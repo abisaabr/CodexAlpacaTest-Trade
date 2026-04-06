@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 from pydantic import BaseModel, ConfigDict, SecretStr, field_validator, model_validator
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -21,6 +21,7 @@ ENV_ALIASES: dict[str, tuple[str, ...]] = {
     "alpaca_secret_key": ("ALPACA_SECRET_KEY", "APCA_API_SECRET_KEY"),
     "alpaca_paper_trade": ("ALPACA_PAPER_TRADE",),
     "alpaca_api_base_url": ("APCA_API_BASE_URL", "ALPACA_API_BASE_URL"),
+    "allow_live_base_url_override": ("ALPACA_ALLOW_LIVE_BASE_URL_OVERRIDE",),
     "alpaca_data_feed": ("ALPACA_DATA_FEED",),
     "default_underlyings": ("DEFAULT_UNDERLYINGS",),
     "data_root": ("DATA_ROOT",),
@@ -61,6 +62,7 @@ class LabSettings(BaseModel):
     alpaca_secret_key: SecretStr | None = None
     alpaca_paper_trade: bool = True
     alpaca_api_base_url: str | None = None
+    allow_live_base_url_override: bool = False
     alpaca_data_feed: str = "iex"
     default_underlyings: tuple[str, ...] = ("SPY", "QQQ")
     data_root: Path = Path("data")
@@ -81,6 +83,13 @@ class LabSettings(BaseModel):
         if not parsed:
             raise ValueError("At least one default underlying is required.")
         return parsed
+
+    @field_validator("alpaca_api_key", "alpaca_secret_key", mode="before")
+    @classmethod
+    def normalize_optional_secrets(cls, value: Any) -> Any:
+        if value in (None, ""):
+            return None
+        return value
 
     @field_validator("data_root", "reports_root", mode="before")
     @classmethod
@@ -128,6 +137,12 @@ class LabSettings(BaseModel):
             allowed_custom = normalized.startswith("http://localhost") or normalized.startswith(
                 "http://127.0.0.1"
             )
+            if normalized == LIVE_TRADING_BASE_URL and not self.allow_live_base_url_override:
+                raise ValueError(
+                    "APCA_API_BASE_URL may not point to https://api.alpaca.markets in this repo. "
+                    "Use the paper endpoint instead. "
+                    "ALPACA_ALLOW_LIVE_BASE_URL_OVERRIDE exists only for future internal use."
+                )
             if normalized != PAPER_TRADING_BASE_URL and not allowed_custom:
                 raise ValueError(
                     "APCA_API_BASE_URL must point to Alpaca paper trading "
@@ -192,6 +207,11 @@ class LabSettings(BaseModel):
                 f"{action} is blocked until the call is explicitly "
                 "marked as paper-trading approved."
             )
+        if self.trading_api_base_url != PAPER_TRADING_BASE_URL:
+            raise LiveTradingRefusedError(
+                "Destructive broker actions require the Alpaca paper endpoint. "
+                "Non-paper base URLs are read-only only in this repo."
+            )
         if not self.alpaca_paper_trade:
             raise LiveTradingRefusedError(
                 "ALPACA_PAPER_TRADE=false is not supported here. "
@@ -202,6 +222,7 @@ class LabSettings(BaseModel):
         return {
             "alpaca_paper_trade": self.alpaca_paper_trade,
             "alpaca_api_base_url": self.trading_api_base_url,
+            "allow_live_base_url_override": self.allow_live_base_url_override,
             "alpaca_data_feed": self.alpaca_data_feed,
             "default_underlyings": list(self.default_underlyings),
             "data_root": str(self.data_root),
@@ -230,14 +251,25 @@ def _load_yaml_config(config_file: Path | None) -> dict[str, Any]:
     return payload
 
 
-def _load_env_overrides() -> dict[str, Any]:
+def _resolve_env_aliases(source: Mapping[str, Any]) -> dict[str, Any]:
     resolved: dict[str, Any] = {}
     for field_name, env_names in ENV_ALIASES.items():
         for env_name in env_names:
-            if env_name in os.environ:
-                resolved[field_name] = os.environ[env_name]
+            if env_name in source:
+                resolved[field_name] = source[env_name]
                 break
     return resolved
+
+
+def _load_process_env_overrides() -> dict[str, Any]:
+    return _resolve_env_aliases(os.environ)
+
+
+def _load_env_file_overrides(env_file: Path | None) -> dict[str, Any]:
+    if env_file is None or not env_file.exists():
+        return {}
+    raw_values = {key: value for key, value in dotenv_values(env_file).items() if value is not None}
+    return _resolve_env_aliases(raw_values)
 
 
 def load_settings(
@@ -246,13 +278,24 @@ def load_settings(
     config_file: str | Path | None = None,
     overrides: Mapping[str, Any] | None = None,
 ) -> LabSettings:
-    env_path = Path(env_file) if env_file else ROOT_DIR / ".env"
-    if env_path.exists():
-        load_dotenv(env_path, override=False)
+    """Load settings with explicit precedence.
+
+    Precedence is:
+    1. explicit process environment variables
+    2. the selected env file
+    3. config-file defaults
+    4. explicit `overrides`
+
+    The env file is parsed directly and never mutates ``os.environ``. When
+    ``env_file`` is provided, only that file is consulted; the repo-root `.env`
+    is not read as a fallback.
+    """
+    env_path = ROOT_DIR / ".env" if env_file is None else Path(env_file)
 
     merged: dict[str, Any] = {}
     merged.update(_load_yaml_config(Path(config_file) if config_file else None))
-    merged.update(_load_env_overrides())
+    merged.update(_load_env_file_overrides(env_path))
+    merged.update(_load_process_env_overrides())
     if overrides:
         merged.update(dict(overrides))
     return LabSettings.model_validate(merged)
