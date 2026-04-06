@@ -1,0 +1,16 @@
+[
+  {
+    "symbol": "REPLACE_WITH_STOCK_SYMBOL",
+    "asset_class": "stock",
+    "side": "buy",
+    "strategy_name": "sample_equity_candidate",
+    "thesis": "Replace with a vetted paper-trading equity candidate before submission.",
+    "score": 0.5,
+    "price": 100.0,
+    "qty": 1,
+    "tags": ["sample", "paper", "replace-before-submit"],
+    "metadata": {
+      "notes": "Safe placeholder for dry-run orchestration only."
+    }
+  }
+]

@@ -1,0 +1,15 @@
+alpaca_paper_trade: true
+alpaca_data_feed: iex
+default_underlyings:
+  - SPY
+  - QQQ
+data_root: data
+reports_root: reports
+log_level: INFO
+live_trading: false
+max_notional_per_trade: 1000
+max_open_positions: 3
+max_orders_per_run: 3
+dry_run: true
+request_timeout_seconds: 30
+retry_attempts: 3

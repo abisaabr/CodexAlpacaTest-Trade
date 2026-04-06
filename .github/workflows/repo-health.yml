@@ -1,0 +1,25 @@
+name: repo-health
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 13 * * 1"
+
+jobs:
+  repo-health:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+      - name: Lint
+        run: python -m ruff check .
+      - name: Import sanity
+        run: python -m compileall alpaca_lab scripts
+      - name: Doctor
+        run: python scripts/doctor.py --skip-connectivity

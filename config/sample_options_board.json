@@ -1,0 +1,18 @@
+[
+  {
+    "symbol": "REPLACE_WITH_OPTION_SYMBOL",
+    "asset_class": "option",
+    "side": "buy",
+    "strategy_name": "sample_option_candidate",
+    "thesis": "Replace with a vetted paper-trading option contract before submission.",
+    "score": 0.5,
+    "price": 1.25,
+    "qty": 1,
+    "underlying_symbol": "REPLACE_WITH_UNDERLYING",
+    "contract_multiplier": 100,
+    "tags": ["sample", "paper", "replace-before-submit"],
+    "metadata": {
+      "notes": "Safe placeholder for dry-run orchestration only."
+    }
+  }
+]

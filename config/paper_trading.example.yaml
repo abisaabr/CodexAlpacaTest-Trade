@@ -1,0 +1,11 @@
+alpaca_paper_trade: true
+live_trading: false
+dry_run: true
+max_notional_per_trade: 1000
+max_open_positions: 3
+max_orders_per_run: 2
+paper_execution:
+  equities_board_path: reports/sample_equities_board.json
+  options_board_path: reports/sample_options_board.json
+  submit_paper_orders: false
+  notes: "Leave submit_paper_orders=false until you explicitly want paper routing."

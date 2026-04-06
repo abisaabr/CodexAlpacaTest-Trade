@@ -1,0 +1,8 @@
+symbols:
+  - SPY
+  - QQQ
+start: "2026-03-01T09:30:00Z"
+end: "2026-03-05T16:00:00Z"
+timeframe: 1Min
+feed: iex
+overwrite: false

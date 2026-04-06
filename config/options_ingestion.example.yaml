@@ -1,0 +1,10 @@
+underlyings:
+  - SPY
+  - QQQ
+min_dte: 7
+max_dte: 30
+strike_distance_pct: 0.05
+option_type: call
+include_bars: true
+timeframe: 1Min
+overwrite: false

@@ -1,0 +1,5 @@
+initial_cash: 100000
+slippage_bps: 5
+fee_per_unit: 0.01
+base_allocation_fraction: 0.10
+default_timeout_bars: 12
