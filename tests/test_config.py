@@ -107,6 +107,19 @@ def test_live_trading_is_refused_even_if_requested(
         load_settings(config_file=config_path, env_file=tmp_path / ".env")
 
 
+def test_paper_trade_flag_false_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _clear_config_env(monkeypatch)
+    config_path = _write_config(
+        tmp_path / "default.yaml",
+        extra_lines="alpaca_paper_trade: false\n",
+    )
+
+    with pytest.raises(ValueError, match="ALPACA_PAPER_TRADE=false"):
+        load_settings(config_file=config_path, env_file=tmp_path / ".env")
+
+
 def test_non_paper_base_url_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -117,4 +130,15 @@ def test_non_paper_base_url_is_refused(
     )
 
     with pytest.raises(ValueError, match="https://api.alpaca.markets"):
+        load_settings(config_file=config_path, env_file=tmp_path / ".env")
+
+
+def test_live_base_url_override_flag_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _clear_config_env(monkeypatch)
+    config_path = _write_config(tmp_path / "default.yaml")
+    monkeypatch.setenv("ALPACA_ALLOW_LIVE_BASE_URL_OVERRIDE", "true")
+
+    with pytest.raises(ValueError, match="ALPACA_ALLOW_LIVE_BASE_URL_OVERRIDE"):
         load_settings(config_file=config_path, env_file=tmp_path / ".env")

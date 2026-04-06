@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from hashlib import sha1
 from typing import Any, Literal
 
@@ -105,15 +106,64 @@ class AlpacaBrokerAdapter:
         json_body: dict[str, Any] | None = None,
         retryable: bool = True,
     ) -> dict[str, Any] | list[dict[str, Any]]:
+        payload, _ = self._request_json_with_audit(
+            method,
+            path,
+            api=api,
+            params=params,
+            json_body=json_body,
+            retryable=retryable,
+        )
+        return payload
+
+    def _prepare_url(
+        self,
+        method: str,
+        url: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json_body: dict[str, Any] | None = None,
+    ) -> str:
+        request = requests.Request(
+            method=method,
+            url=url,
+            headers=self.settings.auth_headers(),
+            params=params,
+            json=json_body,
+        )
+        if hasattr(self.session, "prepare_request"):
+            try:
+                prepared = self.session.prepare_request(request)
+            except Exception:  # noqa: BLE001
+                prepared = request.prepare()
+        else:
+            prepared = request.prepare()
+        return prepared.url or url
+
+    def _request_json_with_audit(
+        self,
+        method: str,
+        path: str,
+        *,
+        api: Literal["trading", "data"],
+        params: dict[str, Any] | None = None,
+        json_body: dict[str, Any] | None = None,
+        retryable: bool = True,
+    ) -> tuple[dict[str, Any] | list[dict[str, Any]], dict[str, Any]]:
+        if api == "trading":
+            self.settings.assert_paper_only_runtime()
         base_url = (
             self.settings.trading_api_base_url
             if api == "trading"
             else self.settings.data_api_base_url
         )
         url = f"{base_url}{path}"
+        prepared_url = self._prepare_url(method, url, params=params, json_body=json_body)
+        requested_at = datetime.now(timezone.utc).isoformat()
         safe_request = {
             "method": method,
             "url": url,
+            "prepared_url": prepared_url,
             "params": params or {},
             "json": json_body or {},
             "mode": self.settings.trading_mode,
@@ -150,26 +200,68 @@ class AlpacaBrokerAdapter:
                 response=response,
             )
 
-        payload = response.json() if response.content else {}
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = {}
         self.logger.info(
             "alpaca response %s",
             self._sanitize(
                 {
                     "status_code": response.status_code,
-                    "url": url,
+                    "url": prepared_url,
                     "keys": sorted(payload.keys()) if isinstance(payload, dict) else "list",
                 }
             ),
         )
-        return payload
+        audit_entry = {
+            "requested_at": requested_at,
+            "method": method,
+            "api": api,
+            "path": path,
+            "prepared_url": prepared_url,
+            "requested_page_token": (params or {}).get("page_token"),
+            "status_code": int(response.status_code),
+            "response_kind": "dict" if isinstance(payload, dict) else "list",
+            "response_keys": sorted(payload.keys()) if isinstance(payload, dict) else [],
+        }
+        return payload, audit_entry
+
+    @staticmethod
+    def _extract_page_token(payload: Mapping[str, Any] | Any) -> str | None:
+        if not isinstance(payload, Mapping):
+            return None
+        token = payload.get("next_page_token") or payload.get("page_token")
+        return str(token) if token else None
+
+    @staticmethod
+    def _response_item_count(payload: Mapping[str, Any] | Any, items_key: str) -> int:
+        if not isinstance(payload, Mapping):
+            return 0
+        items = payload.get(items_key)
+        if isinstance(items, Mapping):
+            total = 0
+            for rows in items.values():
+                if isinstance(rows, list):
+                    total += len(rows)
+                elif rows is not None:
+                    total += 1
+            return total
+        if isinstance(items, list):
+            return len(items)
+        return 0
+
+    @staticmethod
+    def _attach_request_audit(
+        payload: Mapping[str, Any],
+        audit_entries: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        return {**payload, "request_audit": audit_entries}
 
     def ensure_paper_only(self, *, requested_live: bool = False) -> None:
         if requested_live:
             raise LiveTradingRefusedError("Live order routing is refused in this repository.")
-        if not self.settings.alpaca_paper_trade:
-            raise LiveTradingRefusedError(
-                "ALPACA_PAPER_TRADE=false is refused. Use paper mode only."
-            )
+        self.settings.assert_paper_only_runtime()
 
     def build_order_request(
         self,
@@ -269,18 +361,36 @@ class AlpacaBrokerAdapter:
             "limit": limit,
         }
         aggregated: dict[str, Any] = {"bars": {symbol: [] for symbol in symbols}}
+        request_audit: list[dict[str, Any]] = []
+        page_index = 1
         while True:
-            payload = self._request_json("GET", "/v2/stocks/bars", api="data", params=params)
+            payload, audit_entry = self._request_json_with_audit(
+                "GET",
+                "/v2/stocks/bars",
+                api="data",
+                params=params,
+            )
             if isinstance(payload, dict):
                 for symbol, rows in payload.get("bars", {}).items():
                     aggregated["bars"].setdefault(symbol, []).extend(rows)
-                token = payload.get("next_page_token")
+                token = self._extract_page_token(payload)
+                request_audit.append(
+                    {
+                        **audit_entry,
+                        "items_key": "bars",
+                        "page_index": page_index,
+                        "response_page_token": token,
+                        "response_item_count": self._response_item_count(payload, "bars"),
+                        "symbol_scope": symbols,
+                    }
+                )
             else:
                 token = None
             if not token:
                 break
             params["page_token"] = token
-        return aggregated
+            page_index += 1
+        return self._attach_request_audit(aggregated, request_audit)
 
     def get_option_contracts(
         self,
@@ -303,19 +413,47 @@ class AlpacaBrokerAdapter:
         if option_type and option_type != "any":
             params["type"] = option_type
         aggregated: dict[str, Any] = {"option_contracts": []}
+        request_audit: list[dict[str, Any]] = []
+        page_index = 1
         while True:
-            payload = self._request_json(
-                "GET", "/v2/options/contracts", api="trading", params=params
+            payload, audit_entry = self._request_json_with_audit(
+                "GET",
+                "/v2/options/contracts",
+                api="trading",
+                params=params,
             )
             if isinstance(payload, dict):
                 aggregated["option_contracts"].extend(payload.get("option_contracts", []))
-                token = payload.get("next_page_token")
+                token = self._extract_page_token(payload)
+                request_audit.append(
+                    {
+                        **audit_entry,
+                        "items_key": "option_contracts",
+                        "page_index": page_index,
+                        "response_page_token": token,
+                        "response_item_count": self._response_item_count(
+                            payload, "option_contracts"
+                        ),
+                        "symbol_scope": underlyings,
+                    }
+                )
             else:
                 token = None
             if not token:
                 break
             params["page_token"] = token
-        return aggregated
+            page_index += 1
+        return self._attach_request_audit(aggregated, request_audit)
+
+    def get_option_contract(self, symbol_or_id: str) -> dict[str, Any]:
+        payload, audit_entry = self._request_json_with_audit(
+            "GET",
+            f"/v2/options/contracts/{symbol_or_id}",
+            api="trading",
+        )
+        if not isinstance(payload, dict):
+            return {"request_audit": [audit_entry]}
+        return self._attach_request_audit(payload, [{**audit_entry, "symbol_scope": [symbol_or_id]}])
 
     def get_option_bars(
         self,
@@ -334,18 +472,36 @@ class AlpacaBrokerAdapter:
             "limit": limit,
         }
         aggregated: dict[str, Any] = {"bars": {symbol: [] for symbol in symbols}}
+        request_audit: list[dict[str, Any]] = []
+        page_index = 1
         while True:
-            payload = self._request_json("GET", "/v1beta1/options/bars", api="data", params=params)
+            payload, audit_entry = self._request_json_with_audit(
+                "GET",
+                "/v1beta1/options/bars",
+                api="data",
+                params=params,
+            )
             if isinstance(payload, dict):
                 for symbol, rows in payload.get("bars", {}).items():
                     aggregated["bars"].setdefault(symbol, []).extend(rows)
-                token = payload.get("next_page_token")
+                token = self._extract_page_token(payload)
+                request_audit.append(
+                    {
+                        **audit_entry,
+                        "items_key": "bars",
+                        "page_index": page_index,
+                        "response_page_token": token,
+                        "response_item_count": self._response_item_count(payload, "bars"),
+                        "symbol_scope": symbols,
+                    }
+                )
             else:
                 token = None
             if not token:
                 break
             params["page_token"] = token
-        return aggregated
+            page_index += 1
+        return self._attach_request_audit(aggregated, request_audit)
 
     def get_option_trades(
         self,
@@ -362,20 +518,80 @@ class AlpacaBrokerAdapter:
             "limit": limit,
         }
         aggregated: dict[str, Any] = {"trades": {symbol: [] for symbol in symbols}}
+        request_audit: list[dict[str, Any]] = []
+        page_index = 1
         while True:
-            payload = self._request_json(
-                "GET", "/v1beta1/options/trades", api="data", params=params
+            payload, audit_entry = self._request_json_with_audit(
+                "GET",
+                "/v1beta1/options/trades",
+                api="data",
+                params=params,
             )
             if isinstance(payload, dict):
                 for symbol, rows in payload.get("trades", {}).items():
                     aggregated["trades"].setdefault(symbol, []).extend(rows)
-                token = payload.get("next_page_token")
+                token = self._extract_page_token(payload)
+                request_audit.append(
+                    {
+                        **audit_entry,
+                        "items_key": "trades",
+                        "page_index": page_index,
+                        "response_page_token": token,
+                        "response_item_count": self._response_item_count(payload, "trades"),
+                        "symbol_scope": symbols,
+                    }
+                )
             else:
                 token = None
             if not token:
                 break
             params["page_token"] = token
-        return aggregated
+            page_index += 1
+        return self._attach_request_audit(aggregated, request_audit)
+
+    def get_option_chain_snapshots(
+        self,
+        underlying_symbol: str,
+        *,
+        feed: str = "indicative",
+        limit: int = 1000,
+        updated_since: datetime | str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"feed": feed, "limit": limit}
+        if updated_since is not None:
+            params["updated_since"] = _isoformat(updated_since)
+        aggregated: dict[str, Any] = {"snapshots": {}}
+        request_audit: list[dict[str, Any]] = []
+        page_index = 1
+        while True:
+            payload, audit_entry = self._request_json_with_audit(
+                "GET",
+                f"/v1beta1/options/snapshots/{underlying_symbol}",
+                api="data",
+                params=params,
+            )
+            if isinstance(payload, dict):
+                snapshots = payload.get("snapshots", {})
+                if isinstance(snapshots, Mapping):
+                    aggregated["snapshots"].update(dict(snapshots))
+                token = self._extract_page_token(payload)
+                request_audit.append(
+                    {
+                        **audit_entry,
+                        "items_key": "snapshots",
+                        "page_index": page_index,
+                        "response_page_token": token,
+                        "response_item_count": self._response_item_count(payload, "snapshots"),
+                        "symbol_scope": [underlying_symbol],
+                    }
+                )
+            else:
+                token = None
+            if not token:
+                break
+            params["page_token"] = token
+            page_index += 1
+        return self._attach_request_audit(aggregated, request_audit)
 
     def get_option_latest_quotes(self, symbols: list[str]) -> dict[str, Any]:
         payload = self._request_json(

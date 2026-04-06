@@ -15,6 +15,10 @@ DEFAULT_CONFIG_PATH = ROOT_DIR / "config" / "default.yaml"
 PAPER_TRADING_BASE_URL = "https://paper-api.alpaca.markets"
 LIVE_TRADING_BASE_URL = "https://api.alpaca.markets"
 DATA_API_BASE_URL = "https://data.alpaca.markets"
+PAPER_ONLY_LOCK_MESSAGE = (
+    "This repository is locked to Alpaca paper trading only until you explicitly "
+    "change the safeguards in code."
+)
 
 ENV_ALIASES: dict[str, tuple[str, ...]] = {
     "alpaca_api_key": ("ALPACA_API_KEY", "APCA_API_KEY_ID"),
@@ -119,8 +123,19 @@ class LabSettings(BaseModel):
     def validate_controls(self) -> LabSettings:
         if self.live_trading:
             raise ValueError(
-                "LIVE_TRADING=true is intentionally unsupported "
-                "in this public paper-trading repository."
+                "LIVE_TRADING=true is refused. "
+                f"{PAPER_ONLY_LOCK_MESSAGE}"
+            )
+        if not self.alpaca_paper_trade:
+            raise ValueError(
+                "ALPACA_PAPER_TRADE=false is refused. "
+                f"{PAPER_ONLY_LOCK_MESSAGE}"
+            )
+        if self.allow_live_base_url_override:
+            raise ValueError(
+                "ALPACA_ALLOW_LIVE_BASE_URL_OVERRIDE is reserved for a future internal design "
+                "and is disabled in this repo. "
+                f"{PAPER_ONLY_LOCK_MESSAGE}"
             )
         if self.max_notional_per_trade <= 0:
             raise ValueError("MAX_NOTIONAL_PER_TRADE must be positive.")
@@ -134,20 +149,16 @@ class LabSettings(BaseModel):
             raise ValueError("RETRY_ATTEMPTS must be at least 1.")
         if self.alpaca_api_base_url:
             normalized = self.alpaca_api_base_url.lower()
-            allowed_custom = normalized.startswith("http://localhost") or normalized.startswith(
-                "http://127.0.0.1"
-            )
-            if normalized == LIVE_TRADING_BASE_URL and not self.allow_live_base_url_override:
+            if normalized == LIVE_TRADING_BASE_URL:
                 raise ValueError(
-                    "APCA_API_BASE_URL may not point to https://api.alpaca.markets in this repo. "
-                    "Use the paper endpoint instead. "
-                    "ALPACA_ALLOW_LIVE_BASE_URL_OVERRIDE exists only for future internal use."
+                    "APCA_API_BASE_URL may not point to https://api.alpaca.markets. "
+                    f"{PAPER_ONLY_LOCK_MESSAGE}"
                 )
-            if normalized != PAPER_TRADING_BASE_URL and not allowed_custom:
+            if normalized != PAPER_TRADING_BASE_URL:
                 raise ValueError(
-                    "APCA_API_BASE_URL must point to Alpaca paper trading "
-                    "or a local test endpoint. "
-                    "Live endpoints are refused in this repo."
+                    "APCA_API_BASE_URL must point to https://paper-api.alpaca.markets or be "
+                    "left unset. Live and custom trading endpoints are disabled here. "
+                    f"{PAPER_ONLY_LOCK_MESSAGE}"
                 )
         return self
 
@@ -179,6 +190,28 @@ class LabSettings(BaseModel):
     def trading_mode(self) -> str:
         return "paper"
 
+    def assert_paper_only_runtime(self) -> None:
+        if self.live_trading:
+            raise LiveTradingRefusedError(
+                "LIVE_TRADING=true is refused at runtime. "
+                f"{PAPER_ONLY_LOCK_MESSAGE}"
+            )
+        if not self.alpaca_paper_trade:
+            raise LiveTradingRefusedError(
+                "ALPACA_PAPER_TRADE must remain true at runtime. "
+                f"{PAPER_ONLY_LOCK_MESSAGE}"
+            )
+        if self.allow_live_base_url_override:
+            raise LiveTradingRefusedError(
+                "ALPACA_ALLOW_LIVE_BASE_URL_OVERRIDE is disabled in this repo. "
+                f"{PAPER_ONLY_LOCK_MESSAGE}"
+            )
+        if self.trading_api_base_url != PAPER_TRADING_BASE_URL:
+            raise LiveTradingRefusedError(
+                "Trading API base URL must remain https://paper-api.alpaca.markets. "
+                f"{PAPER_ONLY_LOCK_MESSAGE}"
+            )
+
     def auth_headers(self) -> dict[str, str]:
         if self.alpaca_api_key is None or self.alpaca_secret_key is None:
             raise ValueError(
@@ -202,24 +235,16 @@ class LabSettings(BaseModel):
                 f"{action} requested live routing, but "
                 "live trading is permanently refused in this repo."
             )
+        self.assert_paper_only_runtime()
         if not explicitly_requested:
             raise BrokerActionBlockedError(
                 f"{action} is blocked until the call is explicitly "
                 "marked as paper-trading approved."
             )
-        if self.trading_api_base_url != PAPER_TRADING_BASE_URL:
-            raise LiveTradingRefusedError(
-                "Destructive broker actions require the Alpaca paper endpoint. "
-                "Non-paper base URLs are read-only only in this repo."
-            )
-        if not self.alpaca_paper_trade:
-            raise LiveTradingRefusedError(
-                "ALPACA_PAPER_TRADE=false is not supported here. "
-                "This repository only routes to paper trading."
-            )
 
     def redacted(self) -> dict[str, Any]:
         return {
+            "paper_only_repo_lock": True,
             "alpaca_paper_trade": self.alpaca_paper_trade,
             "alpaca_api_base_url": self.trading_api_base_url,
             "allow_live_base_url_override": self.allow_live_base_url_override,

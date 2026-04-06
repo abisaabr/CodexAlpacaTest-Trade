@@ -1,4 +1,7 @@
+# Paper-only repo lock: keep the Alpaca trading URL on paper, keep
+# ALPACA_PAPER_TRADE=true, and keep LIVE_TRADING=false.
 alpaca_paper_trade: true
+alpaca_api_base_url: https://paper-api.alpaca.markets
 alpaca_data_feed: iex
 default_underlyings:
   - SPY

@@ -1,4 +1,7 @@
+# Paper-only repo lock: this repo never routes live orders and rejects live
+# trading flags or live/custom trading URLs.
 alpaca_paper_trade: true
+alpaca_api_base_url: https://paper-api.alpaca.markets
 live_trading: false
 dry_run: true
 max_notional_per_trade: 1000

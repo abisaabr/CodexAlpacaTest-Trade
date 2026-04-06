@@ -1,3 +1,4 @@
+# Backtests are local-only in a repo that is locked to paper-only trading.
 initial_cash: 100000
 slippage_bps: 5
 fee_per_unit: 0.01

@@ -1,3 +1,4 @@
+# Safe research config for a repo that is locked to paper-only trading.
 underlyings:
   - SPY
   - QQQ
