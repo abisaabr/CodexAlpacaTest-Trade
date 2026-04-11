@@ -115,6 +115,24 @@ Paper options dry-run:
 python scripts/run_paper_options.py --board-path config\sample_options_board.json
 ```
 
+QQQ portfolio paper trader, one diagnostic cycle:
+
+```powershell
+python scripts/run_qqq_portfolio_paper_trader.py --portfolio-config config\qqq_paper_portfolio.yaml --run-once
+```
+
+QQQ portfolio paper trader, full live paper session:
+
+```powershell
+python scripts/run_qqq_portfolio_paper_trader.py --portfolio-config config\qqq_paper_portfolio.yaml --submit-paper-orders
+```
+
+Install the weekday scheduler on Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install_qqq_paper_task.ps1 -TaskName "QQQ Portfolio Paper Trader" -StartTime "09:20"
+```
+
 ## What Is Not Committed
 
 - `.env` and any secrets
@@ -128,4 +146,6 @@ python scripts/run_paper_options.py --board-path config\sample_options_board.jso
 - The sample promotion boards are placeholders. Replace their symbols before any intentional paper submission.
 - Paper submission, when explicitly enabled, still routes only to Alpaca paper trading. Live trading is intentionally impossible in this repo.
 - Historical options quotes are not assumed to exist in Alpaca's current public data surface for this repo.
+- The QQQ portfolio runner uses a local virtual sleeve starting at `$25,000` inside the larger paper account, persists daily state under `reports/qqq_portfolio/`, and keeps every strategy flat by the end of the session.
+- Multi-leg spreads and condors route through Alpaca `mleg` paper orders. TLS trust is hardened with `truststore` so scheduled runs also work on Windows machines that rely on the OS certificate store.
 - The repo is intentionally structured so code from older local repos can be migrated into `alpaca_lab/` with minimal reshuffling later.

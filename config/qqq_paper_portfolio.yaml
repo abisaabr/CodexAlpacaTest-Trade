@@ -1,0 +1,30 @@
+name: qqq_portfolio_paper_trader
+description: Daily causal QQQ options paper portfolio built from the validated bull, bear, and choppy sleeves.
+risk:
+  sleeve_starting_equity: 25000
+  max_open_risk_fraction: 0.15
+  daily_loss_gate_pct: 0.02
+  delever_drawdown_pct: 12.0
+  delever_risk_scale: 0.75
+  max_open_positions: 3
+  max_positions_per_regime: 2
+  soft_alert_delta_shares: 838.78
+  soft_alert_vega_dollars_1pct: 171.42
+execution:
+  underlying_symbol: QQQ
+  option_feed: indicative
+  stock_feed: iex
+  submit_paper_orders: true
+  poll_interval_seconds: 20
+  order_status_poll_seconds: 10
+  order_fill_timeout_seconds: 45
+  contract_refresh_minutes: 15
+  quote_stale_seconds: 120
+  max_relative_spread: 0.35
+  max_dte_days: 7
+  state_root: reports/qqq_portfolio/state
+  run_root: reports/qqq_portfolio/runs
+  task_name: QQQ Portfolio Paper Trader
+  allow_market_exit_fallback: true
+  market_exit_fallback_minute: 385
+  startup_lead_minutes: 10
