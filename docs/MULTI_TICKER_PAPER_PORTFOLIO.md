@@ -64,12 +64,32 @@ The promoted live book uses `21` validated single-leg sleeves and a shared virtu
 
 The final promoted `21`-strategy book was chosen because it improved risk-adjusted performance versus the raw `29`-strategy promoted set.
 
-- Refined shared-account book:
+The live overlay now uses the validated shared-account settings that held up best on the refined book:
+
+- `max_open_risk_fraction: 15%`
+- `max_open_positions: 10`
+- `daily_loss_gate_pct: disabled`
+- `delever_drawdown_pct: 8%`
+- `delever_risk_scale: 50%`
+
+- Refined shared-account book with validated live overlay:
+  `$233,243.57`
+  `+832.97%`
+  `624` trades
+  `64.10%` win rate
+  `-11.21%` max drawdown
+- Raw refined book before overlay tuning:
   `$232,091.95`
   `+828.37%`
   `625` trades
   `64.00%` win rate
   `-12.45%` max drawdown
+- Previous live overlay defaults:
+  `$201,356.62`
+  `+705.43%`
+  `568` trades
+  `64.08%` win rate
+  `-13.63%` max drawdown
 - Raw `29`-strategy promoted set:
   `$244,082.22`
   `+876.33%`
@@ -83,7 +103,7 @@ The final promoted `21`-strategy book was chosen because it improved risk-adjust
   `58.01%` win rate
   `-15.21%` max drawdown
 
-The multi-ticker refined book beat the QQQ-only baseline by `679.49` percentage points while also reducing drawdown.
+The validated live overlay beat the QQQ-only baseline by `684.09` percentage points while also reducing drawdown.
 
 ## Live Safety
 
@@ -101,6 +121,8 @@ It also sends Discord webhook check-ins for:
 - end-of-day status
 
 The Discord webhook is loaded from `DISCORD_WEBHOOK_URL` in your local `.env`. It is intentionally not committed to GitHub.
+
+One notable result from the validation pass: the old `2%` daily loss gate was too tight for the six-ticker shared book. It clipped strong rebound days and reduced return while worsening drawdown, so the paper trader keeps that gate disabled for this portfolio.
 
 ## Config
 

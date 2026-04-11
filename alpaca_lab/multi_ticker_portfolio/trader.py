@@ -603,7 +603,10 @@ class MultiTickerPortfolioPaperTrader:
         return sum(1 for trade in session.open_trades if trade["underlying_symbol"] == underlying_symbol)
 
     def _daily_loss_gate_check(self, session: SessionState, current_equity: float) -> tuple[bool, str | None]:
-        threshold = session.starting_equity * (1.0 - self.portfolio_config.risk.daily_loss_gate_pct)
+        gate_pct = self.portfolio_config.risk.daily_loss_gate_pct
+        if gate_pct is None or gate_pct <= 0.0:
+            return False, None
+        threshold = session.starting_equity * (1.0 - gate_pct)
         if current_equity <= threshold:
             return True, f"daily_loss_gate triggered at equity {current_equity:.2f}"
         return False, None

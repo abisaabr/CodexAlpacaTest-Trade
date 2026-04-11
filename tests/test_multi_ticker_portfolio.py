@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 
-from alpaca_lab.multi_ticker_portfolio.config import default_portfolio_config
+from alpaca_lab.multi_ticker_portfolio.config import default_portfolio_config, load_portfolio_config
 from alpaca_lab.multi_ticker_portfolio.signals import signal_is_true
+from alpaca_lab.multi_ticker_portfolio.trader import MultiTickerPortfolioPaperTrader, SessionState
 
 
 def _build_frame(rows: int, *, close_fn, vwap_offset: float = -0.05, ema_fast_offset: float = 0.02, ema_slow_offset: float = 0.0) -> pd.DataFrame:
@@ -72,3 +74,45 @@ def test_fast_orb_put_triggers_before_base_profile() -> None:
 
     assert signal_is_true("orb_put", frame, timing_profile="fast") is True
     assert signal_is_true("orb_put", frame, timing_profile="base") is False
+
+
+def test_portfolio_config_allows_disabling_daily_loss_gate(tmp_path: Path) -> None:
+    config_path = tmp_path / "portfolio.yaml"
+    config_path.write_text(
+        "risk:\n"
+        "  daily_loss_gate_pct: null\n"
+        "  delever_drawdown_pct: 8.0\n"
+        "  delever_risk_scale: 0.5\n",
+        encoding="utf-8",
+    )
+
+    config = load_portfolio_config(config_path)
+
+    assert config.risk.daily_loss_gate_pct is None
+    assert config.risk.delever_drawdown_pct == 8.0
+    assert config.risk.delever_risk_scale == 0.5
+
+
+def test_disabled_daily_loss_gate_never_blocks_entries() -> None:
+    config = default_portfolio_config()
+    config = config.model_copy(
+        update={
+            "risk": config.risk.model_copy(
+                update={
+                    "daily_loss_gate_pct": None,
+                }
+            )
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    session = SessionState(
+        trade_date="2026-04-13",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+
+    blocked, reason = trader._daily_loss_gate_check(session, current_equity=20_000.0)
+
+    assert blocked is False
+    assert reason is None

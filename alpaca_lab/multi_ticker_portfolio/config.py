@@ -55,9 +55,9 @@ class RiskConfig(BaseModel):
 
     sleeve_starting_equity: float = 25_000.0
     max_open_risk_fraction: float = 0.15
-    daily_loss_gate_pct: float = 0.02
-    delever_drawdown_pct: float = 12.0
-    delever_risk_scale: float = 0.75
+    daily_loss_gate_pct: float | None = None
+    delever_drawdown_pct: float = 8.0
+    delever_risk_scale: float = 0.50
     max_open_positions: int = 10
     max_positions_per_regime: int = 6
     max_positions_per_symbol: int = 3

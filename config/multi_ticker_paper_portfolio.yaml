@@ -3,9 +3,9 @@ description: Shared-account intraday options paper portfolio across QQQ, SPY, IW
 risk:
   sleeve_starting_equity: 25000
   max_open_risk_fraction: 0.15
-  daily_loss_gate_pct: 0.02
-  delever_drawdown_pct: 12.0
-  delever_risk_scale: 0.75
+  daily_loss_gate_pct: null
+  delever_drawdown_pct: 8.0
+  delever_risk_scale: 0.5
   max_open_positions: 10
   max_positions_per_regime: 6
   max_positions_per_symbol: 3
