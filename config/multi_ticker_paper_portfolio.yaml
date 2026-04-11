@@ -1,0 +1,40 @@
+name: multi_ticker_portfolio_paper_trader
+description: Shared-account intraday options paper portfolio across QQQ, SPY, IWM, NVDA, TSLA, and MSFT using the validated 365-day bull and bear winners.
+risk:
+  sleeve_starting_equity: 25000
+  max_open_risk_fraction: 0.15
+  daily_loss_gate_pct: null
+  delever_drawdown_pct: 8.0
+  delever_risk_scale: 0.5
+  max_open_positions: 10
+  max_positions_per_regime: 6
+  max_positions_per_symbol: 3
+  min_required_buying_power: 7500
+  soft_alert_delta_shares: 1500
+  soft_alert_vega_dollars_1pct: 350
+execution:
+  underlying_symbols:
+    - QQQ
+    - SPY
+    - IWM
+    - NVDA
+    - TSLA
+    - MSFT
+  option_feed: indicative
+  stock_feed: iex
+  submit_paper_orders: true
+  poll_interval_seconds: 20
+  order_status_poll_seconds: 10
+  order_fill_timeout_seconds: 45
+  contract_refresh_minutes: 15
+  quote_stale_seconds: 120
+  stock_freshness_seconds: 180
+  max_relative_spread: 0.35
+  max_dte_days: 7
+  state_root: reports/multi_ticker_portfolio/state
+  run_root: reports/multi_ticker_portfolio/runs
+  task_name: Multi-Ticker Portfolio Paper Trader
+  allow_market_exit_fallback: true
+  market_exit_fallback_minute: 385
+  startup_lead_minutes: 10
+  midday_report_minute: 180

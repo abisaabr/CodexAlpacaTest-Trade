@@ -9,8 +9,17 @@ from typing import Any, Literal
 import requests
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+try:
+    import truststore
+except ImportError:  # pragma: no cover - optional runtime hardening
+    truststore = None
+
 from alpaca_lab.config import LabSettings, LiveTradingRefusedError
 from alpaca_lab.logging_utils import get_logger, redact_value
+
+
+if truststore is not None:  # pragma: no branch - one-time interpreter setup
+    truststore.inject_into_ssl()
 
 
 def _isoformat(value: datetime | str | None) -> str | None:
@@ -28,9 +37,32 @@ def build_client_order_id(*, strategy_name: str, symbol: str, side: str, request
 
 
 @dataclass(slots=True)
-class OrderRequest:
+class OrderLeg:
     symbol: str
     side: Literal["buy", "sell"]
+    ratio_qty: int = 1
+    position_intent: Literal[
+        "buy_to_open",
+        "buy_to_close",
+        "sell_to_open",
+        "sell_to_close",
+    ] | None = None
+
+    def to_payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "symbol": self.symbol,
+            "ratio_qty": self.ratio_qty,
+            "side": self.side,
+        }
+        if self.position_intent is not None:
+            payload["position_intent"] = self.position_intent
+        return payload
+
+
+@dataclass(slots=True)
+class OrderRequest:
+    symbol: str | None = None
+    side: Literal["buy", "sell"] | None = None
     qty: float | None = None
     notional: float | None = None
     order_type: str = "market"
@@ -41,15 +73,18 @@ class OrderRequest:
     asset_class: Literal["stock", "option"] = "stock"
     requested_live: bool = False
     strategy_name: str = "manual"
+    legs: list[OrderLeg] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            "symbol": self.symbol,
-            "side": self.side,
             "type": self.order_type,
             "time_in_force": self.time_in_force,
         }
+        if self.symbol is not None:
+            payload["symbol"] = self.symbol
+        if self.side is not None:
+            payload["side"] = self.side
         if self.qty is not None:
             payload["qty"] = self.qty
         if self.notional is not None:
@@ -60,6 +95,8 @@ class OrderRequest:
             payload["stop_price"] = self.stop_price
         if self.client_order_id is not None:
             payload["client_order_id"] = self.client_order_id
+        if self.legs:
+            payload["legs"] = [leg.to_payload() for leg in self.legs]
         payload.update(self.extra)
         return payload
 
@@ -304,6 +341,49 @@ class AlpacaBrokerAdapter:
             asset_class=asset_class,
             strategy_name=strategy_name,
             extra=extra or {},
+        )
+
+    def build_multileg_order_request(
+        self,
+        *,
+        strategy_name: str,
+        qty: int,
+        legs: list[OrderLeg],
+        order_type: str = "limit",
+        time_in_force: str = "day",
+        limit_price: float | None = None,
+        client_order_id: str | None = None,
+        client_order_key: str | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> OrderRequest:
+        if not legs:
+            raise ValueError("Multi-leg orders require at least one leg.")
+        resolved_client_order_id = client_order_id
+        if resolved_client_order_id is None:
+            leg_key = "|".join(
+                f"{leg.symbol}:{leg.side}:{leg.ratio_qty}:{leg.position_intent or ''}"
+                for leg in legs
+            )
+            request_key = client_order_key or f"{leg_key}|{qty}|{limit_price}"
+            resolved_client_order_id = build_client_order_id(
+                strategy_name=strategy_name,
+                symbol=legs[0].symbol,
+                side="mleg",
+                request_key=request_key,
+            )
+        payload_extra = {"order_class": "mleg"}
+        if extra:
+            payload_extra.update(extra)
+        return OrderRequest(
+            qty=float(qty),
+            order_type=order_type,
+            time_in_force=time_in_force,
+            limit_price=limit_price,
+            client_order_id=resolved_client_order_id,
+            asset_class="option",
+            strategy_name=strategy_name,
+            legs=legs,
+            extra=payload_extra,
         )
 
     def get_account(self) -> dict[str, Any]:

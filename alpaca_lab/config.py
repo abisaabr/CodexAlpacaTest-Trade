@@ -38,6 +38,7 @@ ENV_ALIASES: dict[str, tuple[str, ...]] = {
     "dry_run": ("DRY_RUN",),
     "request_timeout_seconds": ("REQUEST_TIMEOUT_SECONDS",),
     "retry_attempts": ("RETRY_ATTEMPTS",),
+    "discord_webhook_url": ("DISCORD_WEBHOOK_URL",),
 }
 
 
@@ -79,6 +80,7 @@ class LabSettings(BaseModel):
     dry_run: bool = True
     request_timeout_seconds: float = 30.0
     retry_attempts: int = 3
+    discord_webhook_url: SecretStr | None = None
 
     @field_validator("default_underlyings", mode="before")
     @classmethod
@@ -88,7 +90,7 @@ class LabSettings(BaseModel):
             raise ValueError("At least one default underlying is required.")
         return parsed
 
-    @field_validator("alpaca_api_key", "alpaca_secret_key", mode="before")
+    @field_validator("alpaca_api_key", "alpaca_secret_key", "discord_webhook_url", mode="before")
     @classmethod
     def normalize_optional_secrets(cls, value: Any) -> Any:
         if value in (None, ""):
@@ -262,6 +264,7 @@ class LabSettings(BaseModel):
             "retry_attempts": self.retry_attempts,
             "alpaca_api_key": "set" if self.alpaca_api_key else "missing",
             "alpaca_secret_key": "set" if self.alpaca_secret_key else "missing",
+            "discord_webhook_url": "set" if self.discord_webhook_url else "missing",
         }
 
 
