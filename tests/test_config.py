@@ -27,6 +27,7 @@ ALL_CONFIG_ENV_VARS = (
     "DRY_RUN",
     "REQUEST_TIMEOUT_SECONDS",
     "RETRY_ATTEMPTS",
+    "DISCORD_WEBHOOK_URL",
 )
 
 
@@ -142,3 +143,16 @@ def test_live_base_url_override_flag_is_refused(
 
     with pytest.raises(ValueError, match="ALPACA_ALLOW_LIVE_BASE_URL_OVERRIDE"):
         load_settings(config_file=config_path, env_file=tmp_path / ".env")
+
+
+def test_discord_webhook_url_is_loaded_when_present(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _clear_config_env(monkeypatch)
+    config_path = _write_config(tmp_path / "default.yaml")
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.example/webhook")
+
+    settings = load_settings(config_file=config_path, env_file=tmp_path / ".env")
+
+    assert settings.discord_webhook_url is not None
+    assert settings.redacted()["discord_webhook_url"] == "set"
