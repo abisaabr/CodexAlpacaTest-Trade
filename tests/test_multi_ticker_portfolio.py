@@ -50,12 +50,14 @@ def test_default_multi_ticker_portfolio_contains_all_symbols() -> None:
         "XLE",
         "GDX",
         "SLV",
+        "AMZN",
     )
     assert all(counts[symbol] >= 1 for symbol in config.execution.underlying_symbols)
     assert counts["QQQ"] >= 3
     assert counts["XLE"] >= 4
     assert counts["GDX"] >= 5
     assert counts["SLV"] >= 5
+    assert counts["AMZN"] >= 7
 
 
 def test_default_multi_ticker_portfolio_includes_xle_choppy_alias() -> None:

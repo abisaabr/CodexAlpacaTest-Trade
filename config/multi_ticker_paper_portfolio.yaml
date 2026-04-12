@@ -1,5 +1,5 @@
 name: multi_ticker_portfolio_paper_trader
-description: Shared-account intraday options paper portfolio across QQQ, SPY, IWM, NVDA, TSLA, MSFT, BAC, PLTR, GLD, ARKK, XLE, GDX, and SLV using the validated shared-account winners.
+description: Shared-account intraday options paper portfolio across QQQ, SPY, IWM, NVDA, TSLA, MSFT, BAC, PLTR, GLD, ARKK, XLE, GDX, SLV, and AMZN using the validated shared-account winners.
 risk:
   sleeve_starting_equity: 25000
   max_open_risk_fraction: 0.15
@@ -10,8 +10,8 @@ risk:
   max_positions_per_regime: 10
   max_positions_per_symbol: 3
   min_required_buying_power: 7500
-  soft_alert_delta_shares: 3150
-  soft_alert_vega_dollars_1pct: 655
+  soft_alert_delta_shares: 3200
+  soft_alert_vega_dollars_1pct: 620
 execution:
   underlying_symbols:
     - QQQ
@@ -27,6 +27,7 @@ execution:
     - XLE
     - GDX
     - SLV
+    - AMZN
   option_feed: indicative
   stock_feed: iex
   submit_paper_orders: true

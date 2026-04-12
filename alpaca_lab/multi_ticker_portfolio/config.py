@@ -62,8 +62,8 @@ class RiskConfig(BaseModel):
     max_positions_per_regime: int = 10
     max_positions_per_symbol: int = 3
     min_required_buying_power: float = 7_500.0
-    soft_alert_delta_shares: float = 3_150.0
-    soft_alert_vega_dollars_1pct: float = 655.0
+    soft_alert_delta_shares: float = 3_200.0
+    soft_alert_vega_dollars_1pct: float = 620.0
 
 
 class ExecutionConfig(BaseModel):
@@ -83,6 +83,7 @@ class ExecutionConfig(BaseModel):
         "XLE",
         "GDX",
         "SLV",
+        "AMZN",
     )
     option_feed: str = "indicative"
     stock_feed: str | None = None
@@ -125,7 +126,7 @@ class MultiTickerPortfolioConfig(BaseModel):
     name: str = "multi_ticker_portfolio_paper_trader"
     description: str = (
         "Shared-account intraday options paper portfolio across QQQ, SPY, IWM, NVDA, TSLA, MSFT, BAC, "
-        "PLTR, GLD, ARKK, XLE, GDX, and SLV using the validated shared-account winners."
+        "PLTR, GLD, ARKK, XLE, GDX, SLV, and AMZN using the validated shared-account winners."
     )
     risk: RiskConfig = Field(default_factory=RiskConfig)
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
@@ -264,6 +265,19 @@ def _selected_strategy_specs() -> tuple[dict[str, object], ...]:
         {"underlying_symbol": "SLV", "timing_profile": "slow", "base_name": "trend_long_call_next_expiry"},
         {"underlying_symbol": "SLV", "timing_profile": "fast", "base_name": "trend_long_put_next_expiry"},
         {"underlying_symbol": "SLV", "timing_profile": "base", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "AMZN", "timing_profile": "slow", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "AMZN", "timing_profile": "fast", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "AMZN", "timing_profile": "base", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "AMZN", "timing_profile": "slow", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "AMZN", "timing_profile": "base", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "AMZN", "timing_profile": "fast", "base_name": "trend_long_put_next_expiry"},
+        {
+            "underlying_symbol": "AMZN",
+            "timing_profile": "slow",
+            "base_name": "orb_long_put_same_day",
+            "regime": "choppy",
+            "name": "amzn__slow__orb_long_put_same_day",
+        },
     )
 
 

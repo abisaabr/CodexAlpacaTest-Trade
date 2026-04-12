@@ -17,8 +17,9 @@ This runner now trades the validated shared-account book across:
 - `XLE`
 - `GDX`
 - `SLV`
+- `AMZN`
 
-The live book uses a shared virtual `$25,000` sleeve and `48` strategy entries, including one XLE choppy alias that intentionally reuses the same opening-range call setup under a separate regime label.
+The live book uses a shared virtual `$25,000` sleeve and `55` strategy entries, including one XLE choppy alias that intentionally reuses the same opening-range call setup under a separate regime label.
 
 ### Promoted Strategies
 
@@ -123,6 +124,18 @@ The live book uses a shared virtual `$25,000` sleeve and `48` strategy entries, 
   `slv__fast__trend_long_put_next_expiry`
   `slv__base__trend_long_put_next_expiry`
 
+#### AMZN
+- Bull:
+  `amzn__slow__trend_long_call_next_expiry`
+  `amzn__fast__trend_long_call_next_expiry`
+  `amzn__base__trend_long_call_next_expiry`
+- Bear:
+  `amzn__slow__trend_long_put_next_expiry`
+  `amzn__base__trend_long_put_next_expiry`
+  `amzn__fast__trend_long_put_next_expiry`
+- Choppy:
+  `amzn__slow__orb_long_put_same_day`
+
 ## Research Result
 
 The current deployment book now comes from two promotion rounds:
@@ -171,6 +184,24 @@ Phase-two cached-candidate validation used a stricter common `105`-session out-o
 
 `TLT + SLV + PFE` narrowly won the full candidate sweep on a pure risk-adjusted score, but `PFE` was negative standalone and `TLT` was only marginally positive standalone, so the live promotion stayed conservative and promoted only `GDX` and `SLV`.
 
+Phase-three fresh-download validation then tested the newly downloaded `AAPL`, `AMZN`, `META`, `AVGO`, `GOOGL`, `JPM`, `XLV`, and `XLI` batch. The first finished names were enough to make one clean promotion decision:
+
+- Current 13-ticker live baseline on the common `110`-session overlap used for the first batch comparison:
+  `$254,011.16`
+  `+916.04%`
+  `1085` trades
+  `60.18%` win rate
+  `-16.35%` max drawdown
+- Best early add from that batch:
+  `AMZN`
+  `$287,890.83`
+  `+1051.56%`
+  `1131` trades
+  `61.89%` win rate
+  `-12.78%` max drawdown
+
+`AAPL` improved return too, but it was clearly weaker than `AMZN` on the same overlap slice and carried worse standalone drawdown, so it stayed out of the live book for now. `XLV` and `XLI` were both too weak standalone to justify promotion.
+
 ## Live Safety
 
 The runner starts with a morning self-check and refuses to trade if:
@@ -198,8 +229,8 @@ The live overlay now uses the validated shared-account settings for the expanded
 - `max_positions_per_regime: 10`
 - `max_positions_per_symbol: 3`
 - soft alerts:
-  `delta ~= 3150 shares`
-  `vega ~= 655 dollars per 1 vol point`
+  `delta ~= 3200 shares`
+  `vega ~= 620 dollars per 1 vol point`
 
 Two findings drove those settings:
 
