@@ -62,8 +62,8 @@ class RiskConfig(BaseModel):
     max_positions_per_regime: int = 10
     max_positions_per_symbol: int = 3
     min_required_buying_power: float = 7_500.0
-    soft_alert_delta_shares: float = 3_100.0
-    soft_alert_vega_dollars_1pct: float = 720.0
+    soft_alert_delta_shares: float = 3_150.0
+    soft_alert_vega_dollars_1pct: float = 655.0
 
 
 class ExecutionConfig(BaseModel):
@@ -81,6 +81,8 @@ class ExecutionConfig(BaseModel):
         "GLD",
         "ARKK",
         "XLE",
+        "GDX",
+        "SLV",
     )
     option_feed: str = "indicative"
     stock_feed: str | None = None
@@ -123,7 +125,7 @@ class MultiTickerPortfolioConfig(BaseModel):
     name: str = "multi_ticker_portfolio_paper_trader"
     description: str = (
         "Shared-account intraday options paper portfolio across QQQ, SPY, IWM, NVDA, TSLA, MSFT, BAC, "
-        "PLTR, GLD, ARKK, and XLE using the validated shared-account winners."
+        "PLTR, GLD, ARKK, XLE, GDX, and SLV using the validated shared-account winners."
     )
     risk: RiskConfig = Field(default_factory=RiskConfig)
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
@@ -252,6 +254,16 @@ def _selected_strategy_specs() -> tuple[dict[str, object], ...]:
             "regime": "choppy",
             "name": "xle__base__orb_long_call_same_day__choppy",
         },
+        {"underlying_symbol": "GDX", "timing_profile": "fast", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "GDX", "timing_profile": "base", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "GDX", "timing_profile": "slow", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "GDX", "timing_profile": "base", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "GDX", "timing_profile": "fast", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "SLV", "timing_profile": "base", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "SLV", "timing_profile": "fast", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "SLV", "timing_profile": "slow", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "SLV", "timing_profile": "fast", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "SLV", "timing_profile": "base", "base_name": "trend_long_put_next_expiry"},
     )
 
 

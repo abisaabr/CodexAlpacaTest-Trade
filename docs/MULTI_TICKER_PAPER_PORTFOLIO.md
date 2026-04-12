@@ -15,8 +15,10 @@ This runner now trades the validated shared-account book across:
 - `GLD`
 - `ARKK`
 - `XLE`
+- `GDX`
+- `SLV`
 
-The live book uses a shared virtual `$25,000` sleeve and `38` strategy entries, including one XLE choppy alias that intentionally reuses the same opening-range call setup under a separate regime label.
+The live book uses a shared virtual `$25,000` sleeve and `48` strategy entries, including one XLE choppy alias that intentionally reuses the same opening-range call setup under a separate regime label.
 
 ### Promoted Strategies
 
@@ -103,13 +105,34 @@ The live book uses a shared virtual `$25,000` sleeve and `38` strategy entries, 
 - Choppy:
   `xle__base__orb_long_call_same_day__choppy`
 
+#### GDX
+- Bull:
+  `gdx__fast__trend_long_call_next_expiry`
+  `gdx__base__trend_long_call_next_expiry`
+- Bear:
+  `gdx__slow__trend_long_put_next_expiry`
+  `gdx__base__trend_long_put_next_expiry`
+  `gdx__fast__trend_long_put_next_expiry`
+
+#### SLV
+- Bull:
+  `slv__base__trend_long_call_next_expiry`
+  `slv__fast__trend_long_call_next_expiry`
+  `slv__slow__trend_long_call_next_expiry`
+- Bear:
+  `slv__fast__trend_long_put_next_expiry`
+  `slv__base__trend_long_put_next_expiry`
+
 ## Research Result
 
-The current deployment book comes from a first expansion pass where the existing six-ticker live book was held fixed, six new candidates were fully researched (`AMD`, `PLTR`, `BAC`, `GLD`, `XLE`, `ARKK`), and the shared-account selector then greedily added only the names that improved the live portfolio score. A final strategy-prune pass removed sleeves that hurt the shared book.
+The current deployment book now comes from two promotion rounds:
 
-All numbers below are on the common `120`-session out-of-sample window shared by the core book and the expansion basket:
+- Phase one held the original six-ticker live book fixed, fully researched `AMD`, `PLTR`, `BAC`, `GLD`, `XLE`, and `ARKK`, then greedily added only the names that improved the shared-account score.
+- Phase two used the cached cleanroom datasets that were already on disk, re-tested `C`, `GDX`, `TLT`, `SLV`, and `PFE` against the real live 11-ticker book, and then promoted only the clean additions that both improved the shared account and still looked credible standalone.
 
-- Current live deployment book:
+Phase-one numbers on the common `120`-session out-of-sample window shared by the original expansion basket:
+
+- 11-ticker deployment book after phase one:
   `$305,039.74`
   `+1120.16%`
   `913` trades
@@ -128,7 +151,25 @@ All numbers below are on the common `120`-session out-of-sample window shared by
   `61.82%` win rate
   `-13.93%` max drawdown
 
-The promoted additions were `BAC`, `PLTR`, `GLD`, `ARKK`, and `XLE`. Against the real live baseline, that lifted return by `292.87` percentage points with essentially unchanged max drawdown on the shared OOS window.
+The promoted additions from phase one were `BAC`, `PLTR`, `GLD`, `ARKK`, and `XLE`.
+
+Phase-two cached-candidate validation used a stricter common `105`-session out-of-sample window shared by the live book plus `C`, `GDX`, `TLT`, `SLV`, and `PFE`:
+
+- 11-ticker live baseline on that same common window:
+  `$250,905.31`
+  `+903.62%`
+  `897` trades
+  `60.98%` win rate
+  `-13.50%` max drawdown
+- Best clean promotion set:
+  `GDX + SLV`
+  `$259,147.53`
+  `+936.59%`
+  `1040` trades
+  `61.35%` win rate
+  `-12.00%` max drawdown
+
+`TLT + SLV + PFE` narrowly won the full candidate sweep on a pure risk-adjusted score, but `PFE` was negative standalone and `TLT` was only marginally positive standalone, so the live promotion stayed conservative and promoted only `GDX` and `SLV`.
 
 ## Live Safety
 
@@ -157,8 +198,8 @@ The live overlay now uses the validated shared-account settings for the expanded
 - `max_positions_per_regime: 10`
 - `max_positions_per_symbol: 3`
 - soft alerts:
-  `delta ~= 3100 shares`
-  `vega ~= 720 dollars per 1 vol point`
+  `delta ~= 3150 shares`
+  `vega ~= 655 dollars per 1 vol point`
 
 Two findings drove those settings:
 
