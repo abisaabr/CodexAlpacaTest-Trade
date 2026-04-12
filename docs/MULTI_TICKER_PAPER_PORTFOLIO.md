@@ -2,7 +2,7 @@
 
 ## Deployment Book
 
-This runner trades the refined shared-account winners from the 365-day cleanroom tournament across:
+This runner now trades the validated shared-account book across:
 
 - `QQQ`
 - `SPY`
@@ -10,8 +10,13 @@ This runner trades the refined shared-account winners from the 365-day cleanroom
 - `NVDA`
 - `TSLA`
 - `MSFT`
+- `BAC`
+- `PLTR`
+- `GLD`
+- `ARKK`
+- `XLE`
 
-The promoted live book uses `21` validated single-leg sleeves and a shared virtual `$25,000` account.
+The live book uses a shared virtual `$25,000` sleeve and `38` strategy entries, including one XLE choppy alias that intentionally reuses the same opening-range call setup under a separate regime label.
 
 ### Promoted Strategies
 
@@ -36,7 +41,6 @@ The promoted live book uses `21` validated single-leg sleeves and a shared virtu
   `iwm__slow__trend_long_call_next_expiry`
 - Bear:
   `iwm__fast__trend_long_put_next_expiry`
-  `iwm__base__trend_long_put_next_expiry`
 
 #### NVDA
 - Bull:
@@ -60,50 +64,71 @@ The promoted live book uses `21` validated single-leg sleeves and a shared virtu
   `msft__base__trend_long_put_next_expiry`
   `msft__slow__trend_long_put_next_expiry`
 
+#### BAC
+- Bull:
+  `bac__fast__trend_long_call_next_expiry`
+- Bear:
+  `bac__fast__trend_long_put_next_expiry`
+
+#### PLTR
+- Bull:
+  `pltr__fast__trend_long_call_next_expiry`
+  `pltr__base__trend_long_call_next_expiry`
+- Bear:
+  `pltr__fast__trend_long_put_next_expiry`
+  `pltr__base__trend_long_put_next_expiry`
+
+#### GLD
+- Bull:
+  `gld__base__trend_long_call_next_expiry`
+  `gld__slow__trend_long_call_next_expiry`
+- Bear:
+  `gld__base__trend_long_put_next_expiry`
+
+#### ARKK
+- Bull:
+  `arkk__fast__trend_long_call_next_expiry`
+  `arkk__slow__trend_long_call_next_expiry`
+  `arkk__fast__orb_long_call_same_day`
+- Bear:
+  `arkk__fast__trend_long_put_next_expiry`
+
+#### XLE
+- Bull:
+  `xle__slow__orb_long_call_same_day`
+  `xle__base__orb_long_call_same_day`
+  `xle__base__trend_long_call_next_expiry`
+- Bear:
+  `xle__fast__trend_long_put_next_expiry`
+- Choppy:
+  `xle__base__orb_long_call_same_day__choppy`
+
 ## Research Result
 
-The final promoted `21`-strategy book was chosen because it improved risk-adjusted performance versus the raw `29`-strategy promoted set.
+The current deployment book comes from a first expansion pass where the existing six-ticker live book was held fixed, six new candidates were fully researched (`AMD`, `PLTR`, `BAC`, `GLD`, `XLE`, `ARKK`), and the shared-account selector then greedily added only the names that improved the live portfolio score. A final strategy-prune pass removed sleeves that hurt the shared book.
 
-The live overlay now uses the validated shared-account settings that held up best on the refined book:
+All numbers below are on the common `120`-session out-of-sample window shared by the core book and the expansion basket:
 
-- `max_open_risk_fraction: 15%`
-- `max_open_positions: 10`
-- `daily_loss_gate_pct: disabled`
-- `delever_drawdown_pct: 8%`
-- `delever_risk_scale: 50%`
+- Current live deployment book:
+  `$305,039.74`
+  `+1120.16%`
+  `913` trades
+  `62.87%` win rate
+  `-11.26%` max drawdown
+- Current six-ticker core on the same OOS window:
+  `$231,822.58`
+  `+827.29%`
+  `618` trades
+  `64.40%` win rate
+  `-11.26%` max drawdown
+- Full screened union without greedy selection and pruning:
+  `$296,700.37`
+  `+1086.80%`
+  `1011` trades
+  `61.82%` win rate
+  `-13.93%` max drawdown
 
-- Refined shared-account book with validated live overlay:
-  `$233,243.57`
-  `+832.97%`
-  `624` trades
-  `64.10%` win rate
-  `-11.21%` max drawdown
-- Raw refined book before overlay tuning:
-  `$232,091.95`
-  `+828.37%`
-  `625` trades
-  `64.00%` win rate
-  `-12.45%` max drawdown
-- Previous live overlay defaults:
-  `$201,356.62`
-  `+705.43%`
-  `568` trades
-  `64.08%` win rate
-  `-13.63%` max drawdown
-- Raw `29`-strategy promoted set:
-  `$244,082.22`
-  `+876.33%`
-  `751` trades
-  `61.65%` win rate
-  `-17.99%` max drawdown
-- QQQ-only promoted baseline:
-  `$62,218.86`
-  `+148.88%`
-  `181` trades
-  `58.01%` win rate
-  `-15.21%` max drawdown
-
-The validated live overlay beat the QQQ-only baseline by `684.09` percentage points while also reducing drawdown.
+The promoted additions were `BAC`, `PLTR`, `GLD`, `ARKK`, and `XLE`. Against the real live baseline, that lifted return by `292.87` percentage points with essentially unchanged max drawdown on the shared OOS window.
 
 ## Live Safety
 
@@ -122,7 +147,23 @@ It also sends Discord webhook check-ins for:
 
 The Discord webhook is loaded from `DISCORD_WEBHOOK_URL` in your local `.env`. It is intentionally not committed to GitHub.
 
-One notable result from the validation pass: the old `2%` daily loss gate was too tight for the six-ticker shared book. It clipped strong rebound days and reduced return while worsening drawdown, so the paper trader keeps that gate disabled for this portfolio.
+The live overlay now uses the validated shared-account settings for the expanded book:
+
+- `max_open_risk_fraction: 15%`
+- `daily_loss_gate_pct: disabled`
+- `delever_drawdown_pct: 8%`
+- `delever_risk_scale: 50%`
+- `max_open_positions: 10`
+- `max_positions_per_regime: 10`
+- `max_positions_per_symbol: 3`
+- soft alerts:
+  `delta ~= 3100 shares`
+  `vega ~= 720 dollars per 1 vol point`
+
+Two findings drove those settings:
+
+- the old `2%` daily loss gate clipped rebound days and reduced return while worsening drawdown
+- the expanded research regularly used up to `10` same-regime positions intraday, so the old regime cap of `6` would have undertraded the validated book
 
 ## Config
 

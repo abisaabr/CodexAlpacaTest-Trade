@@ -59,17 +59,29 @@ class RiskConfig(BaseModel):
     delever_drawdown_pct: float = 8.0
     delever_risk_scale: float = 0.50
     max_open_positions: int = 10
-    max_positions_per_regime: int = 6
+    max_positions_per_regime: int = 10
     max_positions_per_symbol: int = 3
     min_required_buying_power: float = 7_500.0
-    soft_alert_delta_shares: float = 1_500.0
-    soft_alert_vega_dollars_1pct: float = 350.0
+    soft_alert_delta_shares: float = 3_100.0
+    soft_alert_vega_dollars_1pct: float = 720.0
 
 
 class ExecutionConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    underlying_symbols: tuple[str, ...] = ("QQQ", "SPY", "IWM", "NVDA", "TSLA", "MSFT")
+    underlying_symbols: tuple[str, ...] = (
+        "QQQ",
+        "SPY",
+        "IWM",
+        "NVDA",
+        "TSLA",
+        "MSFT",
+        "BAC",
+        "PLTR",
+        "GLD",
+        "ARKK",
+        "XLE",
+    )
     option_feed: str = "indicative"
     stock_feed: str | None = None
     submit_paper_orders: bool = True
@@ -110,8 +122,8 @@ class MultiTickerPortfolioConfig(BaseModel):
 
     name: str = "multi_ticker_portfolio_paper_trader"
     description: str = (
-        "Shared-account intraday options paper portfolio across QQQ, SPY, IWM, NVDA, TSLA, and MSFT "
-        "using the validated 365-day bull and bear winners."
+        "Shared-account intraday options paper portfolio across QQQ, SPY, IWM, NVDA, TSLA, MSFT, BAC, "
+        "PLTR, GLD, ARKK, and XLE using the validated shared-account winners."
     )
     risk: RiskConfig = Field(default_factory=RiskConfig)
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
@@ -176,47 +188,93 @@ def _base_strategy_map() -> dict[str, dict[str, object]]:
                 StrategyLegConfig(option_type="put", side="long", target_delta=-0.50),
             ),
         },
+        "orb_long_call_same_day": {
+            "regime": "bull",
+            "family": "Single-leg long call",
+            "description": "Buy the same-day call closest to +0.50 delta on a confirmed opening-range breakout.",
+            "dte_mode": "same_day",
+            "signal_name": "orb_call",
+            "hard_exit_minute": 375,
+            "risk_fraction": 0.05,
+            "max_contracts": 8,
+            "profit_target_multiple": 0.50,
+            "stop_loss_multiple": 0.35,
+            "legs": (
+                StrategyLegConfig(option_type="call", side="long", target_delta=0.50),
+            ),
+        },
     }
 
 
-def _selected_strategy_specs() -> tuple[tuple[str, str, str], ...]:
+def _selected_strategy_specs() -> tuple[dict[str, object], ...]:
     return (
-        ("QQQ", "fast", "trend_long_call_next_expiry"),
-        ("QQQ", "slow", "trend_long_call_next_expiry"),
-        ("QQQ", "fast", "trend_long_put_next_expiry"),
-        ("QQQ", "slow", "orb_long_put_same_day"),
-        ("SPY", "fast", "trend_long_call_next_expiry"),
-        ("SPY", "base", "trend_long_put_next_expiry"),
-        ("SPY", "fast", "trend_long_put_next_expiry"),
-        ("IWM", "fast", "trend_long_call_next_expiry"),
-        ("IWM", "slow", "trend_long_call_next_expiry"),
-        ("IWM", "fast", "trend_long_put_next_expiry"),
-        ("IWM", "base", "trend_long_put_next_expiry"),
-        ("NVDA", "fast", "trend_long_call_next_expiry"),
-        ("NVDA", "base", "trend_long_put_next_expiry"),
-        ("TSLA", "base", "trend_long_call_next_expiry"),
-        ("TSLA", "base", "trend_long_put_next_expiry"),
-        ("TSLA", "fast", "trend_long_put_next_expiry"),
-        ("MSFT", "fast", "trend_long_call_next_expiry"),
-        ("MSFT", "base", "trend_long_call_next_expiry"),
-        ("MSFT", "slow", "trend_long_call_next_expiry"),
-        ("MSFT", "base", "trend_long_put_next_expiry"),
-        ("MSFT", "slow", "trend_long_put_next_expiry"),
+        {"underlying_symbol": "QQQ", "timing_profile": "fast", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "QQQ", "timing_profile": "slow", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "QQQ", "timing_profile": "fast", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "QQQ", "timing_profile": "slow", "base_name": "orb_long_put_same_day"},
+        {"underlying_symbol": "SPY", "timing_profile": "fast", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "SPY", "timing_profile": "base", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "SPY", "timing_profile": "fast", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "IWM", "timing_profile": "fast", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "IWM", "timing_profile": "slow", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "IWM", "timing_profile": "fast", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "NVDA", "timing_profile": "fast", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "NVDA", "timing_profile": "base", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "TSLA", "timing_profile": "base", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "TSLA", "timing_profile": "base", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "TSLA", "timing_profile": "fast", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "MSFT", "timing_profile": "fast", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "MSFT", "timing_profile": "base", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "MSFT", "timing_profile": "slow", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "MSFT", "timing_profile": "base", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "MSFT", "timing_profile": "slow", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "BAC", "timing_profile": "fast", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "BAC", "timing_profile": "fast", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "PLTR", "timing_profile": "fast", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "PLTR", "timing_profile": "base", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "PLTR", "timing_profile": "fast", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "PLTR", "timing_profile": "base", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "GLD", "timing_profile": "base", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "GLD", "timing_profile": "slow", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "GLD", "timing_profile": "base", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "ARKK", "timing_profile": "fast", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "ARKK", "timing_profile": "slow", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "ARKK", "timing_profile": "fast", "base_name": "orb_long_call_same_day"},
+        {"underlying_symbol": "ARKK", "timing_profile": "fast", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "XLE", "timing_profile": "slow", "base_name": "orb_long_call_same_day"},
+        {"underlying_symbol": "XLE", "timing_profile": "base", "base_name": "orb_long_call_same_day"},
+        {"underlying_symbol": "XLE", "timing_profile": "base", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "XLE", "timing_profile": "fast", "base_name": "trend_long_put_next_expiry"},
+        {
+            "underlying_symbol": "XLE",
+            "timing_profile": "base",
+            "base_name": "orb_long_call_same_day",
+            "regime": "choppy",
+            "name": "xle__base__orb_long_call_same_day__choppy",
+        },
     )
 
 
 def _default_strategies() -> tuple[StrategyConfig, ...]:
     base_map = _base_strategy_map()
     strategies: list[StrategyConfig] = []
-    for underlying_symbol, timing_profile, base_name in _selected_strategy_specs():
+    for spec in _selected_strategy_specs():
+        underlying_symbol = str(spec["underlying_symbol"])
+        timing_profile = str(spec["timing_profile"])
+        base_name = str(spec["base_name"])
         template = base_map[base_name]
+        regime = str(spec.get("regime", template["regime"]))
+        name = str(spec.get("name", f"{underlying_symbol.lower()}__{timing_profile}__{base_name}"))
+        description = f"{underlying_symbol} [{timing_profile}] {template['description']}"
+        if regime != template["regime"]:
+            description = f"{description} [{regime}]"
         strategies.append(
             StrategyConfig(
-                name=f"{underlying_symbol.lower()}__{timing_profile}__{base_name}",
+                name=name,
                 underlying_symbol=underlying_symbol,
-                regime=template["regime"],
+                regime=regime,  # type: ignore[arg-type]
                 family=template["family"],
-                description=f"{underlying_symbol} [{timing_profile}] {template['description']}",
+                description=description,
                 dte_mode=template["dte_mode"],
                 signal_name=template["signal_name"],
                 timing_profile=timing_profile,

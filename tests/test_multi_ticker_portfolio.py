@@ -36,9 +36,35 @@ def test_default_multi_ticker_portfolio_contains_all_symbols() -> None:
 
     counts = Counter(strategy.underlying_symbol for strategy in config.strategies)
 
-    assert tuple(config.execution.underlying_symbols) == ("QQQ", "SPY", "IWM", "NVDA", "TSLA", "MSFT")
+    assert tuple(config.execution.underlying_symbols) == (
+        "QQQ",
+        "SPY",
+        "IWM",
+        "NVDA",
+        "TSLA",
+        "MSFT",
+        "BAC",
+        "PLTR",
+        "GLD",
+        "ARKK",
+        "XLE",
+    )
     assert all(counts[symbol] >= 1 for symbol in config.execution.underlying_symbols)
     assert counts["QQQ"] >= 3
+    assert counts["XLE"] >= 4
+
+
+def test_default_multi_ticker_portfolio_includes_xle_choppy_alias() -> None:
+    config = default_portfolio_config()
+    alias = next(
+        strategy
+        for strategy in config.strategies
+        if strategy.name == "xle__base__orb_long_call_same_day__choppy"
+    )
+
+    assert alias.underlying_symbol == "XLE"
+    assert alias.regime == "choppy"
+    assert alias.signal_name == "orb_call"
 
 
 def test_fast_trend_call_triggers_before_base_profile() -> None:
