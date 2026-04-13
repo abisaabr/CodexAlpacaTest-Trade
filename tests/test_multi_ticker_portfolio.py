@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime
+import json
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -284,3 +285,152 @@ def test_startup_check_allows_symbol_when_at_least_one_strategy_is_feasible() ->
             "missing_inventory": ["same_day_calls"],
         }
     ]
+
+
+def test_trade_reconciliation_outputs_roll_up_signals_and_pnl(tmp_path: Path) -> None:
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.run_root = tmp_path / "runs"
+
+    trade_date = "2026-04-13"
+    run_dir = trader.run_root / trade_date
+    run_dir.mkdir(parents=True, exist_ok=True)
+    events = [
+        {
+            "timestamp_et": "2026-04-13T10:00:00-04:00",
+            "event_type": "signal_decision",
+            "attempt_id": "attempt-1",
+            "trade_date": trade_date,
+            "strategy_name": "jpm__fast__trend_long_call_next_expiry",
+            "underlying_symbol": "JPM",
+            "regime": "bull",
+            "signal_name": "trend_call",
+            "timing_profile": "fast",
+            "current_minute": 30,
+            "decision": "eligible",
+            "decision_reason": "eligible",
+            "quantity_planned": 2,
+            "expected_entry_fill_price": 1.25,
+        },
+        {
+            "timestamp_et": "2026-04-13T10:00:05-04:00",
+            "event_type": "order_submission",
+            "phase": "entry",
+            "attempt_id": "attempt-1",
+            "strategy_name": "jpm__fast__trend_long_call_next_expiry",
+            "underlying_symbol": "JPM",
+            "order_id": "entry-1",
+        },
+        {
+            "timestamp_et": "2026-04-13T10:00:08-04:00",
+            "event_type": "entry_result",
+            "phase": "entry",
+            "attempt_id": "attempt-1",
+            "strategy_name": "jpm__fast__trend_long_call_next_expiry",
+            "underlying_symbol": "JPM",
+            "status": "filled",
+            "order_id": "entry-1",
+            "actual_entry_fill_price": 1.27,
+            "entry_slippage": 0.02,
+        },
+        {
+            "timestamp_et": "2026-04-13T11:15:00-04:00",
+            "event_type": "exit_trigger",
+            "phase": "exit",
+            "attempt_id": "attempt-1",
+            "strategy_name": "jpm__fast__trend_long_call_next_expiry",
+            "underlying_symbol": "JPM",
+            "exit_reason": "profit_target",
+            "expected_exit_fill_price": 1.72,
+        },
+        {
+            "timestamp_et": "2026-04-13T11:15:04-04:00",
+            "event_type": "order_submission",
+            "phase": "exit",
+            "attempt_id": "attempt-1",
+            "strategy_name": "jpm__fast__trend_long_call_next_expiry",
+            "underlying_symbol": "JPM",
+            "order_id": "exit-1",
+        },
+        {
+            "timestamp_et": "2026-04-13T11:15:08-04:00",
+            "event_type": "exit_result",
+            "phase": "exit",
+            "attempt_id": "attempt-1",
+            "strategy_name": "jpm__fast__trend_long_call_next_expiry",
+            "underlying_symbol": "JPM",
+            "status": "filled",
+            "order_id": "exit-1",
+            "actual_exit_fill_price": 1.7,
+            "exit_slippage": -0.02,
+            "net_pnl": 85.4,
+            "exit_reason": "profit_target",
+        },
+        {
+            "timestamp_et": "2026-04-13T10:05:00-04:00",
+            "event_type": "signal_decision",
+            "attempt_id": "attempt-2",
+            "trade_date": trade_date,
+            "strategy_name": "xle__base__orb_long_call_same_day__choppy",
+            "underlying_symbol": "XLE",
+            "regime": "choppy",
+            "signal_name": "orb_call",
+            "timing_profile": "base",
+            "current_minute": 35,
+            "decision": "skipped",
+            "decision_reason": "no_eligible_legs",
+        },
+    ]
+    (run_dir / "trade_reconciliation_events.json").write_text(
+        json.dumps(events, indent=2),
+        encoding="utf-8",
+    )
+
+    session = SessionState(
+        trade_date=trade_date,
+        starting_equity=25_000.0,
+        virtual_cash=25_085.4,
+        completed_trades=[
+            {
+                "strategy_name": "jpm__fast__trend_long_call_next_expiry",
+                "underlying_symbol": "JPM",
+                "regime": "bull",
+                "quantity": 2,
+                "entry_time_et": "2026-04-13T10:00:00-04:00",
+                "exit_time_et": "2026-04-13T11:15:08-04:00",
+                "entry_minute": 30,
+                "exit_minute": 105,
+                "entry_fill_price": 1.27,
+                "exit_fill_price": 1.70,
+                "underlying_entry": 245.0,
+                "underlying_exit": 247.3,
+                "exit_reason": "profit_target",
+                "entry_order_id": "entry-1",
+                "exit_order_id": "exit-1",
+                "net_pnl": 85.4,
+                "max_loss_per_combo": 127.0,
+                "max_profit_per_combo": 323.0,
+                "delta_shares_at_entry": 120.0,
+                "vega_dollars_1pct_at_entry": 18.0,
+                "legs": [],
+                "entry_attempt_id": "attempt-1",
+            }
+        ],
+    )
+
+    events_df, reconciliation_df, ticker_df, strategy_df, summary = trader._build_trade_reconciliation_outputs(
+        session=session,
+        trade_date=datetime.fromisoformat(f"{trade_date}T00:00:00").date(),
+    )
+
+    assert len(events_df) == 7
+    assert len(reconciliation_df) == 2
+    assert summary["signal_attempt_count"] == 2
+    assert summary["eligible_signal_count"] == 1
+    assert summary["completed_reconciled_trade_count"] == 1
+    assert summary["realized_reconciled_net_pnl"] == 85.4
+    jpm_row = reconciliation_df.loc[reconciliation_df["attempt_id"] == "attempt-1"].iloc[0]
+    assert jpm_row["final_status"] == "completed"
+    assert jpm_row["entry_status"] == "filled"
+    assert jpm_row["exit_status"] == "filled"
+    assert float(ticker_df.loc[ticker_df["underlying_symbol"] == "JPM", "net_pnl"].iloc[0]) == 85.4
+    assert float(strategy_df.loc[strategy_df["strategy_name"] == "jpm__fast__trend_long_call_next_expiry", "net_pnl"].iloc[0]) == 85.4

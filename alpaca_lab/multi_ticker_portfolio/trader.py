@@ -70,6 +70,7 @@ class OpenTrade:
     entry_order_id: str | None
     entry_fill_price: float
     legs: list[dict[str, Any]]
+    entry_attempt_id: str | None = None
     notes: list[str] = field(default_factory=list)
 
 
@@ -96,6 +97,7 @@ class CompletedTrade:
     delta_shares_at_entry: float
     vega_dollars_1pct_at_entry: float
     legs: list[dict[str, Any]]
+    entry_attempt_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -333,6 +335,43 @@ class MultiTickerPortfolioPaperTrader:
         run_dir = self.run_root / trade_date.isoformat()
         run_dir.mkdir(parents=True, exist_ok=True)
         return run_dir
+
+    def _trade_reconciliation_events_path(self, trade_date: date) -> Path:
+        return self._session_run_dir(trade_date) / "trade_reconciliation_events.json"
+
+    def _append_trade_event(self, trade_date: date, event: dict[str, Any]) -> Path:
+        payload = {"timestamp_et": _now_et().isoformat(), **event}
+        return append_journal_entry(self._trade_reconciliation_events_path(trade_date), payload)
+
+    def _serialize_order_request(self, request: OrderRequest) -> dict[str, Any]:
+        payload = request.to_payload()
+        return {
+            "symbol": request.symbol,
+            "side": request.side,
+            "qty": request.qty,
+            "notional": request.notional,
+            "order_type": request.order_type,
+            "time_in_force": request.time_in_force,
+            "limit_price": request.limit_price,
+            "stop_price": request.stop_price,
+            "client_order_id": request.client_order_id,
+            "asset_class": request.asset_class,
+            "strategy_name": request.strategy_name,
+            "legs": payload.get("legs"),
+            "extra": request.extra,
+        }
+
+    def _event_base_for_trade(self, trade: OpenTrade, *, phase: str) -> dict[str, Any]:
+        return {
+            "attempt_id": trade.entry_attempt_id,
+            "trade_date": date.fromisoformat(trade.entry_time_et[:10]).isoformat(),
+            "strategy_name": trade.strategy_name,
+            "underlying_symbol": trade.underlying_symbol,
+            "regime": trade.regime,
+            "phase": phase,
+            "entry_minute": int(trade.entry_minute),
+            "quantity": int(trade.quantity),
+        }
 
     def _notify_lines(self, *lines: object) -> None:
         if not self.submit_paper_orders or not self.notifier.enabled:
@@ -630,20 +669,41 @@ class MultiTickerPortfolioPaperTrader:
         spot_price: float,
         current_minute: int,
         current_equity: float,
-    ) -> OpenTrade | None:
+        attempt_id: str,
+    ) -> tuple[OpenTrade | None, dict[str, Any]]:
+        event: dict[str, Any] = {
+            "event_type": "signal_decision",
+            "attempt_id": attempt_id,
+            "trade_date": session.trade_date,
+            "strategy_name": strategy.name,
+            "underlying_symbol": strategy.underlying_symbol,
+            "regime": strategy.regime,
+            "signal_name": strategy.signal_name,
+            "timing_profile": strategy.timing_profile,
+            "current_minute": int(current_minute),
+            "current_equity": round(float(current_equity), 4),
+            "decision": "skipped",
+            "decision_reason": None,
+        }
         if strategy.name in session.signals_fired:
-            return None
+            event["decision_reason"] = "duplicate_signal"
+            return None, event
         if len(session.open_trades) >= self.portfolio_config.risk.max_open_positions:
-            return None
+            event["decision_reason"] = "max_open_positions"
+            return None, event
         if self._regime_position_count(session, strategy.regime) >= self.portfolio_config.risk.max_positions_per_regime:
-            return None
+            event["decision_reason"] = "max_positions_per_regime"
+            return None, event
         if self._symbol_position_count(session, strategy.underlying_symbol) >= self.portfolio_config.risk.max_positions_per_symbol:
-            return None
+            event["decision_reason"] = "max_positions_per_symbol"
+            return None, event
         if any(trade["strategy_name"] == strategy.name for trade in session.open_trades):
-            return None
+            event["decision_reason"] = "strategy_already_open"
+            return None, event
         legs = self._select_legs(strategy, option_chain, date.fromisoformat(session.trade_date))
         if not legs:
-            return None
+            event["decision_reason"] = "no_eligible_legs"
+            return None, event
         entry_debit = sum(leg.mark if leg.side == "long" else -leg.mark for leg in legs)
         leg_payloads = [
             {
@@ -666,7 +726,8 @@ class MultiTickerPortfolioPaperTrader:
         ]
         max_loss_per_combo, max_profit_per_combo = _estimate_combo_bounds(leg_payloads)
         if max_loss_per_combo <= 0.0:
-            return None
+            event["decision_reason"] = "invalid_max_loss"
+            return None, event
         risk_scale = self._effective_risk_scale(ledger, current_equity)
         reserved_risk = sum(
             float(trade["max_loss_per_combo"]) * int(trade["quantity"]) for trade in session.open_trades
@@ -679,7 +740,12 @@ class MultiTickerPortfolioPaperTrader:
         allocatable_risk = min(remaining_risk, per_trade_budget)
         quantity_by_risk = math.floor(allocatable_risk / max_loss_per_combo)
         if quantity_by_risk < 1:
-            return None
+            event["decision_reason"] = "risk_budget_too_small"
+            event["risk_scale"] = round(risk_scale, 6)
+            event["reserved_risk"] = round(reserved_risk, 4)
+            event["remaining_risk"] = round(remaining_risk, 4)
+            event["per_trade_budget"] = round(per_trade_budget, 4)
+            return None, event
         debit_cash = max(0.0, entry_debit * CONTRACT_MULTIPLIER)
         quantity_by_cash = (
             math.floor(max(0.0, session.virtual_cash) / debit_cash)
@@ -688,8 +754,11 @@ class MultiTickerPortfolioPaperTrader:
         )
         quantity = min(strategy.max_contracts, quantity_by_risk, quantity_by_cash)
         if quantity < 1:
-            return None
-        return OpenTrade(
+            event["decision_reason"] = "insufficient_cash"
+            event["debit_cash_per_combo"] = round(debit_cash, 4)
+            event["virtual_cash"] = round(float(session.virtual_cash), 4)
+            return None, event
+        open_trade = OpenTrade(
             strategy_name=strategy.name,
             underlying_symbol=strategy.underlying_symbol,
             regime=strategy.regime,
@@ -706,7 +775,30 @@ class MultiTickerPortfolioPaperTrader:
             entry_order_id=None,
             entry_fill_price=legs[0].mark,
             legs=leg_payloads,
+            entry_attempt_id=attempt_id,
         )
+        delta_shares, vega_dollars = self._expected_entry_greeks(open_trade)
+        event.update(
+            {
+                "decision": "eligible",
+                "decision_reason": "eligible",
+                "quantity_planned": int(quantity),
+                "risk_scale": round(risk_scale, 6),
+                "reserved_risk": round(reserved_risk, 4),
+                "remaining_risk": round(remaining_risk, 4),
+                "per_trade_budget": round(per_trade_budget, 4),
+                "allocatable_risk": round(allocatable_risk, 4),
+                "quantity_by_risk": int(quantity_by_risk),
+                "quantity_by_cash": int(quantity_by_cash),
+                "expected_entry_debit": round(float(entry_debit), 4),
+                "expected_entry_fill_price": round(float(open_trade.entry_fill_price), 4),
+                "max_loss_per_combo": round(float(max_loss_per_combo), 4),
+                "max_profit_per_combo": round(float(max_profit_per_combo), 4),
+                "expected_delta_shares": round(float(delta_shares), 4),
+                "expected_vega_dollars_1pct": round(float(vega_dollars), 4),
+            }
+        )
+        return open_trade, event
 
     def _simple_entry_order_requests(self, trade: OpenTrade) -> list[OrderRequest]:
         leg = trade.legs[0]
@@ -801,26 +893,78 @@ class MultiTickerPortfolioPaperTrader:
         requests: list[OrderRequest],
         *,
         journal_name: str,
+        trade: OpenTrade,
+        phase: str,
     ) -> tuple[dict[str, Any], float]:
-        run_dir = self._session_run_dir(_now_et().date())
-        for request in requests:
+        trade_date = date.fromisoformat(trade.entry_time_et[:10])
+        run_dir = self._session_run_dir(trade_date)
+        event_base = self._event_base_for_trade(trade, phase=phase)
+        for request_index, request in enumerate(requests, start=1):
             response = self.broker.submit_order(
                 request,
                 dry_run=not self.submit_paper_orders,
                 explicitly_requested=self.submit_paper_orders,
             )
             append_journal_entry(run_dir / "order_journal.json", {"journal": journal_name, "response": response})
+            self._append_trade_event(
+                trade_date,
+                {
+                    **event_base,
+                    "event_type": "order_submission",
+                    "request_index": request_index,
+                    "request": self._serialize_order_request(request),
+                    "response_status": response.get("status"),
+                    "order_id": response.get("id"),
+                    "client_order_id": request.client_order_id,
+                },
+            )
             if response.get("status") == "dry_run":
                 fallback_price = 0.0 if request.order_type == "market" else float(request.limit_price or 0.0)
+                self._append_trade_event(
+                    trade_date,
+                    {
+                        **event_base,
+                        "event_type": "order_terminal",
+                        "request_index": request_index,
+                        "status": "dry_run",
+                        "order_id": response.get("id"),
+                        "client_order_id": request.client_order_id,
+                        "filled_avg_price": fallback_price,
+                    },
+                )
                 return response, fallback_price
             order_id = str(response.get("id") or "")
             terminal = self._wait_for_terminal_order(order_id)
             append_journal_entry(run_dir / "order_journal.json", {"journal": journal_name, "terminal": terminal})
+            self._append_trade_event(
+                trade_date,
+                {
+                    **event_base,
+                    "event_type": "order_terminal",
+                    "request_index": request_index,
+                    "status": terminal.get("status"),
+                    "order_id": order_id,
+                    "client_order_id": request.client_order_id,
+                    "filled_qty": terminal.get("filled_qty"),
+                    "qty": terminal.get("qty"),
+                    "filled_avg_price": terminal.get("filled_avg_price"),
+                },
+            )
             if self._is_filled(terminal):
                 filled_avg_price = float(terminal.get("filled_avg_price") or request.limit_price or 0.0)
                 return terminal, filled_avg_price
             if str(terminal.get("status", "")) in OPEN_STATUSES:
                 self.broker.cancel_order(order_id, dry_run=False, explicitly_requested=True)
+                self._append_trade_event(
+                    trade_date,
+                    {
+                        **event_base,
+                        "event_type": "order_cancel",
+                        "request_index": request_index,
+                        "order_id": order_id,
+                        "client_order_id": request.client_order_id,
+                    },
+                )
         return {"status": "not_filled"}, 0.0
 
     def _alert(self, session: SessionState, level: str, message: str) -> None:
@@ -839,6 +983,8 @@ class MultiTickerPortfolioPaperTrader:
 
     def _run_entry(self, trade: OpenTrade, session: SessionState, current_equity: float) -> bool:
         delta_shares, vega_dollars = self._expected_entry_greeks(trade)
+        trade_date = date.fromisoformat(session.trade_date)
+        expected_entry_fill_price = float(trade.entry_fill_price)
         if abs(delta_shares) >= self.portfolio_config.risk.soft_alert_delta_shares:
             self._alert(
                 session,
@@ -854,9 +1000,23 @@ class MultiTickerPortfolioPaperTrader:
         response, fill_price = self._execute_attempts(
             self._simple_entry_order_requests(trade),
             journal_name=f"{trade.strategy_name}_entry",
+            trade=trade,
+            phase="entry",
         )
         if response.get("status") == "not_filled":
             self._alert(session, "warning", f"{trade.strategy_name} entry did not fill")
+            self._append_trade_event(
+                trade_date,
+                {
+                    **self._event_base_for_trade(trade, phase="entry"),
+                    "event_type": "entry_result",
+                    "status": "not_filled",
+                    "expected_entry_fill_price": round(expected_entry_fill_price, 4),
+                    "actual_entry_fill_price": None,
+                    "entry_slippage": None,
+                    "virtual_cash_after": round(float(session.virtual_cash), 4),
+                },
+            )
             return False
         trade.entry_order_id = str(response.get("id") or "") if response.get("id") else None
         trade.entry_fill_price = fill_price if fill_price > 0.0 else trade.entry_fill_price
@@ -867,6 +1027,19 @@ class MultiTickerPortfolioPaperTrader:
         )
         session.open_trades.append(asdict(trade))
         session.signals_fired.append(trade.strategy_name)
+        self._append_trade_event(
+            trade_date,
+            {
+                **self._event_base_for_trade(trade, phase="entry"),
+                "event_type": "entry_result",
+                "status": str(response.get("status") or "filled"),
+                "order_id": trade.entry_order_id,
+                "expected_entry_fill_price": round(expected_entry_fill_price, 4),
+                "actual_entry_fill_price": round(float(trade.entry_fill_price), 4),
+                "entry_slippage": round(float(trade.entry_fill_price) - expected_entry_fill_price, 4),
+                "virtual_cash_after": round(float(session.virtual_cash), 4),
+            },
+        )
         self.logger.info(
             "entered %s symbol=%s qty=%s equity=%.2f submit=%s",
             trade.strategy_name,
@@ -908,6 +1081,28 @@ class MultiTickerPortfolioPaperTrader:
         mark_map = self._mark_to_close(trade, snapshot.option_chain)
         if len(mark_map) != len(trade.legs):
             return False
+        trade_date = date.fromisoformat(session.trade_date)
+        expected_exit_fill_price = (
+            float(next(iter(mark_map.values())))
+            if len(mark_map) == 1
+            else _position_mark_cashflow(trade.legs, mark_map) / CONTRACT_MULTIPLIER
+        )
+        current_close_cashflow = _position_mark_cashflow(trade.legs, mark_map)
+        expected_pnl = (
+            _entry_cashflow_from_debit(float(trade.entry_debit), int(trade.quantity), len(trade.legs))
+            + current_close_cashflow * int(trade.quantity)
+            - EXIT_COMMISSION_PER_CONTRACT * len(trade.legs) * int(trade.quantity)
+        )
+        self._append_trade_event(
+            trade_date,
+            {
+                **self._event_base_for_trade(trade, phase="exit"),
+                "event_type": "exit_trigger",
+                "exit_reason": exit_reason,
+                "expected_exit_fill_price": round(float(expected_exit_fill_price), 4),
+                "expected_net_pnl": round(float(expected_pnl), 4),
+            },
+        )
         market_fallback = (
             self.portfolio_config.execution.allow_market_exit_fallback
             and snapshot.current_minute >= self.portfolio_config.execution.market_exit_fallback_minute
@@ -915,9 +1110,26 @@ class MultiTickerPortfolioPaperTrader:
         response, fill_price = self._execute_attempts(
             self._simple_exit_order_requests(trade, mark_map, market_fallback=market_fallback),
             journal_name=f"{trade.strategy_name}_exit",
+            trade=trade,
+            phase="exit",
         )
         if response.get("status") == "not_filled":
             self._alert(session, "warning", f"{trade.strategy_name} exit did not fill")
+            self._append_trade_event(
+                trade_date,
+                {
+                    **self._event_base_for_trade(trade, phase="exit"),
+                    "event_type": "exit_result",
+                    "status": "not_filled",
+                    "exit_reason": exit_reason,
+                    "order_id": None,
+                    "expected_exit_fill_price": round(float(expected_exit_fill_price), 4),
+                    "actual_exit_fill_price": None,
+                    "exit_slippage": None,
+                    "net_pnl": None,
+                    "virtual_cash_after": round(float(session.virtual_cash), 4),
+                },
+            )
             return False
         exit_cashflow = _exit_cashflow_from_fill(
             fill_price=fill_price,
@@ -952,11 +1164,27 @@ class MultiTickerPortfolioPaperTrader:
             delta_shares_at_entry=round(delta_shares, 4),
             vega_dollars_1pct_at_entry=round(vega_dollars, 4),
             legs=list(trade.legs),
+            entry_attempt_id=trade.entry_attempt_id,
         )
         session.completed_trades.append(asdict(completed))
         session.open_trades = [
             item for item in session.open_trades if item["strategy_name"] != trade.strategy_name
         ]
+        self._append_trade_event(
+            trade_date,
+            {
+                **self._event_base_for_trade(trade, phase="exit"),
+                "event_type": "exit_result",
+                "status": str(response.get("status") or "filled"),
+                "exit_reason": exit_reason,
+                "order_id": completed.exit_order_id,
+                "expected_exit_fill_price": round(float(expected_exit_fill_price), 4),
+                "actual_exit_fill_price": round(float(fill_price), 4),
+                "exit_slippage": round(float(fill_price) - float(expected_exit_fill_price), 4),
+                "net_pnl": round(float(net_pnl), 4),
+                "virtual_cash_after": round(float(session.virtual_cash), 4),
+            },
+        )
         self.logger.info("exited %s reason=%s pnl=%.2f", trade.strategy_name, exit_reason, net_pnl)
         return True
 
@@ -1268,7 +1496,8 @@ class MultiTickerPortfolioPaperTrader:
                     timing_profile=strategy.timing_profile,
                 ):
                     continue
-                open_trade = self._evaluate_entry(
+                attempt_id = f"{strategy.name}:{session.trade_date}:{snapshot.current_minute}:{time.time_ns()}"
+                open_trade, signal_event = self._evaluate_entry(
                     strategy=strategy,
                     session=session,
                     ledger=ledger,
@@ -1276,7 +1505,9 @@ class MultiTickerPortfolioPaperTrader:
                     spot_price=snapshot.latest_close,
                     current_minute=snapshot.current_minute,
                     current_equity=current_equity,
+                    attempt_id=attempt_id,
                 )
+                self._append_trade_event(trade_date, signal_event)
                 if open_trade is None:
                     continue
                 if self._run_entry(open_trade, session, current_equity):
@@ -1303,6 +1534,231 @@ class MultiTickerPortfolioPaperTrader:
             if snapshot is None:
                 continue
             self._run_exit(trade_payload, session, snapshot, "forced_flatten")
+
+    def _load_trade_reconciliation_events(self, trade_date: date) -> pd.DataFrame:
+        payload = _read_json(self._trade_reconciliation_events_path(trade_date), [])
+        if isinstance(payload, dict):
+            payload = [payload]
+        if not isinstance(payload, list) or not payload:
+            return pd.DataFrame()
+        frame = pd.DataFrame(payload)
+        if "timestamp_et" in frame.columns:
+            frame["timestamp_et"] = frame["timestamp_et"].astype(str)
+        return frame
+
+    def _build_trade_reconciliation_outputs(
+        self,
+        *,
+        session: SessionState,
+        trade_date: date,
+    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, Any]]:
+        events_df = self._load_trade_reconciliation_events(trade_date)
+        completed_df = pd.DataFrame(session.completed_trades)
+        if completed_df.empty:
+            completed_df = pd.DataFrame(columns=[field for field in CompletedTrade.__dataclass_fields__.keys()])
+        else:
+            completed_df = completed_df.copy()
+
+        if events_df.empty:
+            empty = pd.DataFrame()
+            summary = {
+                "signal_attempt_count": 0,
+                "eligible_signal_count": 0,
+                "skipped_signal_count": 0,
+                "entry_submission_count": 0,
+                "exit_submission_count": 0,
+                "entry_fill_count": 0,
+                "entry_not_filled_count": 0,
+                "exit_fill_count": 0,
+                "open_reconciled_trade_count": len(session.open_trades),
+                "completed_reconciled_trade_count": len(session.completed_trades),
+                "realized_reconciled_net_pnl": round(
+                    float(completed_df["net_pnl"].sum()) if "net_pnl" in completed_df else 0.0,
+                    4,
+                ),
+            }
+            return empty, empty, empty, empty, summary
+
+        if "phase" not in events_df.columns:
+            events_df["phase"] = None
+        if "attempt_id" not in events_df.columns:
+            events_df["attempt_id"] = None
+
+        signal_df = events_df.loc[events_df["event_type"] == "signal_decision"].copy()
+        if signal_df.empty:
+            signal_df = pd.DataFrame(columns=["attempt_id"])
+        entry_results = (
+            events_df.loc[events_df["event_type"] == "entry_result"]
+            .sort_values("timestamp_et")
+            .drop_duplicates(subset=["attempt_id"], keep="last")
+        )
+        exit_triggers = (
+            events_df.loc[events_df["event_type"] == "exit_trigger"]
+            .sort_values("timestamp_et")
+            .drop_duplicates(subset=["attempt_id"], keep="last")
+        )
+        exit_results = (
+            events_df.loc[events_df["event_type"] == "exit_result"]
+            .sort_values("timestamp_et")
+            .drop_duplicates(subset=["attempt_id"], keep="last")
+        )
+        if not completed_df.empty and "entry_attempt_id" in completed_df.columns:
+            completed_lookup = completed_df.set_index("entry_attempt_id", drop=False).to_dict("index")
+        else:
+            completed_lookup = {}
+        open_attempt_ids = {
+            str(trade.get("entry_attempt_id"))
+            for trade in session.open_trades
+            if trade.get("entry_attempt_id") is not None
+        }
+
+        reconciliation_rows: list[dict[str, Any]] = []
+        for signal_row in signal_df.sort_values("timestamp_et").to_dict("records"):
+            attempt_id = str(signal_row.get("attempt_id") or "")
+            entry_row = (
+                entry_results.loc[entry_results["attempt_id"] == attempt_id].iloc[0].to_dict()
+                if attempt_id and not entry_results.loc[entry_results["attempt_id"] == attempt_id].empty
+                else {}
+            )
+            exit_trigger_row = (
+                exit_triggers.loc[exit_triggers["attempt_id"] == attempt_id].iloc[0].to_dict()
+                if attempt_id and not exit_triggers.loc[exit_triggers["attempt_id"] == attempt_id].empty
+                else {}
+            )
+            exit_row = (
+                exit_results.loc[exit_results["attempt_id"] == attempt_id].iloc[0].to_dict()
+                if attempt_id and not exit_results.loc[exit_results["attempt_id"] == attempt_id].empty
+                else {}
+            )
+            completed_row = completed_lookup.get(attempt_id, {})
+            if signal_row.get("decision") != "eligible":
+                final_status = "skipped"
+            elif exit_row:
+                final_status = "completed" if exit_row.get("status") != "not_filled" else "exit_not_filled"
+            elif attempt_id in open_attempt_ids:
+                final_status = "open"
+            elif entry_row:
+                final_status = "entered" if entry_row.get("status") != "not_filled" else "entry_not_filled"
+            else:
+                final_status = "signal_only"
+            reconciliation_rows.append(
+                {
+                    "attempt_id": attempt_id,
+                    "trade_date": signal_row.get("trade_date"),
+                    "strategy_name": signal_row.get("strategy_name"),
+                    "underlying_symbol": signal_row.get("underlying_symbol"),
+                    "regime": signal_row.get("regime"),
+                    "signal_name": signal_row.get("signal_name"),
+                    "timing_profile": signal_row.get("timing_profile"),
+                    "signal_time_et": signal_row.get("timestamp_et"),
+                    "signal_minute": signal_row.get("current_minute"),
+                    "signal_decision": signal_row.get("decision"),
+                    "signal_reason": signal_row.get("decision_reason"),
+                    "quantity_planned": signal_row.get("quantity_planned"),
+                    "expected_entry_fill_price": signal_row.get("expected_entry_fill_price"),
+                    "entry_submission_count": int(
+                        len(
+                            events_df.loc[
+                                (events_df["attempt_id"] == attempt_id)
+                                & (events_df["event_type"] == "order_submission")
+                                & (events_df["phase"] == "entry")
+                            ]
+                        )
+                    ),
+                    "entry_status": entry_row.get("status"),
+                    "entry_order_id": entry_row.get("order_id"),
+                    "entry_actual_fill_price": entry_row.get("actual_entry_fill_price"),
+                    "entry_slippage": entry_row.get("entry_slippage"),
+                    "exit_trigger_reason": exit_trigger_row.get("exit_reason"),
+                    "expected_exit_fill_price": exit_row.get(
+                        "expected_exit_fill_price",
+                        exit_trigger_row.get("expected_exit_fill_price"),
+                    ),
+                    "exit_submission_count": int(
+                        len(
+                            events_df.loc[
+                                (events_df["attempt_id"] == attempt_id)
+                                & (events_df["event_type"] == "order_submission")
+                                & (events_df["phase"] == "exit")
+                            ]
+                        )
+                    ),
+                    "exit_status": exit_row.get("status"),
+                    "exit_order_id": exit_row.get("order_id"),
+                    "exit_actual_fill_price": exit_row.get("actual_exit_fill_price"),
+                    "exit_slippage": exit_row.get("exit_slippage"),
+                    "exit_reason": completed_row.get("exit_reason", exit_row.get("exit_reason")),
+                    "realized_net_pnl": completed_row.get("net_pnl", exit_row.get("net_pnl")),
+                    "final_status": final_status,
+                }
+            )
+
+        reconciliation_df = pd.DataFrame(reconciliation_rows)
+        completed_for_perf = reconciliation_df.loc[
+            reconciliation_df["final_status"] == "completed"
+        ].copy() if not reconciliation_df.empty else pd.DataFrame()
+
+        def _performance_table(group_col: str) -> pd.DataFrame:
+            if completed_for_perf.empty:
+                return pd.DataFrame(
+                    columns=[
+                        group_col,
+                        "trade_count",
+                        "net_pnl",
+                        "avg_pnl",
+                        "win_rate_pct",
+                    ]
+                )
+            grouped = completed_for_perf.groupby(group_col, dropna=False)
+            table = grouped["realized_net_pnl"].agg(["count", "sum", "mean"]).reset_index()
+            wins = (
+                completed_for_perf.assign(_win=completed_for_perf["realized_net_pnl"].astype(float) > 0.0)
+                .groupby(group_col, dropna=False)["_win"]
+                .mean()
+                .reset_index(name="win_rate_pct")
+            )
+            merged = table.merge(wins, on=group_col, how="left")
+            merged = merged.rename(
+                columns={
+                    "count": "trade_count",
+                    "sum": "net_pnl",
+                    "mean": "avg_pnl",
+                }
+            )
+            merged["net_pnl"] = merged["net_pnl"].round(4)
+            merged["avg_pnl"] = merged["avg_pnl"].round(4)
+            merged["win_rate_pct"] = (merged["win_rate_pct"] * 100.0).round(2)
+            return merged.sort_values("net_pnl", ascending=False).reset_index(drop=True)
+
+        ticker_df = _performance_table("underlying_symbol")
+        strategy_df = _performance_table("strategy_name")
+        summary = {
+            "signal_attempt_count": int(len(signal_df)),
+            "eligible_signal_count": int((signal_df["decision"] == "eligible").sum()) if "decision" in signal_df else 0,
+            "skipped_signal_count": int((signal_df["decision"] != "eligible").sum()) if "decision" in signal_df else 0,
+            "entry_submission_count": int(
+                len(events_df.loc[(events_df["event_type"] == "order_submission") & (events_df["phase"] == "entry")])
+            ),
+            "exit_submission_count": int(
+                len(events_df.loc[(events_df["event_type"] == "order_submission") & (events_df["phase"] == "exit")])
+            ),
+            "entry_fill_count": int(
+                len(entry_results.loc[entry_results["status"].isin(["filled", "dry_run"])])
+            ) if not entry_results.empty else 0,
+            "entry_not_filled_count": int(
+                len(entry_results.loc[entry_results["status"] == "not_filled"])
+            ) if not entry_results.empty else 0,
+            "exit_fill_count": int(
+                len(exit_results.loc[exit_results["status"].isin(["filled", "dry_run"])])
+            ) if not exit_results.empty else 0,
+            "open_reconciled_trade_count": int((reconciliation_df["final_status"] == "open").sum()) if not reconciliation_df.empty else 0,
+            "completed_reconciled_trade_count": int((reconciliation_df["final_status"] == "completed").sum()) if not reconciliation_df.empty else 0,
+            "realized_reconciled_net_pnl": round(
+                float(pd.to_numeric(completed_for_perf["realized_net_pnl"], errors="coerce").fillna(0.0).sum()),
+                4,
+            ) if not completed_for_perf.empty else 0.0,
+        }
+        return events_df, reconciliation_df, ticker_df, strategy_df, summary
 
     def finalize_session(
         self,
@@ -1331,6 +1787,16 @@ class MultiTickerPortfolioPaperTrader:
         self.save_session(session)
         run_dir = self._session_run_dir(date.fromisoformat(session.trade_date))
         completed_df = pd.DataFrame(session.completed_trades)
+        (
+            reconciliation_events_df,
+            reconciliation_df,
+            ticker_performance_df,
+            strategy_performance_df,
+            reconciliation_summary,
+        ) = self._build_trade_reconciliation_outputs(
+            session=session,
+            trade_date=date.fromisoformat(session.trade_date),
+        )
         summary = {
             "trade_date": session.trade_date,
             "submit_paper_orders": self.submit_paper_orders,
@@ -1343,11 +1809,18 @@ class MultiTickerPortfolioPaperTrader:
             "last_symbol_regimes": session.last_symbol_regimes,
             "startup_check_status": session.startup_check_status,
         }
+        summary.update(reconciliation_summary)
         write_summary_bundle(
             run_dir,
             name="multi_ticker_portfolio_session_summary",
             summary=summary,
-            table_map={"completed_trades": completed_df},
+            table_map={
+                "completed_trades": completed_df,
+                "trade_reconciliation": reconciliation_df,
+                "trade_reconciliation_events": reconciliation_events_df,
+                "ticker_performance": ticker_performance_df,
+                "strategy_performance": strategy_performance_df,
+            },
         )
         write_alert_queue(run_dir / "alerts.json", session.alerts)
         if not session.notified_end_of_day:
