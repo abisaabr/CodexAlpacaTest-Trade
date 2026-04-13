@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from hashlib import sha1
 from typing import Any, Literal
 
@@ -16,7 +16,6 @@ except ImportError:  # pragma: no cover - optional runtime hardening
 
 from alpaca_lab.config import LabSettings, LiveTradingRefusedError
 from alpaca_lab.logging_utils import get_logger, redact_value
-
 
 if truststore is not None:  # pragma: no branch - one-time interpreter setup
     truststore.inject_into_ssl()
@@ -196,7 +195,7 @@ class AlpacaBrokerAdapter:
         )
         url = f"{base_url}{path}"
         prepared_url = self._prepare_url(method, url, params=params, json_body=json_body)
-        requested_at = datetime.now(timezone.utc).isoformat()
+        requested_at = datetime.now(UTC).isoformat()
         safe_request = {
             "method": method,
             "url": url,

@@ -4,7 +4,8 @@ import json
 import math
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, date, datetime, time as dt_time, timedelta
+from datetime import UTC, date, datetime, timedelta
+from datetime import time as dt_time
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -16,7 +17,6 @@ from alpaca_lab.config import LabSettings
 from alpaca_lab.logging_utils import get_logger
 from alpaca_lab.multi_ticker_portfolio.config import MultiTickerPortfolioConfig, StrategyConfig
 from alpaca_lab.multi_ticker_portfolio.signals import (
-    MINUTES_PER_RTH_SESSION,
     build_stock_frame,
     infer_symbol_regime,
     signal_is_true,
@@ -24,7 +24,6 @@ from alpaca_lab.multi_ticker_portfolio.signals import (
 from alpaca_lab.notifications import DiscordWebhookNotifier
 from alpaca_lab.qqq_portfolio.greeks import bs_greeks, implied_volatility
 from alpaca_lab.reporting import append_journal_entry, write_alert_queue, write_summary_bundle
-
 
 ET = ZoneInfo("America/New_York")
 OPEN_STATUSES = {"accepted", "new", "partially_filled", "pending_new", "accepted_for_bidding"}

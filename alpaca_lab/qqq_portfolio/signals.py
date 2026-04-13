@@ -5,7 +5,6 @@ from datetime import date
 
 import pandas as pd
 
-
 RTH_START_MINUTE = 9 * 60 + 30
 RTH_END_MINUTE = 15 * 60 + 59
 MINUTES_PER_RTH_SESSION = 390

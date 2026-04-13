@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +15,7 @@ def ensure_directory(path: Path) -> Path:
 
 
 def timestamp_slug(moment: datetime | None = None) -> str:
-    current = moment or datetime.now(timezone.utc)
+    current = moment or datetime.now(UTC)
     return current.strftime("%Y%m%d_%H%M%S")
 
 

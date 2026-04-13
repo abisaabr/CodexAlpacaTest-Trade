@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +13,7 @@ class IngestionMetadata(BaseModel):
     request_params: dict[str, Any] = Field(default_factory=dict)
     artifacts: dict[str, str] = Field(default_factory=dict)
     extra_counts: dict[str, int] = Field(default_factory=dict)
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     restart_safe: bool = True
     skipped: bool = False
 
@@ -28,7 +28,7 @@ class IngestionMetadata(BaseModel):
         extra_counts: dict[str, int] | None = None,
         restart_safe: bool = True,
         skipped: bool = False,
-    ) -> "IngestionMetadata":
+    ) -> IngestionMetadata:
         return cls(
             dataset_name=dataset_name,
             row_count=row_count,

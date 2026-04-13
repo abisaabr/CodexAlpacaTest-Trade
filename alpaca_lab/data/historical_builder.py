@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +23,11 @@ from alpaca_lab.data.normalization import (
     normalize_option_trade_chunk,
     normalize_stock_bar_chunk,
 )
-from alpaca_lab.data.quality import aggregate_quality_reports, build_quality_rows, selected_contract_report
+from alpaca_lab.data.quality import (
+    aggregate_quality_reports,
+    build_quality_rows,
+    selected_contract_report,
+)
 from alpaca_lab.data.schemas import (
     OPTION_BAR_SCHEMA,
     OPTION_CONTRACT_SCHEMA,
@@ -87,7 +91,7 @@ class HistoricalBuildRequest(BaseModel):
         raise TypeError("option_types must be a sequence or comma-separated string.")
 
     @model_validator(mode="after")
-    def validate_request(self) -> "HistoricalBuildRequest":
+    def validate_request(self) -> HistoricalBuildRequest:
         if self.end_date < self.start_date:
             raise ValueError("end_date must be on or after start_date.")
         if self.option_underlyings is None:
@@ -337,7 +341,7 @@ class HistoricalDatasetBuilder:
         manifest: BuildManifestStore,
     ) -> None:
         inventory_end = request.end_date + timedelta(days=request.max_dte)
-        collected_at = datetime.now(timezone.utc)
+        collected_at = datetime.now(UTC)
         for underlying in request.option_underlyings or ():
             for chunk in iter_date_chunks(request.start_date, inventory_end, chunk_days=request.contract_chunk_days):
                 chunk_id = f"{underlying}__{chunk.label}"
@@ -582,7 +586,7 @@ class HistoricalDatasetBuilder:
         if selected_history.empty:
             return
 
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(UTC).date()
         selected_history["expiration_date"] = pd.to_datetime(
             selected_history["expiration_date"], errors="coerce"
         ).dt.date
@@ -598,7 +602,7 @@ class HistoricalDatasetBuilder:
             return
 
         active_selected = active_selected.drop_duplicates(subset=["symbol"]).reset_index(drop=True)
-        collected_at = datetime.now(timezone.utc)
+        collected_at = datetime.now(UTC)
         collected_at_slug = collected_at.strftime("%Y%m%d_%H%M%S")
         underlying_lookup = {
             row.symbol: row.underlying_symbol

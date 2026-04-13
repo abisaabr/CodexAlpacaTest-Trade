@@ -3,7 +3,6 @@ from __future__ import annotations
 import math
 from statistics import NormalDist
 
-
 RISK_FREE_RATE = 0.04
 NORM = NormalDist()
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
@@ -10,8 +10,19 @@ from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from alpaca_lab.brokers.alpaca import AlpacaBrokerAdapter
 from alpaca_lab.config import LabSettings
 from alpaca_lab.data.models import IngestionMetadata
-from alpaca_lab.data.normalization import normalize_option_bars, normalize_option_contracts, normalize_stock_bars
-from alpaca_lab.data.storage import ensure_directory, slugify, timestamp_slug, write_json, write_parquet, write_text
+from alpaca_lab.data.normalization import (
+    normalize_option_bars,
+    normalize_option_contracts,
+    normalize_stock_bars,
+)
+from alpaca_lab.data.storage import (
+    ensure_directory,
+    slugify,
+    timestamp_slug,
+    write_json,
+    write_parquet,
+    write_text,
+)
 from alpaca_lab.logging_utils import get_logger
 
 
@@ -39,7 +50,7 @@ class StockBarIngestionRequest(BaseModel):
         return _coerce_symbols(value)
 
     @model_validator(mode="after")
-    def validate_window(self) -> "StockBarIngestionRequest":
+    def validate_window(self) -> StockBarIngestionRequest:
         if self.end <= self.start:
             raise ValueError("end must be after start")
         return self
@@ -66,7 +77,7 @@ class OptionsIngestionRequest(BaseModel):
         return _coerce_symbols(value)
 
     @model_validator(mode="after")
-    def validate_parameters(self) -> "OptionsIngestionRequest":
+    def validate_parameters(self) -> OptionsIngestionRequest:
         if self.min_dte < 0 or self.max_dte < self.min_dte:
             raise ValueError("DTE window must be non-negative and ordered.")
         if not 0 < self.strike_distance_pct <= 1:
@@ -149,7 +160,7 @@ class DataIngestionService:
         return metadata
 
     def ingest_options_data(self, request: OptionsIngestionRequest) -> IngestionMetadata:
-        anchor_date = request.as_of or datetime.now(timezone.utc).date()
+        anchor_date = request.as_of or datetime.now(UTC).date()
         expiry_start = anchor_date + timedelta(days=request.min_dte)
         expiry_end = anchor_date + timedelta(days=request.max_dte)
         dataset_name = slugify(

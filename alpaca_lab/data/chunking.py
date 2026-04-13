@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from itertools import islice
-from typing import Iterable, Iterator, Sequence, TypeVar
+from typing import TypeVar
 from zoneinfo import ZoneInfo
-
 
 T = TypeVar("T")
 
@@ -49,7 +49,7 @@ def market_session_bounds(
     market_zone = ZoneInfo(timezone_name)
     session_start = datetime.combine(trade_date, time(hour=9, minute=30), tzinfo=market_zone)
     session_end = datetime.combine(trade_date, time(hour=16, minute=0), tzinfo=market_zone)
-    return session_start.astimezone(timezone.utc), session_end.astimezone(timezone.utc)
+    return session_start.astimezone(UTC), session_end.astimezone(UTC)
 
 
 def batched(items: Sequence[T] | Iterable[T], batch_size: int) -> Iterator[list[T]]:

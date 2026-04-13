@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date
-from typing import Iterable
 
 import pandas as pd
 
@@ -126,18 +126,26 @@ def select_contracts_for_trade_date(
             selected["reference_price"] = reference.reference_price
             selected["atm_strike"] = atm_strike
             selected["relative_strike_step"] = selected["strike_price"].map(step_lookup).astype("Int64")
-            selected["selection_reason"] = selected.apply(
-                lambda row: (
+            expiration_label = pd.Timestamp(expiration_date).date().isoformat()
+
+            def _selection_reason(
+                row: pd.Series,
+                *,
+                current_option_type: str = option_type,
+                current_expiration: str = expiration_label,
+                current_atm_strike: float = atm_strike,
+            ) -> str:
+                return (
                     f"reference=median_first_{reference_window_minutes}m_close;"
                     f" dte={int(row['dte'])};"
-                    f" option_type={option_type};"
-                    f" expiration_date={pd.Timestamp(expiration_date).date().isoformat()};"
-                    f" atm_strike={atm_strike:.4f};"
+                    f" option_type={current_option_type};"
+                    f" expiration_date={current_expiration};"
+                    f" atm_strike={current_atm_strike:.4f};"
                     f" strike_step={int(row['relative_strike_step'])};"
                     f" within_plus_minus_{strike_steps}_steps"
-                ),
-                axis=1,
-            )
+                )
+
+            selected["selection_reason"] = selected.apply(_selection_reason, axis=1)
             rows.append(
                 selected[
                     [

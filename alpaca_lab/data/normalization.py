@@ -16,7 +16,6 @@ from alpaca_lab.data.schemas import (
     STOCK_BAR_SCHEMA,
 )
 
-
 SHORT_BAR_RENAMES = {
     "t": "timestamp",
     "o": "open",
