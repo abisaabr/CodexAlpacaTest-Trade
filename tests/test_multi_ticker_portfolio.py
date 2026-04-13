@@ -3,12 +3,17 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
 from alpaca_lab.multi_ticker_portfolio.config import default_portfolio_config, load_portfolio_config
 from alpaca_lab.multi_ticker_portfolio.signals import signal_is_true
-from alpaca_lab.multi_ticker_portfolio.trader import MultiTickerPortfolioPaperTrader, SessionState
+from alpaca_lab.multi_ticker_portfolio.trader import (
+    MultiTickerPortfolioPaperTrader,
+    SessionState,
+    SymbolSnapshot,
+)
 
 
 def _build_frame(rows: int, *, close_fn, vwap_offset: float = -0.05, ema_fast_offset: float = 0.02, ema_slow_offset: float = 0.0) -> pd.DataFrame:
@@ -51,6 +56,7 @@ def test_default_multi_ticker_portfolio_contains_all_symbols() -> None:
         "GDX",
         "SLV",
         "AMZN",
+        "JPM",
     )
     assert all(counts[symbol] >= 1 for symbol in config.execution.underlying_symbols)
     assert counts["QQQ"] >= 3
@@ -58,6 +64,7 @@ def test_default_multi_ticker_portfolio_contains_all_symbols() -> None:
     assert counts["GDX"] >= 5
     assert counts["SLV"] >= 5
     assert counts["AMZN"] >= 7
+    assert counts["JPM"] >= 6
 
 
 def test_default_multi_ticker_portfolio_includes_xle_choppy_alias() -> None:
@@ -148,3 +155,132 @@ def test_disabled_daily_loss_gate_never_blocks_entries() -> None:
 
     assert blocked is False
     assert reason is None
+
+
+def test_startup_check_only_requires_inventory_for_promoted_dte_modes() -> None:
+    full_config = default_portfolio_config()
+    jpm_strategies = tuple(
+        strategy for strategy in full_config.strategies if strategy.underlying_symbol == "JPM"
+    )
+    config = full_config.model_copy(
+        update={
+            "execution": full_config.execution.model_copy(update={"underlying_symbols": ("JPM",)}),
+            "strategies": jpm_strategies,
+        }
+    )
+
+    class _BrokerStub:
+        def get_account(self) -> dict[str, object]:
+            return {"buying_power": 25_000.0}
+
+        def get_positions(self) -> list[object]:
+            return []
+
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.underlyings = ("JPM",)
+    trader.broker = _BrokerStub()
+
+    option_chain = pd.DataFrame(
+        [
+            {"dte": 3, "option_type": "call"},
+            {"dte": 3, "option_type": "put"},
+        ]
+    )
+    now_et = pd.Timestamp.now(tz=ZoneInfo("America/New_York")).to_pydatetime()
+    snapshot = SymbolSnapshot(
+        underlying_symbol="JPM",
+        trade_date=now_et.date(),
+        stock_frame=pd.DataFrame([{"close": 100.0}]),
+        option_chain=option_chain,
+        mark_map={},
+        latest_close=100.0,
+        current_minute=10,
+        latest_timestamp_et=now_et,
+    )
+    session = SessionState(
+        trade_date=now_et.date().isoformat(),
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+
+    status, details = trader._perform_startup_check(
+        session=session,
+        trade_date=now_et.date(),
+        snapshots={"JPM": snapshot},
+    )
+
+    assert status == "passed"
+    assert details["underlyings"]["JPM"]["required_inventory"] == {
+        "same_day_calls": False,
+        "same_day_puts": False,
+        "next_expiry_calls": True,
+        "next_expiry_puts": True,
+    }
+
+
+def test_startup_check_allows_symbol_when_at_least_one_strategy_is_feasible() -> None:
+    full_config = default_portfolio_config()
+    arkk_strategies = tuple(
+        strategy for strategy in full_config.strategies if strategy.underlying_symbol == "ARKK"
+    )
+    config = full_config.model_copy(
+        update={
+            "execution": full_config.execution.model_copy(update={"underlying_symbols": ("ARKK",)}),
+            "strategies": arkk_strategies,
+        }
+    )
+
+    class _BrokerStub:
+        def get_account(self) -> dict[str, object]:
+            return {"buying_power": 25_000.0}
+
+        def get_positions(self) -> list[object]:
+            return []
+
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.underlyings = ("ARKK",)
+    trader.broker = _BrokerStub()
+
+    option_chain = pd.DataFrame(
+        [
+            {"dte": 3, "option_type": "call"},
+            {"dte": 3, "option_type": "put"},
+        ]
+    )
+    now_et = pd.Timestamp.now(tz=ZoneInfo("America/New_York")).to_pydatetime()
+    snapshot = SymbolSnapshot(
+        underlying_symbol="ARKK",
+        trade_date=now_et.date(),
+        stock_frame=pd.DataFrame([{"close": 100.0}]),
+        option_chain=option_chain,
+        mark_map={},
+        latest_close=100.0,
+        current_minute=10,
+        latest_timestamp_et=now_et,
+    )
+    session = SessionState(
+        trade_date=now_et.date().isoformat(),
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+
+    status, details = trader._perform_startup_check(
+        session=session,
+        trade_date=now_et.date(),
+        snapshots={"ARKK": snapshot},
+    )
+
+    assert status == "passed"
+    assert details["underlyings"]["ARKK"]["available_strategies"] == [
+        "arkk__fast__trend_long_call_next_expiry",
+        "arkk__slow__trend_long_call_next_expiry",
+        "arkk__fast__trend_long_put_next_expiry",
+    ]
+    assert details["underlyings"]["ARKK"]["unavailable_strategies"] == [
+        {
+            "name": "arkk__fast__orb_long_call_same_day",
+            "missing_inventory": ["same_day_calls"],
+        }
+    ]

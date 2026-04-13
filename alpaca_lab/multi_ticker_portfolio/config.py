@@ -84,6 +84,7 @@ class ExecutionConfig(BaseModel):
         "GDX",
         "SLV",
         "AMZN",
+        "JPM",
     )
     option_feed: str = "indicative"
     stock_feed: str | None = None
@@ -126,7 +127,7 @@ class MultiTickerPortfolioConfig(BaseModel):
     name: str = "multi_ticker_portfolio_paper_trader"
     description: str = (
         "Shared-account intraday options paper portfolio across QQQ, SPY, IWM, NVDA, TSLA, MSFT, BAC, "
-        "PLTR, GLD, ARKK, XLE, GDX, SLV, and AMZN using the validated shared-account winners."
+        "PLTR, GLD, ARKK, XLE, GDX, SLV, AMZN, and JPM using the validated shared-account winners."
     )
     risk: RiskConfig = Field(default_factory=RiskConfig)
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
@@ -278,6 +279,12 @@ def _selected_strategy_specs() -> tuple[dict[str, object], ...]:
             "regime": "choppy",
             "name": "amzn__slow__orb_long_put_same_day",
         },
+        {"underlying_symbol": "JPM", "timing_profile": "base", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "JPM", "timing_profile": "slow", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "JPM", "timing_profile": "fast", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "JPM", "timing_profile": "fast", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "JPM", "timing_profile": "base", "base_name": "trend_long_put_next_expiry"},
+        {"underlying_symbol": "JPM", "timing_profile": "slow", "base_name": "trend_long_put_next_expiry"},
     )
 
 

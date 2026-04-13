@@ -1088,6 +1088,18 @@ class MultiTickerPortfolioPaperTrader:
             symbol_details["same_day_puts"] = same_day_puts
             symbol_details["next_expiry_calls"] = next_expiry_calls
             symbol_details["next_expiry_puts"] = next_expiry_puts
+            required_inventory = {
+                "same_day_calls": False,
+                "same_day_puts": False,
+                "next_expiry_calls": False,
+                "next_expiry_puts": False,
+            }
+            for strategy in self.portfolio_config.strategies_by_symbol.get(symbol, []):
+                dte_prefix = "same_day" if strategy.dte_mode == "same_day" else "next_expiry"
+                for leg in strategy.legs:
+                    bucket = f"{dte_prefix}_{leg.option_type}s"
+                    required_inventory[bucket] = True
+            symbol_details["required_inventory"] = required_inventory
             if freshness_seconds is None:
                 if now_et <= grace_cutoff:
                     pending_reasons.append(f"{symbol} latest stock bar timestamp not ready yet")
@@ -1098,7 +1110,37 @@ class MultiTickerPortfolioPaperTrader:
                     pending_reasons.append(f"{symbol} stock data stale at {freshness_seconds:.0f}s")
                 else:
                     failures.append(f"{symbol} stock data stale at {freshness_seconds:.0f}s")
-            if same_day_calls == 0 or same_day_puts == 0 or next_expiry_calls == 0 or next_expiry_puts == 0:
+            missing_inventory: list[str] = []
+            inventory_counts = {
+                "same_day_calls": same_day_calls,
+                "same_day_puts": same_day_puts,
+                "next_expiry_calls": next_expiry_calls,
+                "next_expiry_puts": next_expiry_puts,
+            }
+            available_strategies: list[str] = []
+            unavailable_strategies: list[dict[str, Any]] = []
+            for strategy in self.portfolio_config.strategies_by_symbol.get(symbol, []):
+                strategy_missing: list[str] = []
+                dte_prefix = "same_day" if strategy.dte_mode == "same_day" else "next_expiry"
+                for leg in strategy.legs:
+                    bucket = f"{dte_prefix}_{leg.option_type}s"
+                    if inventory_counts[bucket] == 0:
+                        strategy_missing.append(bucket)
+                if strategy_missing:
+                    unavailable_strategies.append(
+                        {
+                            "name": strategy.name,
+                            "missing_inventory": strategy_missing,
+                        }
+                    )
+                    missing_inventory.extend(strategy_missing)
+                else:
+                    available_strategies.append(strategy.name)
+            symbol_details["available_strategies"] = available_strategies
+            if unavailable_strategies:
+                symbol_details["unavailable_strategies"] = unavailable_strategies
+            if not available_strategies:
+                symbol_details["missing_inventory"] = sorted(set(missing_inventory))
                 if now_et <= grace_cutoff:
                     pending_reasons.append(f"{symbol} option inventory incomplete")
                 else:
