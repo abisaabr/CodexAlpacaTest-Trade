@@ -1369,6 +1369,24 @@ class MultiTickerPortfolioPaperTrader:
         now_et = _now_et()
         ledger = self.load_ledger()
         session = self.load_or_create_session(trade_date, ledger)
+        startup_block_markers = (
+            "option inventory incomplete",
+            "stock data stale",
+            "latest stock bar timestamp",
+            "buying power",
+            "unexpected open positions",
+        )
+        if (
+            session.startup_check_status == "passed"
+            and session.blocked_new_entries
+            and not session.open_trades
+            and not session.completed_trades
+            and session.block_reason
+            and any(marker in session.block_reason.lower() for marker in startup_block_markers)
+        ):
+            session.blocked_new_entries = False
+            session.block_reason = None
+            self.save_session(session)
         if not bool(clock.get("is_open", False)):
             if now_et < _rth_open_for(trade_date):
                 seconds_to_open = (_rth_open_for(trade_date) - now_et).total_seconds()
@@ -1437,6 +1455,8 @@ class MultiTickerPortfolioPaperTrader:
                         "details": details,
                     }
                 self._send_morning_notification(session, details)
+                session.blocked_new_entries = False
+                session.block_reason = None
                 self.save_session(session)
 
             if any(not frame.empty for frame in stock_frames.values()):
