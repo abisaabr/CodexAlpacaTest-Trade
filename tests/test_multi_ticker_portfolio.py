@@ -434,3 +434,60 @@ def test_trade_reconciliation_outputs_roll_up_signals_and_pnl(tmp_path: Path) ->
     assert jpm_row["exit_status"] == "filled"
     assert float(ticker_df.loc[ticker_df["underlying_symbol"] == "JPM", "net_pnl"].iloc[0]) == 85.4
     assert float(strategy_df.loc[strategy_df["strategy_name"] == "jpm__fast__trend_long_call_next_expiry", "net_pnl"].iloc[0]) == 85.4
+
+
+def test_backfill_open_trade_reconciliation_assigns_attempt_ids(tmp_path: Path) -> None:
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.run_root = tmp_path / "runs"
+
+    session = SessionState(
+        trade_date="2026-04-13",
+        starting_equity=25_000.0,
+        virtual_cash=24_000.0,
+        open_trades=[
+            {
+                "strategy_name": "spy__fast__trend_long_call_next_expiry",
+                "underlying_symbol": "SPY",
+                "regime": "bull",
+                "quantity": 2,
+                "entry_time_et": "2026-04-13T10:00:00-04:00",
+                "entry_minute": 30,
+                "hard_exit_minute": 360,
+                "underlying_entry": 680.0,
+                "entry_debit": 2.8,
+                "max_loss_per_combo": 280.0,
+                "max_profit_per_combo": 120.0,
+                "profit_target_dollars": 126.0,
+                "stop_loss_dollars": 84.0,
+                "entry_order_id": "entry-123",
+                "entry_fill_price": 2.8,
+                "legs": [
+                    {
+                        "symbol": "SPY260414C00680000",
+                        "expiration_date": "2026-04-14",
+                        "option_type": "call",
+                        "side": "long",
+                        "strike_price": 680.0,
+                        "target_delta": 0.6,
+                        "entry_fill_price": 2.8,
+                        "bid": 2.79,
+                        "ask": 2.81,
+                        "mark": 2.8,
+                        "delta": 0.58,
+                        "gamma": 0.06,
+                        "theta": -0.9,
+                        "vega": 0.14,
+                    }
+                ],
+            }
+        ],
+    )
+
+    updated = trader._backfill_open_trade_reconciliation(session)
+
+    assert updated is True
+    assert session.open_trades[0]["entry_attempt_id"].startswith("recovered:spy__fast__trend_long_call_next_expiry")
+    events = json.loads((trader.run_root / "2026-04-13" / "trade_reconciliation_events.json").read_text(encoding="utf-8"))
+    assert len(events) == 2
+    assert events[0]["decision_reason"] == "backfilled_open_trade"
+    assert events[1]["status"] == "filled"

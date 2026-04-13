@@ -1760,6 +1760,69 @@ class MultiTickerPortfolioPaperTrader:
         }
         return events_df, reconciliation_df, ticker_df, strategy_df, summary
 
+    def _backfill_open_trade_reconciliation(self, session: SessionState) -> bool:
+        if not session.open_trades:
+            return False
+        trade_date = date.fromisoformat(session.trade_date)
+        events_df = self._load_trade_reconciliation_events(trade_date)
+        existing_attempt_ids = (
+            set(events_df["attempt_id"].dropna().astype(str).tolist())
+            if not events_df.empty and "attempt_id" in events_df.columns
+            else set()
+        )
+        updated = False
+        for index, trade_payload in enumerate(session.open_trades):
+            if not trade_payload.get("entry_attempt_id"):
+                trade_payload["entry_attempt_id"] = (
+                    f"recovered:{trade_payload['strategy_name']}:{trade_payload['entry_minute']}:{index}"
+                )
+                updated = True
+            attempt_id = str(trade_payload["entry_attempt_id"])
+            if attempt_id in existing_attempt_ids:
+                continue
+            trade = OpenTrade(**trade_payload)
+            delta_shares, vega_dollars = self._expected_entry_greeks(trade)
+            self._append_trade_event(
+                trade_date,
+                {
+                    "event_type": "signal_decision",
+                    "attempt_id": attempt_id,
+                    "trade_date": session.trade_date,
+                    "strategy_name": trade.strategy_name,
+                    "underlying_symbol": trade.underlying_symbol,
+                    "regime": trade.regime,
+                    "signal_name": "recovered_open_trade",
+                    "timing_profile": "recovered",
+                    "current_minute": int(trade.entry_minute),
+                    "current_equity": round(float(session.starting_equity), 4),
+                    "decision": "eligible",
+                    "decision_reason": "backfilled_open_trade",
+                    "quantity_planned": int(trade.quantity),
+                    "expected_entry_debit": round(float(trade.entry_debit), 4),
+                    "expected_entry_fill_price": round(float(trade.entry_fill_price), 4),
+                    "expected_delta_shares": round(float(delta_shares), 4),
+                    "expected_vega_dollars_1pct": round(float(vega_dollars), 4),
+                    "backfilled": True,
+                },
+            )
+            self._append_trade_event(
+                trade_date,
+                {
+                    **self._event_base_for_trade(trade, phase="entry"),
+                    "event_type": "entry_result",
+                    "status": "filled",
+                    "order_id": trade.entry_order_id,
+                    "expected_entry_fill_price": round(float(trade.entry_fill_price), 4),
+                    "actual_entry_fill_price": round(float(trade.entry_fill_price), 4),
+                    "entry_slippage": 0.0,
+                    "virtual_cash_after": round(float(session.virtual_cash), 4),
+                    "backfilled": True,
+                },
+            )
+            existing_attempt_ids.add(attempt_id)
+            updated = True
+        return updated
+
     def finalize_session(
         self,
         session: SessionState,
@@ -1842,6 +1905,8 @@ class MultiTickerPortfolioPaperTrader:
         now_et = _now_et()
         ledger = self.load_ledger()
         session = self.load_or_create_session(trade_date, ledger)
+        if self._backfill_open_trade_reconciliation(session):
+            self.save_session(session)
         startup_block_markers = (
             "option inventory incomplete",
             "stock data stale",
