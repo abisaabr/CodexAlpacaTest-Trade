@@ -19,8 +19,9 @@ This runner now trades the validated shared-account book across:
 - `SLV`
 - `AMZN`
 - `JPM`
+- `XOM`
 
-The live book uses a shared virtual `$25,000` sleeve and `61` strategy entries, including one XLE choppy alias that intentionally reuses the same opening-range call setup under a separate regime label.
+The live book uses a shared virtual `$25,000` sleeve and `64` strategy entries, including one XLE choppy alias that intentionally reuses the same opening-range call setup under a separate regime label.
 
 ### Promoted Strategies
 
@@ -147,6 +148,12 @@ The live book uses a shared virtual `$25,000` sleeve and `61` strategy entries, 
   `jpm__base__trend_long_put_next_expiry`
   `jpm__slow__trend_long_put_next_expiry`
 
+#### XOM
+- Bull:
+  `xom__slow__trend_long_call_next_expiry`
+  `xom__base__trend_long_call_next_expiry`
+  `xom__fast__trend_long_call_next_expiry`
+
 ## Research Result
 
 The current deployment book now comes from two promotion rounds:
@@ -230,6 +237,24 @@ Once `AVGO` and `JPM` finished, the shared-account gate produced a second clean 
   `-12.63%` max drawdown
 
 `AVGO` was positive standalone, but it weakened the shared account when added alone. `AVGO + JPM` produced slightly higher ending equity than `JPM` alone, but it also worsened drawdown and risk-adjusted score, so the live promotion stayed disciplined and added only `JPM`.
+
+The next completed cleanroom wave then compared `UNH`, `LLY`, `WMT`, `BA`, `CVX`, `DIA`, `SMH`, `NFLX`, `XOM`, and `UBER` against the 15-ticker live book on candidate-specific overlap windows and then re-checked the strongest names on shared windows:
+
+- Current 15-ticker live baseline on the common `110`-session overlap shared with the strongest additions:
+  `$300,142.68`
+  `+1100.57%`
+  `1157` trades
+  `62.06%` win rate
+  `-12.63%` max drawdown
+- Best next add:
+  `XOM`
+  `$307,369.68`
+  `+1129.48%`
+  `1184` trades
+  `63.18%` win rate
+  `-12.37%` max drawdown
+
+`UBER` was mildly additive, but `XOM` was stronger on both ending equity and risk-adjusted score on the same overlap. `BA` improved return but worsened drawdown, while `DIA` only looked strong on a much shorter `65`-session overlap and stayed in research instead of being promoted.
 
 ## Live Safety
 
