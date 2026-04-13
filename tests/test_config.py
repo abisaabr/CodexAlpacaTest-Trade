@@ -28,6 +28,14 @@ ALL_CONFIG_ENV_VARS = (
     "REQUEST_TIMEOUT_SECONDS",
     "RETRY_ATTEMPTS",
     "DISCORD_WEBHOOK_URL",
+    "EMAIL_SMTP_HOST",
+    "EMAIL_SMTP_PORT",
+    "EMAIL_USERNAME",
+    "EMAIL_PASSWORD",
+    "EMAIL_FROM",
+    "EMAIL_TO",
+    "EMAIL_USE_STARTTLS",
+    "EMAIL_SUBJECT_PREFIX",
 )
 
 
@@ -156,3 +164,24 @@ def test_discord_webhook_url_is_loaded_when_present(
 
     assert settings.discord_webhook_url is not None
     assert settings.redacted()["discord_webhook_url"] == "set"
+
+
+def test_email_settings_are_loaded_when_present(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _clear_config_env(monkeypatch)
+    config_path = _write_config(tmp_path / "default.yaml")
+    monkeypatch.setenv("EMAIL_SMTP_HOST", "smtp.gmail.com")
+    monkeypatch.setenv("EMAIL_SMTP_PORT", "587")
+    monkeypatch.setenv("EMAIL_USERNAME", "sender@example.com")
+    monkeypatch.setenv("EMAIL_PASSWORD", "app-password")
+    monkeypatch.setenv("EMAIL_FROM", "sender@example.com")
+    monkeypatch.setenv("EMAIL_TO", "first@example.com, second@example.com")
+
+    settings = load_settings(config_file=config_path, env_file=tmp_path / ".env")
+
+    assert settings.email_smtp_host == "smtp.gmail.com"
+    assert settings.email_smtp_port == 587
+    assert settings.email_from == "sender@example.com"
+    assert settings.email_to == ("first@example.com", "second@example.com")
+    assert settings.redacted()["email_password"] == "set"

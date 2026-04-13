@@ -188,7 +188,7 @@ def test_morning_notification_only_marks_sent_after_success() -> None:
     )
 
     assert session.notified_morning is False
-    assert any(alert["message"] == "Discord morning notification failed" for alert in session.alerts)
+    assert any(alert["message"] == "Morning notification delivery failed" for alert in session.alerts)
 
 
 def test_startup_check_only_requires_inventory_for_promoted_dte_modes() -> None:

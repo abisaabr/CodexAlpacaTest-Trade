@@ -240,13 +240,28 @@ The runner starts with a morning self-check and refuses to trade if:
 - stock bars are stale after the startup grace period
 - same-day or next-expiry option inventory is missing for any symbol
 
-It also sends Discord webhook check-ins for:
+It also sends outbound notifications for:
 
 - successful morning start
 - midday status
 - end-of-day status
 
-The Discord webhook is loaded from `DISCORD_WEBHOOK_URL` in your local `.env`. It is intentionally not committed to GitHub.
+Supported channels:
+
+- Discord webhook via `DISCORD_WEBHOOK_URL`
+- SMTP email via local `.env` settings such as `EMAIL_SMTP_HOST`, `EMAIL_USERNAME`, `EMAIL_PASSWORD`, `EMAIL_FROM`, and `EMAIL_TO`
+
+For Gmail, use:
+
+- `EMAIL_SMTP_HOST=smtp.gmail.com`
+- `EMAIL_SMTP_PORT=587`
+- `EMAIL_USE_STARTTLS=true`
+- `EMAIL_USERNAME=<your gmail address>`
+- `EMAIL_PASSWORD=<your 16-character Gmail app password>`
+- `EMAIL_FROM=<your gmail address>`
+- `EMAIL_TO=<recipient list>`
+
+Secrets stay in your local `.env` and are intentionally not committed to GitHub.
 
 The live overlay now uses the validated shared-account settings for the expanded book:
 

@@ -21,7 +21,7 @@ from alpaca_lab.multi_ticker_portfolio.signals import (
     infer_symbol_regime,
     signal_is_true,
 )
-from alpaca_lab.notifications import DiscordWebhookNotifier
+from alpaca_lab.notifications import DiscordWebhookNotifier, EmailNotifier
 from alpaca_lab.qqq_portfolio.greeks import bs_greeks, implied_volatility
 from alpaca_lab.reporting import append_journal_entry, write_alert_queue, write_summary_bundle
 
@@ -268,7 +268,8 @@ class MultiTickerPortfolioPaperTrader:
             else submit_paper_orders
         )
         self.broker = broker or AlpacaBrokerAdapter(settings, dry_run=not self.submit_paper_orders)
-        self.notifier = DiscordWebhookNotifier(settings)
+        self.discord_notifier = DiscordWebhookNotifier(settings)
+        self.email_notifier = EmailNotifier(settings)
         self.logger = get_logger("multi_ticker_portfolio")
         self._failed_notification_phases: set[str] = set()
         self.state_root = portfolio_config.execution.state_root
@@ -374,9 +375,17 @@ class MultiTickerPortfolioPaperTrader:
         }
 
     def _notify_lines(self, *lines: object) -> bool:
-        if not self.submit_paper_orders or not self.notifier.enabled:
+        if not self.submit_paper_orders:
             return False
-        return self.notifier.send_lines(*lines)
+        delivered = False
+        for notifier in (
+            getattr(self, "email_notifier", None),
+            getattr(self, "discord_notifier", None),
+        ):
+            if notifier is None or not getattr(notifier, "enabled", False):
+                continue
+            delivered = notifier.send_lines(*lines) or delivered
+        return delivered
 
     def _record_notification_failure(self, session: SessionState, phase: str) -> None:
         failed_phases = getattr(self, "_failed_notification_phases", None)
@@ -384,7 +393,7 @@ class MultiTickerPortfolioPaperTrader:
             failed_phases = set()
             self._failed_notification_phases = failed_phases
         failed_phases.add(phase)
-        message = f"Discord {phase} notification failed"
+        message = f"{phase.title()} notification delivery failed"
         if any(alert.get("message") == message for alert in session.alerts):
             return
         self._alert(session, "warning", message)

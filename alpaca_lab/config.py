@@ -39,6 +39,14 @@ ENV_ALIASES: dict[str, tuple[str, ...]] = {
     "request_timeout_seconds": ("REQUEST_TIMEOUT_SECONDS",),
     "retry_attempts": ("RETRY_ATTEMPTS",),
     "discord_webhook_url": ("DISCORD_WEBHOOK_URL",),
+    "email_smtp_host": ("EMAIL_SMTP_HOST", "SMTP_HOST"),
+    "email_smtp_port": ("EMAIL_SMTP_PORT", "SMTP_PORT"),
+    "email_username": ("EMAIL_USERNAME", "SMTP_USERNAME", "GMAIL_USERNAME"),
+    "email_password": ("EMAIL_PASSWORD", "SMTP_PASSWORD", "GMAIL_APP_PASSWORD"),
+    "email_from": ("EMAIL_FROM",),
+    "email_to": ("EMAIL_TO", "EMAIL_RECIPIENTS"),
+    "email_use_starttls": ("EMAIL_USE_STARTTLS",),
+    "email_subject_prefix": ("EMAIL_SUBJECT_PREFIX",),
 }
 
 
@@ -58,6 +66,16 @@ def _coerce_underlyings(value: Any) -> tuple[str, ...]:
     if isinstance(value, (list, tuple, set)):
         return tuple(str(item).strip().upper() for item in value if str(item).strip())
     raise TypeError("DEFAULT_UNDERLYINGS must be a comma-separated string or sequence.")
+
+
+def _coerce_email_addresses(value: Any) -> tuple[str, ...]:
+    if value in (None, ""):
+        return tuple()
+    if isinstance(value, str):
+        return tuple(item.strip() for item in value.split(",") if item.strip())
+    if isinstance(value, (list, tuple, set)):
+        return tuple(str(item).strip() for item in value if str(item).strip())
+    raise TypeError("EMAIL_TO must be a comma-separated string or sequence.")
 
 
 class LabSettings(BaseModel):
@@ -81,6 +99,14 @@ class LabSettings(BaseModel):
     request_timeout_seconds: float = 30.0
     retry_attempts: int = 3
     discord_webhook_url: SecretStr | None = None
+    email_smtp_host: str | None = None
+    email_smtp_port: int = 587
+    email_username: SecretStr | None = None
+    email_password: SecretStr | None = None
+    email_from: str | None = None
+    email_to: tuple[str, ...] = tuple()
+    email_use_starttls: bool = True
+    email_subject_prefix: str = "[CodexAlpaca]"
 
     @field_validator("default_underlyings", mode="before")
     @classmethod
@@ -90,12 +116,24 @@ class LabSettings(BaseModel):
             raise ValueError("At least one default underlying is required.")
         return parsed
 
-    @field_validator("alpaca_api_key", "alpaca_secret_key", "discord_webhook_url", mode="before")
+    @field_validator(
+        "alpaca_api_key",
+        "alpaca_secret_key",
+        "discord_webhook_url",
+        "email_username",
+        "email_password",
+        mode="before",
+    )
     @classmethod
     def normalize_optional_secrets(cls, value: Any) -> Any:
         if value in (None, ""):
             return None
         return value
+
+    @field_validator("email_to", mode="before")
+    @classmethod
+    def parse_email_recipients(cls, value: Any) -> tuple[str, ...]:
+        return _coerce_email_addresses(value)
 
     @field_validator("data_root", "reports_root", mode="before")
     @classmethod
@@ -104,7 +142,14 @@ class LabSettings(BaseModel):
             return value
         return Path(str(value))
 
-    @field_validator("log_level", "alpaca_data_feed", mode="before")
+    @field_validator(
+        "log_level",
+        "alpaca_data_feed",
+        "email_smtp_host",
+        "email_from",
+        "email_subject_prefix",
+        mode="before",
+    )
     @classmethod
     def normalize_strings(cls, value: Any) -> str:
         return str(value).strip()
@@ -149,6 +194,8 @@ class LabSettings(BaseModel):
             raise ValueError("REQUEST_TIMEOUT_SECONDS must be positive.")
         if self.retry_attempts < 1:
             raise ValueError("RETRY_ATTEMPTS must be at least 1.")
+        if self.email_smtp_port <= 0:
+            raise ValueError("EMAIL_SMTP_PORT must be positive.")
         if self.alpaca_api_base_url:
             normalized = self.alpaca_api_base_url.lower()
             if normalized == LIVE_TRADING_BASE_URL:
@@ -265,6 +312,14 @@ class LabSettings(BaseModel):
             "alpaca_api_key": "set" if self.alpaca_api_key else "missing",
             "alpaca_secret_key": "set" if self.alpaca_secret_key else "missing",
             "discord_webhook_url": "set" if self.discord_webhook_url else "missing",
+            "email_smtp_host": self.email_smtp_host or "missing",
+            "email_smtp_port": self.email_smtp_port,
+            "email_username": "set" if self.email_username else "missing",
+            "email_password": "set" if self.email_password else "missing",
+            "email_from": self.email_from or "missing",
+            "email_to": list(self.email_to),
+            "email_use_starttls": self.email_use_starttls,
+            "email_subject_prefix": self.email_subject_prefix,
         }
 
 
