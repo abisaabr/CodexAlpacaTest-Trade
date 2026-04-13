@@ -158,6 +158,39 @@ def test_disabled_daily_loss_gate_never_blocks_entries() -> None:
     assert reason is None
 
 
+def test_morning_notification_only_marks_sent_after_success() -> None:
+    config = default_portfolio_config()
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.underlyings = tuple(config.execution.underlying_symbols)
+    trader.submit_paper_orders = True
+    trader.notifier = object()
+
+    class _LoggerStub:
+        def warning(self, *_args, **_kwargs) -> None:
+            return None
+
+    trader.logger = _LoggerStub()
+
+    session = SessionState(
+        trade_date="2026-04-13",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+
+    trader._notify_lines = lambda *_lines: False
+    trader._send_morning_notification(
+        session,
+        {
+            "buying_power": 25_000.0,
+            "required_buying_power": 7_500.0,
+        },
+    )
+
+    assert session.notified_morning is False
+    assert any(alert["message"] == "Discord morning notification failed" for alert in session.alerts)
+
+
 def test_startup_check_only_requires_inventory_for_promoted_dte_modes() -> None:
     full_config = default_portfolio_config()
     jpm_strategies = tuple(

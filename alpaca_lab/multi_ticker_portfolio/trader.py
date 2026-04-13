@@ -270,6 +270,7 @@ class MultiTickerPortfolioPaperTrader:
         self.broker = broker or AlpacaBrokerAdapter(settings, dry_run=not self.submit_paper_orders)
         self.notifier = DiscordWebhookNotifier(settings)
         self.logger = get_logger("multi_ticker_portfolio")
+        self._failed_notification_phases: set[str] = set()
         self.state_root = portfolio_config.execution.state_root
         self.run_root = portfolio_config.execution.run_root
         self.ledger_path = self.state_root / "ledger.json"
@@ -372,10 +373,21 @@ class MultiTickerPortfolioPaperTrader:
             "quantity": int(trade.quantity),
         }
 
-    def _notify_lines(self, *lines: object) -> None:
+    def _notify_lines(self, *lines: object) -> bool:
         if not self.submit_paper_orders or not self.notifier.enabled:
+            return False
+        return self.notifier.send_lines(*lines)
+
+    def _record_notification_failure(self, session: SessionState, phase: str) -> None:
+        failed_phases = getattr(self, "_failed_notification_phases", None)
+        if failed_phases is None:
+            failed_phases = set()
+            self._failed_notification_phases = failed_phases
+        failed_phases.add(phase)
+        message = f"Discord {phase} notification failed"
+        if any(alert.get("message") == message for alert in session.alerts):
             return
-        self.notifier.send_lines(*lines)
+        self._alert(session, "warning", message)
 
     def _fetch_today_stock_frames(self, trade_date: date) -> dict[str, pd.DataFrame]:
         start = _rth_open_for(trade_date).astimezone(UTC)
@@ -1384,9 +1396,10 @@ class MultiTickerPortfolioPaperTrader:
         return "passed", details
 
     def _send_morning_notification(self, session: SessionState, details: dict[str, Any]) -> None:
-        if session.notified_morning:
+        failed_phases = getattr(self, "_failed_notification_phases", set())
+        if session.notified_morning or "morning" in failed_phases:
             return
-        self._notify_lines(
+        delivered = self._notify_lines(
             "**Multi-Ticker Portfolio Morning Check**",
             f"Trade date: {session.trade_date}",
             f"Buying power: ${float(details.get('buying_power', 0.0)):,.2f}",
@@ -1394,7 +1407,10 @@ class MultiTickerPortfolioPaperTrader:
             f"Strategies loaded: {len(self.portfolio_config.strategies)} across {len(self.underlyings)} tickers",
             "Startup check passed. Paper trader is live for RTH.",
         )
-        session.notified_morning = True
+        if delivered:
+            session.notified_morning = True
+        else:
+            self._record_notification_failure(session, "morning")
 
     def _maybe_send_midday_notification(
         self,
@@ -1403,14 +1419,15 @@ class MultiTickerPortfolioPaperTrader:
         current_equity: float,
         snapshots: dict[str, SymbolSnapshot],
     ) -> None:
-        if session.notified_midday:
+        failed_phases = getattr(self, "_failed_notification_phases", set())
+        if session.notified_midday or "midday" in failed_phases:
             return
         current_minute = max((snapshot.current_minute for snapshot in snapshots.values()), default=-1)
         if current_minute < self.portfolio_config.execution.midday_report_minute:
             return
         day_pnl = current_equity - session.starting_equity
         open_symbols = sorted({trade["underlying_symbol"] for trade in session.open_trades})
-        self._notify_lines(
+        delivered = self._notify_lines(
             "**Multi-Ticker Portfolio Midday Update**",
             f"Trade date: {session.trade_date}",
             f"Current equity: ${current_equity:,.2f}",
@@ -1419,7 +1436,10 @@ class MultiTickerPortfolioPaperTrader:
             f"Open trades: {len(session.open_trades)}",
             f"Active symbols: {', '.join(open_symbols) if open_symbols else 'none'}",
         )
-        session.notified_midday = True
+        if delivered:
+            session.notified_midday = True
+        else:
+            self._record_notification_failure(session, "midday")
 
     def _reconcile_and_trade(
         self,
@@ -1885,8 +1905,9 @@ class MultiTickerPortfolioPaperTrader:
             },
         )
         write_alert_queue(run_dir / "alerts.json", session.alerts)
-        if not session.notified_end_of_day:
-            self._notify_lines(
+        failed_phases = getattr(self, "_failed_notification_phases", set())
+        if not session.notified_end_of_day and "end-of-day" not in failed_phases:
+            delivered = self._notify_lines(
                 "**Multi-Ticker Portfolio End Of Day**",
                 f"Trade date: {session.trade_date}",
                 f"Ending equity: ${ending_equity:,.2f}",
@@ -1894,7 +1915,10 @@ class MultiTickerPortfolioPaperTrader:
                 f"Completed trades: {len(session.completed_trades)}",
                 f"Blocked new entries: {'yes' if session.blocked_new_entries else 'no'}",
             )
-            session.notified_end_of_day = True
+            if delivered:
+                session.notified_end_of_day = True
+            else:
+                self._record_notification_failure(session, "end-of-day")
             self.save_session(session)
         return summary
 

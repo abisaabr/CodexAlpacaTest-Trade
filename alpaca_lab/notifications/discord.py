@@ -77,9 +77,18 @@ class DiscordWebhookNotifier:
         payload = json.dumps({"content": content[:1900]})
         script = (
             "$ProgressPreference='SilentlyContinue'; "
-            "Invoke-RestMethod -Method Post -Uri $args[0] "
-            "-ContentType 'application/json' -Body $args[1] | Out-Null"
+            "try { "
+            "[Net.ServicePointManager]::SecurityProtocol = "
+            "[Net.SecurityProtocolType]::Tls12 -bor [enum]::Parse([Net.SecurityProtocolType], 'Tls13') "
+            "} catch { "
+            "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 "
+            "}; "
+            "Invoke-RestMethod -Method Post -Uri $env:CODEX_DISCORD_WEBHOOK_URL "
+            "-ContentType 'application/json' -Body $env:CODEX_DISCORD_PAYLOAD | Out-Null"
         )
+        env = os.environ.copy()
+        env["CODEX_DISCORD_WEBHOOK_URL"] = webhook_url
+        env["CODEX_DISCORD_PAYLOAD"] = payload
         try:
             completed = subprocess.run(
                 [
@@ -88,9 +97,8 @@ class DiscordWebhookNotifier:
                     "-NonInteractive",
                     "-Command",
                     script,
-                    webhook_url,
-                    payload,
                 ],
+                env=env,
                 capture_output=True,
                 text=True,
                 timeout=self.settings.request_timeout_seconds,

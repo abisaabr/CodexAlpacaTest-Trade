@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ssl
+import subprocess
 
 import requests
 
@@ -40,3 +41,24 @@ def test_discord_notifier_uses_powershell_fallback_after_request_failure(monkeyp
         "webhook_url": "https://discord.com/api/webhooks/test",
         "content": "hello from fallback",
     }
+
+
+def test_discord_powershell_fallback_passes_payload_via_environment(monkeypatch) -> None:
+    notifier = DiscordWebhookNotifier(
+        LabSettings.model_validate({"discord_webhook_url": "https://discord.com/api/webhooks/test"})
+    )
+    captured = {}
+
+    def fake_run(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return subprocess.CompletedProcess(args[0], 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    error = notifier._send_via_powershell("https://discord.com/api/webhooks/test", "hello")
+
+    assert error is None
+    assert captured["kwargs"]["env"]["CODEX_DISCORD_WEBHOOK_URL"] == "https://discord.com/api/webhooks/test"
+    assert '"content": "hello"' in captured["kwargs"]["env"]["CODEX_DISCORD_PAYLOAD"]
+    assert "Invoke-RestMethod" in " ".join(captured["args"][0])
