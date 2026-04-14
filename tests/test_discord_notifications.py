@@ -55,6 +55,7 @@ def test_discord_powershell_fallback_passes_payload_via_environment(monkeypatch)
         return subprocess.CompletedProcess(args[0], 0, "", "")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr("alpaca_lab.notifications.discord.os.name", "nt")
 
     error = notifier._send_via_powershell("https://discord.com/api/webhooks/test", "hello")
 
