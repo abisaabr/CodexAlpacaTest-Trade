@@ -20,8 +20,11 @@ This runner now trades the validated shared-account book across:
 - `AMZN`
 - `JPM`
 - `XOM`
+- `ORCL`
+- `SHOP`
+- `CRM`
 
-The live book uses a shared virtual `$25,000` sleeve and `64` strategy entries, including one XLE choppy alias that intentionally reuses the same opening-range call setup under a separate regime label.
+The live book uses a shared virtual `$25,000` sleeve and `78` strategy entries, including two explicit choppy aliases that intentionally reuse validated same-day single-leg setups under separate regime labels.
 
 ### Promoted Strategies
 
@@ -154,6 +157,33 @@ The live book uses a shared virtual `$25,000` sleeve and `64` strategy entries, 
   `xom__base__trend_long_call_next_expiry`
   `xom__fast__trend_long_call_next_expiry`
 
+#### ORCL
+- Bull:
+  `orcl__slow__trend_long_call_next_expiry`
+  `orcl__fast__trend_long_call_next_expiry`
+- Bear:
+  `orcl__slow__trend_long_put_next_expiry`
+  `orcl__fast__trend_long_put_next_expiry`
+
+#### SHOP
+- Bull:
+  `shop__slow__trend_long_call_next_expiry`
+  `shop__fast__trend_long_call_next_expiry`
+  `shop__base__trend_long_call_next_expiry`
+- Bear:
+  `shop__fast__trend_long_put_next_expiry`
+  `shop__slow__trend_long_put_next_expiry`
+
+#### CRM
+- Bull:
+  `crm__fast__trend_long_call_next_expiry`
+- Bear:
+  `crm__fast__trend_long_put_next_expiry`
+  `crm__slow__trend_long_put_next_expiry`
+  `crm__base__trend_long_put_next_expiry`
+- Choppy:
+  `crm__base__orb_long_put_same_day`
+
 ## Research Result
 
 The current deployment book now comes from two promotion rounds:
@@ -255,6 +285,27 @@ The next completed cleanroom wave then compared `UNH`, `LLY`, `WMT`, `BA`, `CVX`
   `-12.37%` max drawdown
 
 `UBER` was mildly additive, but `XOM` was stronger on both ending equity and risk-adjusted score on the same overlap. `BA` improved return but worsened drawdown, while `DIA` only looked strong on a much shorter `65`-session overlap and stayed in research instead of being promoted.
+
+The next partial wave from the newest cleanroom batch completed `ORCL`, `ADBE`, `CRM`, `PANW`, and `SHOP` before lower-coverage names halted the batch. Those finished names were then re-tested against the current 16-ticker live book that already included `XOM`:
+
+- Current 16-ticker live baseline on the common `101`-session overlap shared by the best new combo:
+  `$286,760.69`
+  `+1047.04%`
+  `-13.13%` max drawdown
+- Best promoted combo:
+  `ORCL + SHOP + CRM`
+  `$325,774.50`
+  `+1203.10%`
+  `-11.80%` max drawdown
+
+Each of those three also improved the shared account individually on its own overlap window:
+
+- `ORCL` was the strongest single add:
+  on `110` shared sessions it improved the live book from `$307,369.68` to `$324,856.82` while slightly reducing drawdown from `-12.37%` to `-12.11%`
+- `SHOP` improved the live book on `104` shared sessions from `$296,728.38` to `$299,324.39` and reduced drawdown from `-12.69%` to `-11.63%`
+- `CRM` improved the live book on `104` shared sessions from `$287,887.92` to `$293,208.70` and reduced drawdown from `-12.88%` to `-12.59%`
+
+`ADBE` and `PANW` both finished their standalone tournaments, but neither improved the shared account, so they stayed out of the live deployment book.
 
 ## Live Safety
 

@@ -59,6 +59,9 @@ def test_default_multi_ticker_portfolio_contains_all_symbols() -> None:
         "AMZN",
         "JPM",
         "XOM",
+        "ORCL",
+        "SHOP",
+        "CRM",
     )
     assert all(counts[symbol] >= 1 for symbol in config.execution.underlying_symbols)
     assert counts["QQQ"] >= 3
@@ -68,6 +71,9 @@ def test_default_multi_ticker_portfolio_contains_all_symbols() -> None:
     assert counts["AMZN"] >= 7
     assert counts["JPM"] >= 6
     assert counts["XOM"] >= 3
+    assert counts["ORCL"] >= 4
+    assert counts["SHOP"] >= 5
+    assert counts["CRM"] >= 5
 
 
 def test_default_multi_ticker_portfolio_includes_xle_choppy_alias() -> None:
