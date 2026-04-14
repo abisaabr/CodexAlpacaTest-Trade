@@ -12,9 +12,9 @@ if (-not (Test-Path $pythonPath)) {
 
 $scriptPath = Join-Path $repoRoot "scripts\\run_multi_ticker_portfolio_paper_trader.py"
 $portfolioConfig = Join-Path $repoRoot "config\\multi_ticker_paper_portfolio.yaml"
-$args = @($scriptPath, "--portfolio-config", $portfolioConfig, "--submit-paper-orders")
+$pythonArgs = @($scriptPath, "--portfolio-config", $portfolioConfig, "--submit-paper-orders")
 if ($RunOnce) {
-    $args += "--run-once"
+    $pythonArgs += "--run-once"
 }
 
 function Get-EasternNow {
@@ -37,7 +37,8 @@ function Write-SupervisorLog([string]$message) {
 function Invoke-Trader {
     Push-Location $repoRoot
     try {
-        & $pythonPath @args
+        Write-SupervisorLog ("Launching trader: {0} {1}" -f $pythonPath, ($pythonArgs -join " "))
+        & $pythonPath @pythonArgs
         return $LASTEXITCODE
     }
     finally {
