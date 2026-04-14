@@ -36,6 +36,8 @@ The paper trader can publish its morning startup check, midday status, and end-o
 
 `ntfy` is the simplest path to get mobile push notifications quickly. Set `NTFY_TOPIC` in the local `.env`, then subscribe to that topic in the ntfy mobile app or by opening `https://ntfy.sh/<your-topic>` in a browser.
 
+The notification payloads now include higher-signal operating context, including open positions grouped by ticker plus realized day PnL summaries for the strongest and weakest strategies so far.
+
 ### Promoted Strategies
 
 #### QQQ

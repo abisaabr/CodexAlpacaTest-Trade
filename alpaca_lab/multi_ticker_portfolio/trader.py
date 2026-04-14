@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import time
+from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from datetime import time as dt_time
@@ -251,6 +252,11 @@ def _current_equity(state: SessionState, mark_map: dict[str, float] | None = Non
     return equity
 
 
+def _format_signed_dollars(value: float) -> str:
+    sign = "+" if value >= 0 else "-"
+    return f"{sign}${abs(value):,.2f}"
+
+
 class MultiTickerPortfolioPaperTrader:
     def __init__(
         self,
@@ -388,6 +394,105 @@ class MultiTickerPortfolioPaperTrader:
                 continue
             delivered = notifier.send_lines(*lines) or delivered
         return delivered
+
+    def _open_positions_by_ticker_line(self, session: SessionState) -> str:
+        counts = Counter(str(trade["underlying_symbol"]) for trade in session.open_trades)
+        if not counts:
+            return "Open positions by ticker: none"
+        summary = ", ".join(f"{symbol} x{counts[symbol]}" for symbol in sorted(counts))
+        return f"Open positions by ticker: {summary}"
+
+    def _strategy_pnl_summary_lines(
+        self,
+        session: SessionState,
+        *,
+        limit: int = 3,
+    ) -> list[str]:
+        if not session.completed_trades:
+            return ["Strategy day PnL: no closed trades yet"]
+
+        totals: dict[str, float] = {}
+        for trade in session.completed_trades:
+            strategy_name = str(trade.get("strategy_name", "unknown"))
+            totals[strategy_name] = totals.get(strategy_name, 0.0) + float(trade.get("net_pnl", 0.0))
+
+        winners = [
+            (name, pnl)
+            for name, pnl in sorted(totals.items(), key=lambda item: (-item[1], item[0]))
+            if pnl > 0
+        ][:limit]
+        losers = [
+            (name, pnl)
+            for name, pnl in sorted(totals.items(), key=lambda item: (item[1], item[0]))
+            if pnl < 0
+        ][:limit]
+
+        lines: list[str] = []
+        if winners:
+            winner_summary = "; ".join(
+                f"{name} {_format_signed_dollars(pnl)}" for name, pnl in winners
+            )
+            lines.append(f"Top strategy PnL: {winner_summary}")
+        if losers:
+            loser_summary = "; ".join(
+                f"{name} {_format_signed_dollars(pnl)}" for name, pnl in losers
+            )
+            lines.append(f"Lagging strategies: {loser_summary}")
+        if not lines:
+            lines.append("Strategy day PnL: flat so far")
+        return lines
+
+    def _build_morning_notification_lines(
+        self,
+        session: SessionState,
+        details: dict[str, Any],
+    ) -> list[object]:
+        return [
+            "**Multi-Ticker Portfolio Morning Check**",
+            f"Trade date: {session.trade_date}",
+            f"Buying power: ${float(details.get('buying_power', 0.0)):,.2f}",
+            f"Required buying power: ${float(details.get('required_buying_power', 0.0)):,.2f}",
+            f"Strategies loaded: {len(self.portfolio_config.strategies)} across {len(self.underlyings)} tickers",
+            self._open_positions_by_ticker_line(session),
+            "Startup check passed. Paper trader is live for RTH.",
+        ]
+
+    def _build_midday_notification_lines(
+        self,
+        session: SessionState,
+        *,
+        current_equity: float,
+    ) -> list[object]:
+        day_pnl = current_equity - session.starting_equity
+        open_symbols = sorted({trade["underlying_symbol"] for trade in session.open_trades})
+        return [
+            "**Multi-Ticker Portfolio Midday Update**",
+            f"Trade date: {session.trade_date}",
+            f"Current equity: ${current_equity:,.2f}",
+            f"Day PnL: {_format_signed_dollars(day_pnl)}",
+            f"Completed trades: {len(session.completed_trades)}",
+            f"Open trades: {len(session.open_trades)}",
+            f"Active symbols: {', '.join(open_symbols) if open_symbols else 'none'}",
+            self._open_positions_by_ticker_line(session),
+            *self._strategy_pnl_summary_lines(session),
+        ]
+
+    def _build_end_of_day_notification_lines(
+        self,
+        session: SessionState,
+        *,
+        ending_equity: float,
+    ) -> list[object]:
+        return [
+            "**Multi-Ticker Portfolio End Of Day**",
+            f"Trade date: {session.trade_date}",
+            f"Ending equity: ${ending_equity:,.2f}",
+            f"Day PnL: {_format_signed_dollars(ending_equity - session.starting_equity)}",
+            f"Completed trades: {len(session.completed_trades)}",
+            f"Blocked new entries: {'yes' if session.blocked_new_entries else 'no'}",
+            self._open_positions_by_ticker_line(session),
+            *self._strategy_pnl_summary_lines(session),
+        ]
 
     def _record_notification_failure(self, session: SessionState, phase: str) -> None:
         failed_phases = getattr(self, "_failed_notification_phases", None)
@@ -1410,14 +1515,7 @@ class MultiTickerPortfolioPaperTrader:
         failed_phases = getattr(self, "_failed_notification_phases", set())
         if session.notified_morning or "morning" in failed_phases:
             return
-        delivered = self._notify_lines(
-            "**Multi-Ticker Portfolio Morning Check**",
-            f"Trade date: {session.trade_date}",
-            f"Buying power: ${float(details.get('buying_power', 0.0)):,.2f}",
-            f"Required buying power: ${float(details.get('required_buying_power', 0.0)):,.2f}",
-            f"Strategies loaded: {len(self.portfolio_config.strategies)} across {len(self.underlyings)} tickers",
-            "Startup check passed. Paper trader is live for RTH.",
-        )
+        delivered = self._notify_lines(*self._build_morning_notification_lines(session, details))
         if delivered:
             session.notified_morning = True
         else:
@@ -1436,16 +1534,8 @@ class MultiTickerPortfolioPaperTrader:
         current_minute = max((snapshot.current_minute for snapshot in snapshots.values()), default=-1)
         if current_minute < self.portfolio_config.execution.midday_report_minute:
             return
-        day_pnl = current_equity - session.starting_equity
-        open_symbols = sorted({trade["underlying_symbol"] for trade in session.open_trades})
         delivered = self._notify_lines(
-            "**Multi-Ticker Portfolio Midday Update**",
-            f"Trade date: {session.trade_date}",
-            f"Current equity: ${current_equity:,.2f}",
-            f"Day PnL: ${day_pnl:,.2f}",
-            f"Completed trades: {len(session.completed_trades)}",
-            f"Open trades: {len(session.open_trades)}",
-            f"Active symbols: {', '.join(open_symbols) if open_symbols else 'none'}",
+            *self._build_midday_notification_lines(session, current_equity=current_equity)
         )
         if delivered:
             session.notified_midday = True
@@ -1919,12 +2009,7 @@ class MultiTickerPortfolioPaperTrader:
         failed_phases = getattr(self, "_failed_notification_phases", set())
         if not session.notified_end_of_day and "end-of-day" not in failed_phases:
             delivered = self._notify_lines(
-                "**Multi-Ticker Portfolio End Of Day**",
-                f"Trade date: {session.trade_date}",
-                f"Ending equity: ${ending_equity:,.2f}",
-                f"Day PnL: ${ending_equity - session.starting_equity:,.2f}",
-                f"Completed trades: {len(session.completed_trades)}",
-                f"Blocked new entries: {'yes' if session.blocked_new_entries else 'no'}",
+                *self._build_end_of_day_notification_lines(session, ending_equity=ending_equity)
             )
             if delivered:
                 session.notified_end_of_day = True

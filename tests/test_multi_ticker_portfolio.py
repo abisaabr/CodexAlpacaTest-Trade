@@ -199,6 +199,69 @@ def test_morning_notification_only_marks_sent_after_success() -> None:
     assert any(alert["message"] == "Morning notification delivery failed" for alert in session.alerts)
 
 
+def test_open_positions_summary_line_groups_by_ticker() -> None:
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    session = SessionState(
+        trade_date="2026-04-13",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+        open_trades=[
+            {"underlying_symbol": "QQQ"},
+            {"underlying_symbol": "SPY"},
+            {"underlying_symbol": "QQQ"},
+        ],
+    )
+
+    assert trader._open_positions_by_ticker_line(session) == "Open positions by ticker: QQQ x2, SPY x1"
+
+
+def test_strategy_pnl_summary_lines_include_winners_and_losers() -> None:
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    session = SessionState(
+        trade_date="2026-04-13",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+        completed_trades=[
+            {"strategy_name": "qqq__fast__trend_long_call_next_expiry", "net_pnl": 120.0},
+            {"strategy_name": "qqq__fast__trend_long_call_next_expiry", "net_pnl": 30.0},
+            {"strategy_name": "xle__fast__trend_long_put_next_expiry", "net_pnl": -45.0},
+            {"strategy_name": "spy__fast__trend_long_call_next_expiry", "net_pnl": 80.0},
+        ],
+    )
+
+    lines = trader._strategy_pnl_summary_lines(session)
+
+    assert lines[0] == (
+        "Top strategy PnL: qqq__fast__trend_long_call_next_expiry +$150.00; "
+        "spy__fast__trend_long_call_next_expiry +$80.00"
+    )
+    assert lines[1] == "Lagging strategies: xle__fast__trend_long_put_next_expiry -$45.00"
+
+
+def test_midday_notification_lines_include_open_positions_and_strategy_pnl() -> None:
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    session = SessionState(
+        trade_date="2026-04-13",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+        open_trades=[
+            {"underlying_symbol": "QQQ"},
+            {"underlying_symbol": "NVDA"},
+            {"underlying_symbol": "QQQ"},
+        ],
+        completed_trades=[
+            {"strategy_name": "qqq__fast__trend_long_call_next_expiry", "net_pnl": 95.0},
+            {"strategy_name": "xle__fast__trend_long_put_next_expiry", "net_pnl": -20.0},
+        ],
+    )
+
+    lines = trader._build_midday_notification_lines(session, current_equity=25_120.0)
+
+    assert "Open positions by ticker: NVDA x1, QQQ x2" in lines
+    assert "Top strategy PnL: qqq__fast__trend_long_call_next_expiry +$95.00" in lines
+    assert "Lagging strategies: xle__fast__trend_long_put_next_expiry -$20.00" in lines
+
+
 def test_startup_check_only_requires_inventory_for_promoted_dte_modes() -> None:
     full_config = default_portfolio_config()
     jpm_strategies = tuple(
