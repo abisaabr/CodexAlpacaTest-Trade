@@ -38,6 +38,10 @@ The paper trader can publish its morning startup check, midday status, and end-o
 
 The notification payloads now include higher-signal operating context, including open positions grouped by ticker plus realized day PnL summaries for the strongest and weakest strategies so far.
 
+## Health Check
+
+An hourly local health-check runner is available at `scripts/run_multi_ticker_health_check.py`. It verifies the main scheduled task, checks whether the paper trader is running and updating its session during market hours, and sends ntfy alerts when something is wrong. Safe operational fixes such as reinstalling the main scheduled task or restarting a missing trader process can be enabled with `--restart-if-needed`.
+
 ### Promoted Strategies
 
 #### QQQ
