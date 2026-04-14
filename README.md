@@ -31,6 +31,22 @@ tests/               config, safeguards, ingestion, backtest, selector, reportin
 
 ## New Machine Setup
 
+### Easiest Portable Path
+
+If the goal is to run the paper trader on any machine with the fewest moving parts, use Docker:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_new_machine.ps1 -Mode docker
+docker compose up -d portfolio-trader portfolio-watchdog
+```
+
+```bash
+bash ./scripts/setup_new_machine.sh --mode docker
+docker compose up -d portfolio-trader portfolio-watchdog
+```
+
+This keeps local secrets in `.env`, persists state in `data/` and `reports/`, and avoids machine-specific scheduler differences. See [docs/PORTABLE_DEPLOYMENT.md](docs/PORTABLE_DEPLOYMENT.md) for the full portable deployment flow.
+
 ### Windows
 
 ```powershell
@@ -139,7 +155,13 @@ Multi-ticker paper trader, one diagnostic cycle:
 python scripts/run_multi_ticker_portfolio_paper_trader.py --portfolio-config config\multi_ticker_paper_portfolio.yaml --run-once
 ```
 
-See `docs/MULTI_TICKER_PAPER_PORTFOLIO.md` for the current promoted multi-ticker book, scheduler install, morning self-check behavior, and Discord notifications.
+Portable daemon, cross-machine runtime:
+
+```powershell
+python scripts/run_multi_ticker_portable_daemon.py --portfolio-config config\multi_ticker_paper_portfolio.yaml --submit-paper-orders
+```
+
+See `docs/MULTI_TICKER_PAPER_PORTFOLIO.md` for the current promoted multi-ticker book, scheduler install, morning self-check behavior, and notifications. See `docs/PORTABLE_DEPLOYMENT.md` for the Docker-based “run it on any machine” path.
 
 ## What Is Not Committed
 

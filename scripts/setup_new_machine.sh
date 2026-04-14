@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MODE="docker"
+START_SERVICES="false"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --mode)
+      MODE="$2"
+      shift 2
+      ;;
+    --start-services)
+      START_SERVICES="true"
+      shift
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
+
+mkdir -p data reports
+
+if [[ ! -f ".env" ]]; then
+  cp .env.example .env
+  echo "Created .env from .env.example"
+fi
+
+if [[ "$MODE" == "docker" ]]; then
+  docker compose build
+  if [[ "$START_SERVICES" == "true" ]]; then
+    docker compose up -d portfolio-trader portfolio-watchdog
+  fi
+  echo
+  echo "Docker setup is ready."
+  echo "Next steps:"
+  echo "  1. Fill .env with Alpaca paper credentials and your ntfy topic."
+  echo "  2. Run 'docker compose up -d portfolio-trader portfolio-watchdog' if you did not pass --start-services."
+  echo "  3. Check 'docker compose ps' and 'docker compose logs -f portfolio-trader'."
+  exit 0
+fi
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  bash ./scripts/bootstrap_mac.sh
+else
+  bash ./scripts/bootstrap_linux.sh
+fi
+
+echo
+echo "Native shell setup is ready."
+echo "Next steps:"
+echo "  1. Activate .venv with 'source .venv/bin/activate'"
+echo "  2. Fill .env with Alpaca paper credentials and your ntfy topic."
+echo "  3. Run 'python scripts/doctor.py --skip-connectivity'"
+echo "  4. Run 'python -m pytest'"
+echo "  5. For the always-on trader on macOS/Linux, prefer 'docker compose up -d portfolio-trader portfolio-watchdog'."

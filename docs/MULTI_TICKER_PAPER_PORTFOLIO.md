@@ -38,6 +38,25 @@ The paper trader can publish its morning startup check, midday status, and end-o
 
 The notification payloads now include higher-signal operating context, including open positions grouped by ticker plus realized day PnL summaries for the strongest and weakest strategies so far.
 
+## Portable Runtime
+
+For the easiest cross-machine deployment, the repo now includes:
+
+- `Dockerfile`
+- `docker-compose.yml`
+- `scripts/run_multi_ticker_portable_daemon.py`
+- `scripts/run_multi_ticker_watchdog.py`
+- `scripts/setup_new_machine.ps1`
+- `scripts/setup_new_machine.sh`
+
+The recommended portable runtime is:
+
+```bash
+docker compose up -d portfolio-trader portfolio-watchdog
+```
+
+That keeps the strategy book, state, and alerts identical across machines while avoiding OS-specific schedulers.
+
 ## Health Check
 
 An hourly local health-check runner is available at `scripts/run_multi_ticker_health_check.py`. It verifies the main scheduled task, checks whether the paper trader is running and updating its session during market hours, and sends ntfy alerts when something is wrong. Safe operational fixes such as reinstalling the main scheduled task or restarting a missing trader process can be enabled with `--restart-if-needed`.
