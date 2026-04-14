@@ -39,6 +39,9 @@ ENV_ALIASES: dict[str, tuple[str, ...]] = {
     "request_timeout_seconds": ("REQUEST_TIMEOUT_SECONDS",),
     "retry_attempts": ("RETRY_ATTEMPTS",),
     "discord_webhook_url": ("DISCORD_WEBHOOK_URL",),
+    "ntfy_base_url": ("NTFY_BASE_URL",),
+    "ntfy_topic": ("NTFY_TOPIC",),
+    "ntfy_access_token": ("NTFY_ACCESS_TOKEN",),
     "email_smtp_host": ("EMAIL_SMTP_HOST", "SMTP_HOST"),
     "email_smtp_port": ("EMAIL_SMTP_PORT", "SMTP_PORT"),
     "email_username": ("EMAIL_USERNAME", "SMTP_USERNAME", "GMAIL_USERNAME"),
@@ -99,6 +102,9 @@ class LabSettings(BaseModel):
     request_timeout_seconds: float = 30.0
     retry_attempts: int = 3
     discord_webhook_url: SecretStr | None = None
+    ntfy_base_url: str = "https://ntfy.sh"
+    ntfy_topic: str | None = None
+    ntfy_access_token: SecretStr | None = None
     email_smtp_host: str | None = None
     email_smtp_port: int = 587
     email_username: SecretStr | None = None
@@ -120,6 +126,7 @@ class LabSettings(BaseModel):
         "alpaca_api_key",
         "alpaca_secret_key",
         "discord_webhook_url",
+        "ntfy_access_token",
         "email_username",
         "email_password",
         mode="before",
@@ -160,6 +167,21 @@ class LabSettings(BaseModel):
         if value in (None, ""):
             return None
         return str(value).rstrip("/")
+
+    @field_validator("ntfy_base_url", mode="before")
+    @classmethod
+    def normalize_ntfy_base_url(cls, value: Any) -> str:
+        if value in (None, ""):
+            return "https://ntfy.sh"
+        return str(value).rstrip("/")
+
+    @field_validator("ntfy_topic", mode="before")
+    @classmethod
+    def normalize_ntfy_topic(cls, value: Any) -> str | None:
+        if value in (None, ""):
+            return None
+        topic = str(value).strip().strip("/")
+        return topic or None
 
     @field_validator("alpaca_data_feed", mode="after")
     @classmethod
@@ -312,6 +334,9 @@ class LabSettings(BaseModel):
             "alpaca_api_key": "set" if self.alpaca_api_key else "missing",
             "alpaca_secret_key": "set" if self.alpaca_secret_key else "missing",
             "discord_webhook_url": "set" if self.discord_webhook_url else "missing",
+            "ntfy_base_url": self.ntfy_base_url,
+            "ntfy_topic": self.ntfy_topic or "missing",
+            "ntfy_access_token": "set" if self.ntfy_access_token else "missing",
             "email_smtp_host": self.email_smtp_host or "missing",
             "email_smtp_port": self.email_smtp_port,
             "email_username": "set" if self.email_username else "missing",

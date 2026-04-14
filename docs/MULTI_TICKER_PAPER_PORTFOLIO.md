@@ -26,6 +26,16 @@ This runner now trades the validated shared-account book across:
 
 The live book uses a shared virtual `$25,000` sleeve and `78` strategy entries, including two explicit choppy aliases that intentionally reuse validated same-day single-leg setups under separate regime labels.
 
+## Notifications
+
+The paper trader can publish its morning startup check, midday status, and end-of-day summary through any combination of:
+
+- `NTFY_TOPIC` via `https://ntfy.sh`
+- `DISCORD_WEBHOOK_URL`
+- SMTP email settings
+
+`ntfy` is the simplest path to get mobile push notifications quickly. Set `NTFY_TOPIC` in the local `.env`, then subscribe to that topic in the ntfy mobile app or by opening `https://ntfy.sh/<your-topic>` in a browser.
+
 ### Promoted Strategies
 
 #### QQQ

@@ -21,7 +21,7 @@ from alpaca_lab.multi_ticker_portfolio.signals import (
     infer_symbol_regime,
     signal_is_true,
 )
-from alpaca_lab.notifications import DiscordWebhookNotifier, EmailNotifier
+from alpaca_lab.notifications import DiscordWebhookNotifier, EmailNotifier, NtfyNotifier
 from alpaca_lab.qqq_portfolio.greeks import bs_greeks, implied_volatility
 from alpaca_lab.reporting import append_journal_entry, write_alert_queue, write_summary_bundle
 
@@ -268,6 +268,7 @@ class MultiTickerPortfolioPaperTrader:
             else submit_paper_orders
         )
         self.broker = broker or AlpacaBrokerAdapter(settings, dry_run=not self.submit_paper_orders)
+        self.ntfy_notifier = NtfyNotifier(settings)
         self.discord_notifier = DiscordWebhookNotifier(settings)
         self.email_notifier = EmailNotifier(settings)
         self.logger = get_logger("multi_ticker_portfolio")
@@ -379,6 +380,7 @@ class MultiTickerPortfolioPaperTrader:
             return False
         delivered = False
         for notifier in (
+            getattr(self, "ntfy_notifier", None),
             getattr(self, "email_notifier", None),
             getattr(self, "discord_notifier", None),
         ):
