@@ -62,6 +62,8 @@ class RiskConfig(BaseModel):
     max_positions_per_regime: int = 10
     max_positions_per_symbol: int = 3
     min_required_buying_power: float = 7_500.0
+    broker_min_equity_to_trade: float | None = 26_000.0
+    broker_equity_emergency_stop: float | None = 25_500.0
     soft_alert_delta_shares: float = 3_200.0
     soft_alert_vega_dollars_1pct: float = 620.0
 
@@ -356,6 +358,20 @@ def default_portfolio_config() -> MultiTickerPortfolioConfig:
     return MultiTickerPortfolioConfig(strategies=_default_strategies())
 
 
+def _deep_merge(base: dict[str, object], overlay: dict[str, object]) -> dict[str, object]:
+    merged = dict(base)
+    for key, value in overlay.items():
+        if (
+            key in merged
+            and isinstance(merged[key], dict)
+            and isinstance(value, dict)
+        ):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
 def load_portfolio_config(path: str | Path | None = None) -> MultiTickerPortfolioConfig:
     if path is None:
         return default_portfolio_config()
@@ -365,6 +381,17 @@ def load_portfolio_config(path: str | Path | None = None) -> MultiTickerPortfoli
     payload = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     if not isinstance(payload, dict):
         raise ValueError("Portfolio config must contain a top-level mapping.")
+    risk_controls_path_value = payload.pop("risk_controls_path", None)
+    if risk_controls_path_value:
+        risk_controls_path = Path(str(risk_controls_path_value))
+        if not risk_controls_path.is_absolute():
+            risk_controls_path = config_path.parent / risk_controls_path
+        if not risk_controls_path.exists():
+            raise FileNotFoundError(f"Risk controls config not found: {risk_controls_path}")
+        risk_payload = yaml.safe_load(risk_controls_path.read_text(encoding="utf-8")) or {}
+        if not isinstance(risk_payload, dict):
+            raise ValueError("Risk controls config must contain a top-level mapping.")
+        payload = _deep_merge(payload, risk_payload)
     if "strategies" not in payload:
         payload["strategies"] = [strategy.model_dump() for strategy in _default_strategies()]
     return MultiTickerPortfolioConfig.model_validate(payload)

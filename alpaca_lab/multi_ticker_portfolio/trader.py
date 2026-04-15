@@ -35,6 +35,7 @@ EXIT_COMMISSION_PER_CONTRACT = 0.65
 AUTO_FLATTEN_UNEXPECTED_STARTUP_REASON = "auto_flatten_unexpected_startup_position"
 AUTO_FLATTEN_KNOWN_EOD_REASON = "auto_flatten_known_end_of_day_position"
 AUTO_FLATTEN_UNEXPECTED_EOD_REASON = "auto_flatten_unexpected_end_of_day_position"
+BROKER_EQUITY_EMERGENCY_STOP_REASON = "broker_equity_emergency_stop"
 
 
 @dataclass(slots=True)
@@ -870,6 +871,41 @@ class MultiTickerPortfolioPaperTrader:
             return True, f"daily_loss_gate triggered at equity {current_equity:.2f}"
         return False, None
 
+    def _extract_broker_equity(self, account: dict[str, Any]) -> float | None:
+        for key in ("equity", "portfolio_value", "last_equity"):
+            raw_value = account.get(key)
+            if raw_value in (None, ""):
+                continue
+            try:
+                return float(raw_value)
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    def _broker_min_equity_to_trade(self) -> float | None:
+        threshold = self.portfolio_config.risk.broker_min_equity_to_trade
+        if threshold is None or threshold <= 0.0:
+            return None
+        return float(threshold)
+
+    def _broker_equity_emergency_stop(self) -> float | None:
+        threshold = self.portfolio_config.risk.broker_equity_emergency_stop
+        if threshold is None or threshold <= 0.0:
+            return None
+        return float(threshold)
+
+    def _record_guardrail_block(
+        self,
+        session: SessionState,
+        *,
+        level: str,
+        reason: str,
+    ) -> None:
+        session.blocked_new_entries = True
+        if session.block_reason != reason:
+            session.block_reason = reason
+            self._alert(session, level, reason)
+
     def _mark_to_close(self, open_trade: OpenTrade, option_chain: pd.DataFrame) -> dict[str, float]:
         mark_map: dict[str, float] = {}
         for leg in open_trade.legs:
@@ -889,6 +925,7 @@ class MultiTickerPortfolioPaperTrader:
         spot_price: float,
         current_minute: int,
         current_equity: float,
+        broker_equity: float | None,
         attempt_id: str,
     ) -> tuple[OpenTrade | None, dict[str, Any]]:
         event: dict[str, Any] = {
@@ -902,6 +939,7 @@ class MultiTickerPortfolioPaperTrader:
             "timing_profile": strategy.timing_profile,
             "current_minute": int(current_minute),
             "current_equity": round(float(current_equity), 4),
+            "broker_equity": round(float(broker_equity), 4) if broker_equity is not None else None,
             "decision": "skipped",
             "decision_reason": None,
         }
@@ -958,9 +996,23 @@ class MultiTickerPortfolioPaperTrader:
         )
         per_trade_budget = current_equity * strategy.risk_fraction * risk_scale
         allocatable_risk = min(remaining_risk, per_trade_budget)
+        min_broker_equity = self._broker_min_equity_to_trade()
+        broker_remaining_risk: float | None = None
+        if broker_equity is not None and min_broker_equity is not None:
+            if broker_equity < min_broker_equity:
+                event["decision_reason"] = "broker_equity_below_trade_floor"
+                event["broker_min_equity_to_trade"] = round(min_broker_equity, 4)
+                return None, event
+            broker_remaining_risk = max(0.0, broker_equity - min_broker_equity - reserved_risk)
+            allocatable_risk = min(allocatable_risk, broker_remaining_risk)
         quantity_by_risk = math.floor(allocatable_risk / max_loss_per_combo)
         if quantity_by_risk < 1:
-            event["decision_reason"] = "risk_budget_too_small"
+            if broker_remaining_risk is not None and broker_remaining_risk < max_loss_per_combo:
+                event["decision_reason"] = "broker_equity_risk_buffer"
+                event["broker_min_equity_to_trade"] = round(min_broker_equity or 0.0, 4)
+                event["broker_remaining_risk"] = round(broker_remaining_risk, 4)
+            else:
+                event["decision_reason"] = "risk_budget_too_small"
             event["risk_scale"] = round(risk_scale, 6)
             event["reserved_risk"] = round(reserved_risk, 4)
             event["remaining_risk"] = round(remaining_risk, 4)
@@ -1010,6 +1062,9 @@ class MultiTickerPortfolioPaperTrader:
                 "allocatable_risk": round(allocatable_risk, 4),
                 "quantity_by_risk": int(quantity_by_risk),
                 "quantity_by_cash": int(quantity_by_cash),
+                "broker_remaining_risk": round(broker_remaining_risk, 4)
+                if broker_remaining_risk is not None
+                else None,
                 "expected_entry_debit": round(float(entry_debit), 4),
                 "expected_entry_fill_price": round(float(open_trade.entry_fill_price), 4),
                 "max_loss_per_combo": round(float(max_loss_per_combo), 4),
@@ -1642,12 +1697,13 @@ class MultiTickerPortfolioPaperTrader:
         )
         return True
 
-    def _cleanup_known_open_trades_at_end_of_day(
+    def _cleanup_known_open_trades(
         self,
         *,
         session: SessionState,
         trade_date: date,
         stock_frames: dict[str, pd.DataFrame] | None,
+        reason: str,
     ) -> int:
         cleaned = 0
         for trade_payload in list(session.open_trades):
@@ -1656,7 +1712,7 @@ class MultiTickerPortfolioPaperTrader:
                 session=session,
                 trade_date=trade_date,
                 stock_frames=stock_frames,
-                reason=AUTO_FLATTEN_KNOWN_EOD_REASON,
+                reason=reason,
             ):
                 cleaned += 1
         return cleaned
@@ -1817,7 +1873,9 @@ class MultiTickerPortfolioPaperTrader:
         account = self.broker.get_account()
         positions = self.broker.get_positions()
         buying_power = float(account.get("buying_power") or 0.0)
+        broker_equity = self._extract_broker_equity(account)
         details["buying_power"] = round(buying_power, 2)
+        details["broker_equity"] = round(broker_equity, 2) if broker_equity is not None else None
         details["required_buying_power"] = round(
             self.portfolio_config.risk.min_required_buying_power,
             2,
@@ -1829,6 +1887,15 @@ class MultiTickerPortfolioPaperTrader:
         if buying_power < self.portfolio_config.risk.min_required_buying_power:
             failures.append(
                 f"buying power {buying_power:.2f} below required {self.portfolio_config.risk.min_required_buying_power:.2f}"
+            )
+        min_broker_equity = self._broker_min_equity_to_trade()
+        if (
+            broker_equity is not None
+            and min_broker_equity is not None
+            and broker_equity < min_broker_equity
+        ):
+            failures.append(
+                f"broker equity {broker_equity:.2f} below minimum trading threshold {min_broker_equity:.2f}"
             )
         if positions and self.portfolio_config.execution.auto_flatten_unexpected_positions:
             cleanup_entries = self._close_unexpected_broker_positions(
@@ -1994,6 +2061,7 @@ class MultiTickerPortfolioPaperTrader:
         session: SessionState,
         ledger: PortfolioLedger,
         stock_frames: dict[str, pd.DataFrame],
+        broker_equity: float | None = None,
     ) -> tuple[dict[str, SymbolSnapshot], float]:
         trade_date = date.fromisoformat(session.trade_date)
         snapshots: dict[str, SymbolSnapshot] = {}
@@ -2019,6 +2087,40 @@ class MultiTickerPortfolioPaperTrader:
         if loss_gate:
             session.blocked_new_entries = True
             session.block_reason = reason
+        min_broker_equity = self._broker_min_equity_to_trade()
+        emergency_broker_equity = self._broker_equity_emergency_stop()
+        if (
+            broker_equity is not None
+            and emergency_broker_equity is not None
+            and broker_equity <= emergency_broker_equity
+        ):
+            reason = (
+                f"broker equity emergency stop triggered at {broker_equity:.2f} "
+                f"(threshold {emergency_broker_equity:.2f})"
+            )
+            self._record_guardrail_block(session, level="error", reason=reason)
+            self._cleanup_known_open_trades(
+                session=session,
+                trade_date=trade_date,
+                stock_frames=stock_frames,
+                reason=BROKER_EQUITY_EMERGENCY_STOP_REASON,
+            )
+            self._close_unexpected_broker_positions(
+                session=session,
+                trade_date=trade_date,
+                reason=BROKER_EQUITY_EMERGENCY_STOP_REASON,
+                flatten_all_remaining=True,
+            )
+        elif (
+            broker_equity is not None
+            and min_broker_equity is not None
+            and broker_equity < min_broker_equity
+        ):
+            reason = (
+                f"broker equity {broker_equity:.2f} below minimum trading threshold "
+                f"{min_broker_equity:.2f}"
+            )
+            self._record_guardrail_block(session, level="warning", reason=reason)
 
         exiting: list[tuple[dict[str, Any], SymbolSnapshot, str]] = []
         for trade_payload in list(session.open_trades):
@@ -2071,6 +2173,7 @@ class MultiTickerPortfolioPaperTrader:
                     spot_price=snapshot.latest_close,
                     current_minute=snapshot.current_minute,
                     current_equity=current_equity,
+                    broker_equity=broker_equity,
                     attempt_id=attempt_id,
                 )
                 self._append_trade_event(trade_date, signal_event)
@@ -2402,10 +2505,11 @@ class MultiTickerPortfolioPaperTrader:
             self._flatten_all(session, stock_frames)
         cleanup_summary: dict[str, Any] = {}
         if self.portfolio_config.execution.auto_flatten_unexpected_positions:
-            known_cleanup_count = self._cleanup_known_open_trades_at_end_of_day(
+            known_cleanup_count = self._cleanup_known_open_trades(
                 session=session,
                 trade_date=trade_date,
                 stock_frames=stock_frames,
+                reason=AUTO_FLATTEN_KNOWN_EOD_REASON,
             )
             unexpected_cleanup_entries = self._close_unexpected_broker_positions(
                 session=session,
@@ -2541,6 +2645,8 @@ class MultiTickerPortfolioPaperTrader:
 
         while True:
             stock_frames = self._fetch_today_stock_frames(trade_date)
+            broker_account = self.broker.get_account()
+            broker_equity = self._extract_broker_equity(broker_account)
             snapshots = {
                 symbol: snapshot
                 for symbol, snapshot in (
@@ -2600,6 +2706,7 @@ class MultiTickerPortfolioPaperTrader:
                     session=session,
                     ledger=ledger,
                     stock_frames=stock_frames,
+                    broker_equity=broker_equity,
                 )
                 self.save_session(session)
             else:

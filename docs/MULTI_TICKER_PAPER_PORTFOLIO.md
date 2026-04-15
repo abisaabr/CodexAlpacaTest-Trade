@@ -378,6 +378,8 @@ Secrets stay in your local `.env` and are intentionally not committed to GitHub.
 
 The live overlay now uses the validated shared-account settings for the expanded book:
 
+- dedicated risk controls file:
+  `config/risk_controls/multi_ticker_portfolio.yaml`
 - `max_open_risk_fraction: 15%`
 - `daily_loss_gate_pct: disabled`
 - `delever_drawdown_pct: 8%`
@@ -385,9 +387,13 @@ The live overlay now uses the validated shared-account settings for the expanded
 - `max_open_positions: 10`
 - `max_positions_per_regime: 10`
 - `max_positions_per_symbol: 3`
+- `broker_min_equity_to_trade: $26,000`
+- `broker_equity_emergency_stop: $25,500`
 - soft alerts:
   `delta ~= 3200 shares`
   `vega ~= 620 dollars per 1 vol point`
+
+The virtual research sleeve is still `$25,000`, but the live broker-equity guardrails are intentionally higher. That keeps the runner from opening new day trades when the actual brokerage account is too close to the FINRA PDT minimum of `$25,000`.
 
 Two findings drove those settings:
 
@@ -398,6 +404,8 @@ Two findings drove those settings:
 
 - Portfolio config:
   `config/multi_ticker_paper_portfolio.yaml`
+- Risk controls:
+  `config/risk_controls/multi_ticker_portfolio.yaml`
 - Runner:
   `scripts/run_multi_ticker_portfolio_paper_trader.py`
 - Windows wrapper:

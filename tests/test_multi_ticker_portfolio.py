@@ -144,6 +144,32 @@ def test_portfolio_config_allows_disabling_daily_loss_gate(tmp_path: Path) -> No
     assert config.risk.delever_risk_scale == 0.5
 
 
+def test_portfolio_config_loads_risk_controls_overlay(tmp_path: Path) -> None:
+    risk_controls_path = tmp_path / "risk_controls.yaml"
+    risk_controls_path.write_text(
+        "risk:\n"
+        "  broker_min_equity_to_trade: 31000\n"
+        "  broker_equity_emergency_stop: 30500\n"
+        "execution:\n"
+        "  max_relative_spread: 0.22\n",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "portfolio.yaml"
+    config_path.write_text(
+        f"risk_controls_path: {risk_controls_path.name}\n"
+        "execution:\n"
+        "  stock_feed: iex\n",
+        encoding="utf-8",
+    )
+
+    config = load_portfolio_config(config_path)
+
+    assert config.risk.broker_min_equity_to_trade == 31_000
+    assert config.risk.broker_equity_emergency_stop == 30_500
+    assert config.execution.max_relative_spread == 0.22
+    assert config.execution.stock_feed == "iex"
+
+
 def test_disabled_daily_loss_gate_never_blocks_entries() -> None:
     config = default_portfolio_config()
     config = config.model_copy(
@@ -325,6 +351,69 @@ def test_startup_check_only_requires_inventory_for_promoted_dte_modes() -> None:
         "next_expiry_calls": True,
         "next_expiry_puts": True,
     }
+
+
+def test_startup_check_fails_when_broker_equity_below_trade_threshold() -> None:
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={"underlying_symbols": ("QQQ",)}
+            ),
+            "strategies": tuple(
+                strategy
+                for strategy in default_portfolio_config().strategies
+                if strategy.underlying_symbol == "QQQ"
+            ),
+        }
+    )
+
+    class _BrokerStub:
+        def get_account(self) -> dict[str, object]:
+            return {"buying_power": 25_000.0, "equity": 25_400.0}
+
+        def get_positions(self) -> list[object]:
+            return []
+
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.underlyings = ("QQQ",)
+    trader.broker = _BrokerStub()
+
+    now_et = datetime(2026, 4, 15, 9, 36, tzinfo=ZoneInfo("America/New_York"))
+    snapshot = SymbolSnapshot(
+        underlying_symbol="QQQ",
+        trade_date=now_et.date(),
+        stock_frame=pd.DataFrame([{"close": 500.0}]),
+        option_chain=pd.DataFrame(
+            [
+                {"dte": 0, "option_type": "call"},
+                {"dte": 0, "option_type": "put"},
+                {"dte": 1, "option_type": "call"},
+                {"dte": 1, "option_type": "put"},
+            ]
+        ),
+        mark_map={},
+        latest_close=500.0,
+        current_minute=6,
+        latest_timestamp_et=now_et,
+    )
+    session = SessionState(
+        trade_date=now_et.date().isoformat(),
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+
+    status, details = trader._perform_startup_check(
+        session=session,
+        trade_date=now_et.date(),
+        snapshots={"QQQ": snapshot},
+    )
+
+    assert status == "failed"
+    assert (
+        "broker equity 25400.00 below minimum trading threshold 26000.00"
+        in details["failures"]
+    )
 
 
 def test_startup_check_allows_symbol_when_at_least_one_strategy_is_feasible() -> None:
@@ -633,6 +722,9 @@ def test_run_rechecks_clock_after_preopen_sleep_before_fetching_stock_bars(monke
         def __init__(self) -> None:
             self.clock_calls = 0
 
+        def get_account(self) -> dict[str, object]:
+            return {"equity": 100_000.0, "buying_power": 100_000.0}
+
         def get_clock(self) -> dict[str, object]:
             self.clock_calls += 1
             if self.clock_calls == 1:
@@ -918,10 +1010,11 @@ def test_force_cleanup_known_trade_books_completion(tmp_path: Path) -> None:
         )
     }
 
-    cleaned = trader._cleanup_known_open_trades_at_end_of_day(
+    cleaned = trader._cleanup_known_open_trades(
         session=session,
         trade_date=datetime(2026, 4, 15).date(),
         stock_frames=stock_frames,
+        reason="auto_flatten_known_end_of_day_position",
     )
 
     assert cleaned == 1
