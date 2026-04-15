@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date as dt_date
 from pathlib import Path
 from typing import Literal
 
@@ -68,6 +69,46 @@ class RiskBucketConfig(BaseModel):
         raise TypeError("symbols must be a comma-separated string or sequence")
 
 
+class EventBlackoutConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    reason: str
+    start_date: dt_date
+    end_date: dt_date | None = None
+    start_minute: int = 0
+    end_minute: int = 390
+    symbols: tuple[str, ...] = ()
+    regimes: tuple[Literal["bull", "bear", "choppy"], ...] = ()
+    timing_profiles: tuple[Literal["fast", "base", "slow"], ...] = ()
+    dte_modes: tuple[Literal["same_day", "next_expiry"], ...] = ()
+    enabled: bool = True
+
+    @field_validator("symbols", mode="before")
+    @classmethod
+    def normalize_symbols(cls, value: object) -> tuple[str, ...]:
+        if value in (None, "", []):
+            return ()
+        if isinstance(value, str):
+            items = [item.strip().upper() for item in value.split(",") if item.strip()]
+            return tuple(items)
+        if isinstance(value, (list, tuple, set)):
+            return tuple(str(item).strip().upper() for item in value if str(item).strip())
+        raise TypeError("symbols must be a comma-separated string or sequence")
+
+    @field_validator("regimes", "timing_profiles", "dte_modes", mode="before")
+    @classmethod
+    def normalize_tuple_strs(cls, value: object) -> tuple[str, ...]:
+        if value in (None, "", []):
+            return ()
+        if isinstance(value, str):
+            items = [item.strip() for item in value.split(",") if item.strip()]
+            return tuple(items)
+        if isinstance(value, (list, tuple, set)):
+            return tuple(str(item).strip() for item in value if str(item).strip())
+        raise TypeError("value must be a comma-separated string or sequence")
+
+
 class RiskConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -116,6 +157,9 @@ class RiskConfig(BaseModel):
     entry_failure_streak_limit: int | None = 3
     entry_adverse_slippage_fraction_limit: float | None = 0.20
     entry_adverse_slippage_lookback: int = 4
+    entry_cutoff_minute: int | None = 345
+    same_day_entry_cutoff_minute: int | None = 300
+    event_blackouts: tuple[EventBlackoutConfig, ...] = Field(default_factory=tuple)
 
 
 class ExecutionConfig(BaseModel):

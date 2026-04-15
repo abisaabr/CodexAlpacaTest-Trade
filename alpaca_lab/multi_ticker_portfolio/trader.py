@@ -45,6 +45,8 @@ SEVERE_LOSS_FLATTEN_REASON = "severe_loss_flatten_all"
 PROJECTED_DELTA_HARD_CAP_REASON = "projected_delta_hard_cap"
 PROJECTED_VEGA_HARD_CAP_REASON = "projected_vega_hard_cap"
 ENTRY_EXECUTION_CIRCUIT_BREAKER_REASON = "entry_execution_circuit_breaker"
+LATE_DAY_ENTRY_CUTOFF_REASON = "late_day_entry_cutoff"
+EVENT_BLACKOUT_REASON = "event_blackout"
 
 
 @dataclass(slots=True)
@@ -1059,6 +1061,52 @@ class MultiTickerPortfolioPaperTrader:
             total_vega_dollars += vega_dollars
         return total_delta_shares, total_vega_dollars
 
+    def _entry_cutoff_minute_for_strategy(self, strategy: StrategyConfig) -> int | None:
+        if strategy.dte_mode == "same_day":
+            cutoff = self.portfolio_config.risk.same_day_entry_cutoff_minute
+            if cutoff is not None and cutoff > 0:
+                return int(cutoff)
+        cutoff = self.portfolio_config.risk.entry_cutoff_minute
+        if cutoff is None or cutoff <= 0:
+            return None
+        return int(cutoff)
+
+    def _matching_event_blackouts(
+        self,
+        *,
+        strategy: StrategyConfig,
+        trade_date: date,
+        current_minute: int,
+    ) -> list[dict[str, Any]]:
+        matches: list[dict[str, Any]] = []
+        for blackout in self.portfolio_config.risk.event_blackouts:
+            if not blackout.enabled:
+                continue
+            end_date = blackout.end_date or blackout.start_date
+            if trade_date < blackout.start_date or trade_date > end_date:
+                continue
+            if current_minute < blackout.start_minute or current_minute > blackout.end_minute:
+                continue
+            if blackout.symbols and strategy.underlying_symbol not in blackout.symbols:
+                continue
+            if blackout.regimes and strategy.regime not in blackout.regimes:
+                continue
+            if blackout.timing_profiles and strategy.timing_profile not in blackout.timing_profiles:
+                continue
+            if blackout.dte_modes and strategy.dte_mode not in blackout.dte_modes:
+                continue
+            matches.append(
+                {
+                    "name": blackout.name,
+                    "reason": blackout.reason,
+                    "start_date": blackout.start_date.isoformat(),
+                    "end_date": (blackout.end_date or blackout.start_date).isoformat(),
+                    "start_minute": int(blackout.start_minute),
+                    "end_minute": int(blackout.end_minute),
+                }
+            )
+        return matches
+
     def _mark_to_close(self, open_trade: OpenTrade, option_chain: pd.DataFrame) -> dict[str, float]:
         mark_map: dict[str, float] = {}
         for leg in open_trade.legs:
@@ -1111,7 +1159,23 @@ class MultiTickerPortfolioPaperTrader:
         if any(trade["strategy_name"] == strategy.name for trade in session.open_trades):
             event["decision_reason"] = "strategy_already_open"
             return None, event
-        legs = self._select_legs(strategy, option_chain, date.fromisoformat(session.trade_date))
+        trade_date = date.fromisoformat(session.trade_date)
+        entry_cutoff_minute = self._entry_cutoff_minute_for_strategy(strategy)
+        if entry_cutoff_minute is not None and current_minute >= entry_cutoff_minute:
+            event["decision_reason"] = LATE_DAY_ENTRY_CUTOFF_REASON
+            event["entry_cutoff_minute"] = int(entry_cutoff_minute)
+            return None, event
+        matching_blackouts = self._matching_event_blackouts(
+            strategy=strategy,
+            trade_date=trade_date,
+            current_minute=current_minute,
+        )
+        if matching_blackouts:
+            first_blackout = matching_blackouts[0]
+            event["decision_reason"] = f"{EVENT_BLACKOUT_REASON}:{first_blackout['name']}"
+            event["event_blackouts"] = matching_blackouts
+            return None, event
+        legs = self._select_legs(strategy, option_chain, trade_date)
         if not legs:
             event["decision_reason"] = "no_eligible_legs"
             return None, event

@@ -11,7 +11,11 @@ import pandas as pd
 
 from alpaca_lab.brokers.alpaca import OrderRequest
 from alpaca_lab.config import LabSettings
-from alpaca_lab.multi_ticker_portfolio.config import default_portfolio_config, load_portfolio_config
+from alpaca_lab.multi_ticker_portfolio.config import (
+    EventBlackoutConfig,
+    default_portfolio_config,
+    load_portfolio_config,
+)
 from alpaca_lab.multi_ticker_portfolio.signals import signal_is_true
 from alpaca_lab.multi_ticker_portfolio.trader import (
     MultiTickerPortfolioPaperTrader,
@@ -515,6 +519,103 @@ def test_evaluate_entry_blocks_on_projected_vega_hard_cap() -> None:
     assert open_trade is None
     assert event["decision_reason"] == "projected_vega_hard_cap"
     assert event["projected_portfolio_vega_dollars_1pct"] == 55.0
+
+
+def test_evaluate_entry_respects_same_day_entry_cutoff() -> None:
+    base = default_portfolio_config()
+    config = base.model_copy(
+        update={
+            "risk": base.risk.model_copy(
+                update={
+                    "entry_cutoff_minute": 345,
+                    "same_day_entry_cutoff_minute": 300,
+                }
+            ),
+            "execution": base.execution.model_copy(update={"underlying_symbols": ("QQQ",)}),
+            "strategies": tuple(
+                strategy for strategy in base.strategies if strategy.name == "qqq__slow__orb_long_put_same_day"
+            ),
+        }
+    )
+    strategy = config.strategies[0]
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader._select_legs = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should not select legs"))
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+    ledger = PortfolioLedger(realized_equity=25_000.0, high_watermark=25_000.0)
+
+    open_trade, event = trader._evaluate_entry(
+        strategy=strategy,
+        session=session,
+        ledger=ledger,
+        option_chain=pd.DataFrame(),
+        spot_price=500.0,
+        current_minute=301,
+        current_equity=25_000.0,
+        broker_equity=30_000.0,
+        attempt_id="attempt-cutoff",
+    )
+
+    assert open_trade is None
+    assert event["decision_reason"] == "late_day_entry_cutoff"
+    assert event["entry_cutoff_minute"] == 300
+
+
+def test_evaluate_entry_respects_event_blackout() -> None:
+    base = default_portfolio_config()
+    config = base.model_copy(
+        update={
+            "risk": base.risk.model_copy(
+                update={
+                    "event_blackouts": (
+                        EventBlackoutConfig(
+                            name="qqq_cpi",
+                            reason="CPI release blackout",
+                            start_date="2026-04-15",
+                            end_date="2026-04-15",
+                            start_minute=0,
+                            end_minute=390,
+                            symbols=("QQQ",),
+                        ),
+                    )
+                }
+            ),
+            "execution": base.execution.model_copy(update={"underlying_symbols": ("QQQ",)}),
+            "strategies": tuple(
+                strategy for strategy in base.strategies if strategy.name == "qqq__fast__trend_long_call_next_expiry"
+            ),
+        }
+    )
+    strategy = config.strategies[0]
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader._select_legs = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should not select legs"))
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+    ledger = PortfolioLedger(realized_equity=25_000.0, high_watermark=25_000.0)
+
+    open_trade, event = trader._evaluate_entry(
+        strategy=strategy,
+        session=session,
+        ledger=ledger,
+        option_chain=pd.DataFrame(),
+        spot_price=500.0,
+        current_minute=60,
+        current_equity=25_000.0,
+        broker_equity=30_000.0,
+        attempt_id="attempt-blackout",
+    )
+
+    assert open_trade is None
+    assert event["decision_reason"] == "event_blackout:qqq_cpi"
+    assert event["event_blackouts"][0]["reason"] == "CPI release blackout"
 
 
 def test_entry_execution_circuit_breaker_triggers_on_failure_streak() -> None:

@@ -33,6 +33,25 @@ risk:
   entry_failure_streak_limit: 3
   entry_adverse_slippage_fraction_limit: 0.20
   entry_adverse_slippage_lookback: 4
+  entry_cutoff_minute: 345
+  same_day_entry_cutoff_minute: 300
+  event_blackouts: []
+  # Example:
+  # event_blackouts:
+  #   - name: fomc_hold
+  #     reason: "FOMC decision window"
+  #     start_date: 2026-05-06
+  #     end_date: 2026-05-06
+  #     start_minute: 0
+  #     end_minute: 390
+  #     symbols: [QQQ, SPY, IWM]
+  #   - name: nvda_earnings
+  #     reason: "NVDA earnings blackout"
+  #     start_date: 2026-05-27
+  #     end_date: 2026-05-27
+  #     start_minute: 0
+  #     end_minute: 390
+  #     symbols: [NVDA]
 
 execution:
   quote_stale_seconds: 120

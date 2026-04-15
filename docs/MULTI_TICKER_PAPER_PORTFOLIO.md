@@ -406,12 +406,19 @@ The live overlay now uses the validated shared-account settings for the expanded
 - execution circuit breaker:
   `3` consecutive entry failures
   or `20%` average adverse entry slippage over the last `4` filled entries
+- late-day entry cutoffs:
+  `same_day ~= minute 300`
+  `all other entries ~= minute 345`
+- manual event blackout calendar:
+  `risk.event_blackouts` in `config/risk_controls/multi_ticker_portfolio.yaml`
 
 The virtual research sleeve is still `$25,000`, but the live broker-equity guardrails are intentionally higher. That keeps the runner from opening new day trades when the actual brokerage account is too close to the FINRA PDT minimum of `$25,000`.
 
 The new concentration controls work before order submission, not after. Entries are now reduced or skipped if they would push one symbol or one correlated bucket beyond its configured open-risk cap. The severe-loss kill switch is separate from the normal daily-loss gate: it halts new entries once the sleeve is down `3.5%` on the day, and it force-flattens the book at `5%`.
 
 The projected Greek caps add a second layer on top of that position sizing. Before a new order goes out, the runner estimates what total portfolio delta and vega would become if the trade fills at the planned quantity. If the projected book would move past the hard cap, the entry is blocked. Separately, the execution circuit breaker watches the live plumbing. If entries stop filling normally or recent fills slip badly against us, the runner stops opening fresh positions for the rest of the day while still managing exits and end-of-day cleanup.
+
+The late-day entry cutoff is a simpler quality filter: same-day contracts are blocked after minute `300`, and all other new entries are blocked after minute `345`. That keeps us from opening fresh risk too close to the close unless we explicitly relax the thresholds. The event blackout list is operator-controlled on purpose. You can add one-off windows for things like CPI, FOMC, or single-name earnings by date, minute range, symbol, regime, timing profile, or DTE mode without changing code.
 
 Two findings drove those settings:
 
