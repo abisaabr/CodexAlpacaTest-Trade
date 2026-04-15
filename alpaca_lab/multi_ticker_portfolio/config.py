@@ -111,6 +111,11 @@ class RiskConfig(BaseModel):
     severe_loss_flatten_all_pct: float | None = 0.05
     soft_alert_delta_shares: float = 3_200.0
     soft_alert_vega_dollars_1pct: float = 620.0
+    hard_cap_delta_shares: float | None = 4_000.0
+    hard_cap_vega_dollars_1pct: float | None = 750.0
+    entry_failure_streak_limit: int | None = 3
+    entry_adverse_slippage_fraction_limit: float | None = 0.20
+    entry_adverse_slippage_lookback: int = 4
 
 
 class ExecutionConfig(BaseModel):

@@ -400,10 +400,18 @@ The live overlay now uses the validated shared-account settings for the expanded
 - soft alerts:
   `delta ~= 3200 shares`
   `vega ~= 620 dollars per 1 vol point`
+- hard projected entry caps:
+  `delta ~= 4000 shares`
+  `vega ~= 750 dollars per 1 vol point`
+- execution circuit breaker:
+  `3` consecutive entry failures
+  or `20%` average adverse entry slippage over the last `4` filled entries
 
 The virtual research sleeve is still `$25,000`, but the live broker-equity guardrails are intentionally higher. That keeps the runner from opening new day trades when the actual brokerage account is too close to the FINRA PDT minimum of `$25,000`.
 
 The new concentration controls work before order submission, not after. Entries are now reduced or skipped if they would push one symbol or one correlated bucket beyond its configured open-risk cap. The severe-loss kill switch is separate from the normal daily-loss gate: it halts new entries once the sleeve is down `3.5%` on the day, and it force-flattens the book at `5%`.
+
+The projected Greek caps add a second layer on top of that position sizing. Before a new order goes out, the runner estimates what total portfolio delta and vega would become if the trade fills at the planned quantity. If the projected book would move past the hard cap, the entry is blocked. Separately, the execution circuit breaker watches the live plumbing. If entries stop filling normally or recent fills slip badly against us, the runner stops opening fresh positions for the rest of the day while still managing exits and end-of-day cleanup.
 
 Two findings drove those settings:
 

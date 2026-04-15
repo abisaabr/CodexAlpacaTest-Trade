@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -14,6 +15,7 @@ from alpaca_lab.multi_ticker_portfolio.config import default_portfolio_config, l
 from alpaca_lab.multi_ticker_portfolio.signals import signal_is_true
 from alpaca_lab.multi_ticker_portfolio.trader import (
     MultiTickerPortfolioPaperTrader,
+    OpenTrade,
     PortfolioLedger,
     SelectedLeg,
     SessionState,
@@ -39,6 +41,55 @@ def _build_frame(rows: int, *, close_fn, vwap_offset: float = -0.05, ema_fast_of
             }
         )
     return pd.DataFrame(data)
+
+
+def _sample_open_trade(
+    *,
+    strategy_name: str,
+    underlying_symbol: str,
+    regime: str = "bull",
+    quantity: int = 1,
+    delta: float = 0.40,
+    vega: float = 0.08,
+) -> dict[str, object]:
+    return asdict(
+        OpenTrade(
+            strategy_name=strategy_name,
+            underlying_symbol=underlying_symbol,
+            regime=regime,
+            quantity=quantity,
+            entry_time_et="2026-04-15T10:30:00-04:00",
+            entry_minute=60,
+            hard_exit_minute=360,
+            underlying_entry=500.0,
+            entry_debit=3.0,
+            max_loss_per_combo=300.0,
+            max_profit_per_combo=900.0,
+            profit_target_dollars=135.0,
+            stop_loss_dollars=90.0,
+            entry_order_id=None,
+            entry_fill_price=3.0,
+            legs=[
+                {
+                    "symbol": f"{underlying_symbol}260417C00600000",
+                    "expiration_date": "2026-04-17",
+                    "option_type": "call",
+                    "side": "long",
+                    "strike_price": 600.0,
+                    "target_delta": delta,
+                    "entry_fill_price": 3.0,
+                    "bid": 2.95,
+                    "ask": 3.05,
+                    "mark": 3.0,
+                    "delta": delta,
+                    "gamma": 0.06,
+                    "theta": -0.09,
+                    "vega": vega,
+                }
+            ],
+            entry_attempt_id=f"{strategy_name}-attempt",
+        )
+    )
 
 
 def test_default_multi_ticker_portfolio_contains_all_symbols() -> None:
@@ -326,6 +377,209 @@ def test_evaluate_entry_respects_bucket_risk_cap() -> None:
 
     assert open_trade is None
     assert event["decision_reason"] == "bucket_risk_cap:index_beta"
+
+
+def test_evaluate_entry_blocks_on_projected_delta_hard_cap() -> None:
+    base = default_portfolio_config()
+    config = base.model_copy(
+        update={
+            "risk": base.risk.model_copy(
+                update={
+                    "hard_cap_delta_shares": 95.0,
+                    "hard_cap_vega_dollars_1pct": None,
+                }
+            ),
+            "execution": base.execution.model_copy(update={"underlying_symbols": ("QQQ", "SPY")}),
+            "strategies": tuple(
+                strategy for strategy in base.strategies if strategy.name == "qqq__fast__trend_long_call_next_expiry"
+            ),
+        }
+    )
+    strategy = config.strategies[0]
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader._select_legs = lambda *_args, **_kwargs: [
+        SelectedLeg(
+            symbol="QQQ260417C00600000",
+            expiration_date="2026-04-17",
+            option_type="call",
+            side="long",
+            strike_price=600.0,
+            target_delta=0.60,
+            bid=2.95,
+            ask=3.05,
+            mark=3.0,
+            delta=0.58,
+            gamma=0.06,
+            theta=-0.09,
+            vega=0.12,
+            quote_time=None,
+        )
+    ]
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+        open_trades=[
+            _sample_open_trade(
+                strategy_name="spy__fast__trend_long_call_next_expiry",
+                underlying_symbol="SPY",
+                delta=0.42,
+                vega=0.04,
+            )
+        ],
+    )
+    ledger = PortfolioLedger(realized_equity=25_000.0, high_watermark=25_000.0)
+
+    open_trade, event = trader._evaluate_entry(
+        strategy=strategy,
+        session=session,
+        ledger=ledger,
+        option_chain=pd.DataFrame(),
+        spot_price=500.0,
+        current_minute=60,
+        current_equity=25_000.0,
+        broker_equity=30_000.0,
+        attempt_id="attempt-delta-cap",
+    )
+
+    assert open_trade is None
+    assert event["decision_reason"] == "projected_delta_hard_cap"
+    assert event["projected_portfolio_delta_shares"] == 274.0
+
+
+def test_evaluate_entry_blocks_on_projected_vega_hard_cap() -> None:
+    base = default_portfolio_config()
+    config = base.model_copy(
+        update={
+            "risk": base.risk.model_copy(
+                update={
+                    "hard_cap_delta_shares": None,
+                    "hard_cap_vega_dollars_1pct": 18.0,
+                }
+            ),
+            "execution": base.execution.model_copy(update={"underlying_symbols": ("QQQ", "SPY")}),
+            "strategies": tuple(
+                strategy for strategy in base.strategies if strategy.name == "qqq__fast__trend_long_call_next_expiry"
+            ),
+        }
+    )
+    strategy = config.strategies[0]
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader._select_legs = lambda *_args, **_kwargs: [
+        SelectedLeg(
+            symbol="QQQ260417C00600000",
+            expiration_date="2026-04-17",
+            option_type="call",
+            side="long",
+            strike_price=600.0,
+            target_delta=0.60,
+            bid=2.95,
+            ask=3.05,
+            mark=3.0,
+            delta=0.20,
+            gamma=0.06,
+            theta=-0.09,
+            vega=0.12,
+            quote_time=None,
+        )
+    ]
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+        open_trades=[
+            _sample_open_trade(
+                strategy_name="spy__fast__trend_long_call_next_expiry",
+                underlying_symbol="SPY",
+                delta=0.10,
+                vega=0.07,
+            )
+        ],
+    )
+    ledger = PortfolioLedger(realized_equity=25_000.0, high_watermark=25_000.0)
+
+    open_trade, event = trader._evaluate_entry(
+        strategy=strategy,
+        session=session,
+        ledger=ledger,
+        option_chain=pd.DataFrame(),
+        spot_price=500.0,
+        current_minute=60,
+        current_equity=25_000.0,
+        broker_equity=30_000.0,
+        attempt_id="attempt-vega-cap",
+    )
+
+    assert open_trade is None
+    assert event["decision_reason"] == "projected_vega_hard_cap"
+    assert event["projected_portfolio_vega_dollars_1pct"] == 55.0
+
+
+def test_entry_execution_circuit_breaker_triggers_on_failure_streak() -> None:
+    base = default_portfolio_config()
+    config = base.model_copy(
+        update={
+            "risk": base.risk.model_copy(
+                update={
+                    "entry_failure_streak_limit": 3,
+                    "entry_adverse_slippage_fraction_limit": None,
+                }
+            )
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader._alert = lambda session, level, message: session.alerts.append(
+        {"level": level, "message": message}
+    )
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+
+    trader._record_entry_execution_outcome(session, success=False, failure_status="rejected")
+    trader._record_entry_execution_outcome(session, success=False, failure_status="rejected")
+    trader._record_entry_execution_outcome(session, success=False, failure_status="rejected")
+
+    assert session.blocked_new_entries is True
+    assert session.execution_guardrails["circuit_breaker_triggered"] is True
+    assert "consecutive entry failures" in (session.block_reason or "")
+
+
+def test_entry_execution_circuit_breaker_triggers_on_adverse_slippage_average() -> None:
+    base = default_portfolio_config()
+    config = base.model_copy(
+        update={
+            "risk": base.risk.model_copy(
+                update={
+                    "entry_failure_streak_limit": None,
+                    "entry_adverse_slippage_fraction_limit": 0.10,
+                    "entry_adverse_slippage_lookback": 3,
+                }
+            )
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader._alert = lambda session, level, message: session.alerts.append(
+        {"level": level, "message": message}
+    )
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+
+    trader._record_entry_execution_outcome(session, success=True, adverse_slippage_fraction=0.06)
+    trader._record_entry_execution_outcome(session, success=True, adverse_slippage_fraction=0.11)
+    trader._record_entry_execution_outcome(session, success=True, adverse_slippage_fraction=0.15)
+
+    assert session.blocked_new_entries is True
+    assert session.execution_guardrails["circuit_breaker_triggered"] is True
+    assert "average adverse entry slippage" in (session.block_reason or "")
 
 
 def test_morning_notification_only_marks_sent_after_success() -> None:

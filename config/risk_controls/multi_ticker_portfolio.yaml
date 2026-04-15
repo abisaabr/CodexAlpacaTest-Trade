@@ -28,6 +28,11 @@ risk:
   severe_loss_flatten_all_pct: 0.05
   soft_alert_delta_shares: 3200
   soft_alert_vega_dollars_1pct: 620
+  hard_cap_delta_shares: 4000
+  hard_cap_vega_dollars_1pct: 750
+  entry_failure_streak_limit: 3
+  entry_adverse_slippage_fraction_limit: 0.20
+  entry_adverse_slippage_lookback: 4
 
 execution:
   quote_stale_seconds: 120

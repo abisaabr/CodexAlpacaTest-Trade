@@ -42,6 +42,9 @@ AUTO_FLATTEN_UNEXPECTED_EOD_REASON = "auto_flatten_unexpected_end_of_day_positio
 BROKER_EQUITY_EMERGENCY_STOP_REASON = "broker_equity_emergency_stop"
 SEVERE_LOSS_HALT_REASON = "severe_loss_halt_new_entries"
 SEVERE_LOSS_FLATTEN_REASON = "severe_loss_flatten_all"
+PROJECTED_DELTA_HARD_CAP_REASON = "projected_delta_hard_cap"
+PROJECTED_VEGA_HARD_CAP_REASON = "projected_vega_hard_cap"
+ENTRY_EXECUTION_CIRCUIT_BREAKER_REASON = "entry_execution_circuit_breaker"
 
 
 @dataclass(slots=True)
@@ -124,6 +127,7 @@ class SessionState:
     virtual_cash: float
     blocked_new_entries: bool = False
     block_reason: str | None = None
+    execution_guardrails: dict[str, Any] = field(default_factory=dict)
     signals_fired: list[str] = field(default_factory=list)
     open_trades: list[dict[str, Any]] = field(default_factory=list)
     completed_trades: list[dict[str, Any]] = field(default_factory=list)
@@ -327,6 +331,7 @@ class MultiTickerPortfolioPaperTrader:
                 virtual_cash=float(payload["virtual_cash"]),
                 blocked_new_entries=bool(payload.get("blocked_new_entries", False)),
                 block_reason=payload.get("block_reason"),
+                execution_guardrails=dict(payload.get("execution_guardrails", {})),
                 signals_fired=list(payload.get("signals_fired", [])),
                 open_trades=list(payload.get("open_trades", [])),
                 completed_trades=list(payload.get("completed_trades", [])),
@@ -961,6 +966,99 @@ class MultiTickerPortfolioPaperTrader:
             session.block_reason = reason
             self._alert(session, level, reason)
 
+    def _execution_guardrail_state(self, session: SessionState) -> dict[str, Any]:
+        state = session.execution_guardrails
+        if not isinstance(state, dict):
+            state = {}
+            session.execution_guardrails = state
+        state["entry_failure_streak"] = int(state.get("entry_failure_streak", 0) or 0)
+        samples = state.get("recent_entry_adverse_slippage_fractions", [])
+        if not isinstance(samples, list):
+            samples = []
+        state["recent_entry_adverse_slippage_fractions"] = [
+            float(sample) for sample in samples if isinstance(sample, (int, float))
+        ]
+        state["circuit_breaker_triggered"] = bool(state.get("circuit_breaker_triggered", False))
+        circuit_reason = state.get("circuit_breaker_reason")
+        state["circuit_breaker_reason"] = str(circuit_reason) if circuit_reason else None
+        last_failure_status = state.get("last_failure_status")
+        state["last_failure_status"] = str(last_failure_status) if last_failure_status else None
+        return state
+
+    def _apply_entry_execution_circuit_breaker(self, session: SessionState) -> None:
+        state = self._execution_guardrail_state(session)
+        if state["circuit_breaker_triggered"]:
+            self._record_guardrail_block(
+                session,
+                level="error",
+                reason=state["circuit_breaker_reason"] or ENTRY_EXECUTION_CIRCUIT_BREAKER_REASON,
+            )
+            return
+        failure_limit = self.portfolio_config.risk.entry_failure_streak_limit
+        if failure_limit is not None and failure_limit > 0 and state["entry_failure_streak"] >= failure_limit:
+            last_status = state.get("last_failure_status") or "not_filled"
+            reason = (
+                f"{ENTRY_EXECUTION_CIRCUIT_BREAKER_REASON}: "
+                f"{state['entry_failure_streak']} consecutive entry failures "
+                f"(last status {last_status})"
+            )
+            state["circuit_breaker_triggered"] = True
+            state["circuit_breaker_reason"] = reason
+            self._record_guardrail_block(session, level="error", reason=reason)
+            return
+        slippage_limit = self.portfolio_config.risk.entry_adverse_slippage_fraction_limit
+        lookback = max(1, int(self.portfolio_config.risk.entry_adverse_slippage_lookback))
+        samples = state["recent_entry_adverse_slippage_fractions"]
+        if (
+            slippage_limit is not None
+            and slippage_limit > 0.0
+            and len(samples) >= lookback
+        ):
+            recent_samples = samples[-lookback:]
+            average_slippage = sum(recent_samples) / len(recent_samples)
+            if average_slippage >= slippage_limit:
+                reason = (
+                    f"{ENTRY_EXECUTION_CIRCUIT_BREAKER_REASON}: "
+                    f"average adverse entry slippage {average_slippage:.2%} "
+                    f"over last {len(recent_samples)} fills"
+                )
+                state["circuit_breaker_triggered"] = True
+                state["circuit_breaker_reason"] = reason
+                self._record_guardrail_block(session, level="error", reason=reason)
+
+    def _record_entry_execution_outcome(
+        self,
+        session: SessionState,
+        *,
+        success: bool,
+        adverse_slippage_fraction: float | None = None,
+        failure_status: str | None = None,
+    ) -> None:
+        state = self._execution_guardrail_state(session)
+        if success:
+            state["entry_failure_streak"] = 0
+            state["last_failure_status"] = None
+            if adverse_slippage_fraction is not None:
+                samples = state["recent_entry_adverse_slippage_fractions"]
+                samples.append(max(0.0, float(adverse_slippage_fraction)))
+                lookback = max(1, int(self.portfolio_config.risk.entry_adverse_slippage_lookback))
+                if len(samples) > lookback:
+                    del samples[:-lookback]
+        else:
+            state["entry_failure_streak"] = int(state.get("entry_failure_streak", 0)) + 1
+            state["last_failure_status"] = str(failure_status or "not_filled")
+        self._apply_entry_execution_circuit_breaker(session)
+
+    def _current_portfolio_expected_greeks(self, session: SessionState) -> tuple[float, float]:
+        total_delta_shares = 0.0
+        total_vega_dollars = 0.0
+        for trade_payload in session.open_trades:
+            trade = OpenTrade(**trade_payload)
+            delta_shares, vega_dollars = self._expected_entry_greeks(trade)
+            total_delta_shares += delta_shares
+            total_vega_dollars += vega_dollars
+        return total_delta_shares, total_vega_dollars
+
     def _mark_to_close(self, open_trade: OpenTrade, option_chain: pd.DataFrame) -> dict[str, float]:
         mark_map: dict[str, float] = {}
         for leg in open_trade.legs:
@@ -1140,6 +1238,33 @@ class MultiTickerPortfolioPaperTrader:
             entry_attempt_id=attempt_id,
         )
         delta_shares, vega_dollars = self._expected_entry_greeks(open_trade)
+        portfolio_delta_shares, portfolio_vega_dollars = self._current_portfolio_expected_greeks(session)
+        projected_delta_shares = portfolio_delta_shares + delta_shares
+        projected_vega_dollars = portfolio_vega_dollars + vega_dollars
+        hard_delta_cap = self.portfolio_config.risk.hard_cap_delta_shares
+        if hard_delta_cap is not None and hard_delta_cap > 0.0 and abs(projected_delta_shares) > hard_delta_cap:
+            event.update(
+                {
+                    "decision_reason": PROJECTED_DELTA_HARD_CAP_REASON,
+                    "current_portfolio_delta_shares": round(float(portfolio_delta_shares), 4),
+                    "projected_portfolio_delta_shares": round(float(projected_delta_shares), 4),
+                    "hard_cap_delta_shares": round(float(hard_delta_cap), 4),
+                    "expected_delta_shares": round(float(delta_shares), 4),
+                }
+            )
+            return None, event
+        hard_vega_cap = self.portfolio_config.risk.hard_cap_vega_dollars_1pct
+        if hard_vega_cap is not None and hard_vega_cap > 0.0 and abs(projected_vega_dollars) > hard_vega_cap:
+            event.update(
+                {
+                    "decision_reason": PROJECTED_VEGA_HARD_CAP_REASON,
+                    "current_portfolio_vega_dollars_1pct": round(float(portfolio_vega_dollars), 4),
+                    "projected_portfolio_vega_dollars_1pct": round(float(projected_vega_dollars), 4),
+                    "hard_cap_vega_dollars_1pct": round(float(hard_vega_cap), 4),
+                    "expected_vega_dollars_1pct": round(float(vega_dollars), 4),
+                }
+            )
+            return None, event
         event.update(
             {
                 "decision": "eligible",
@@ -1166,6 +1291,14 @@ class MultiTickerPortfolioPaperTrader:
                 "max_profit_per_combo": round(float(max_profit_per_combo), 4),
                 "expected_delta_shares": round(float(delta_shares), 4),
                 "expected_vega_dollars_1pct": round(float(vega_dollars), 4),
+                "current_portfolio_delta_shares": round(float(portfolio_delta_shares), 4),
+                "projected_portfolio_delta_shares": round(float(projected_delta_shares), 4),
+                "hard_cap_delta_shares": round(float(hard_delta_cap), 4) if hard_delta_cap is not None else None,
+                "current_portfolio_vega_dollars_1pct": round(float(portfolio_vega_dollars), 4),
+                "projected_portfolio_vega_dollars_1pct": round(float(projected_vega_dollars), 4),
+                "hard_cap_vega_dollars_1pct": round(float(hard_vega_cap), 4)
+                if hard_vega_cap is not None
+                else None,
             }
         )
         return open_trade, event
@@ -1390,6 +1523,11 @@ class MultiTickerPortfolioPaperTrader:
             phase="entry",
         )
         if response.get("status") == "not_filled":
+            self._record_entry_execution_outcome(
+                session,
+                success=False,
+                failure_status=str(response.get("status") or "not_filled"),
+            )
             self._alert(session, "warning", f"{trade.strategy_name} entry did not fill")
             self._append_trade_event(
                 trade_date,
@@ -1408,6 +1546,15 @@ class MultiTickerPortfolioPaperTrader:
         trade.entry_fill_price = fill_price if fill_price > 0.0 else trade.entry_fill_price
         trade.entry_debit = trade.entry_fill_price
         trade.legs[0]["entry_fill_price"] = trade.entry_fill_price
+        adverse_slippage_fraction = max(
+            0.0,
+            (float(trade.entry_fill_price) - expected_entry_fill_price) / max(abs(expected_entry_fill_price), 0.01),
+        )
+        self._record_entry_execution_outcome(
+            session,
+            success=True,
+            adverse_slippage_fraction=adverse_slippage_fraction,
+        )
         session.virtual_cash += _entry_cashflow_from_debit(
             float(trade.entry_debit), int(trade.quantity), len(trade.legs)
         )
@@ -1423,6 +1570,7 @@ class MultiTickerPortfolioPaperTrader:
                 "expected_entry_fill_price": round(expected_entry_fill_price, 4),
                 "actual_entry_fill_price": round(float(trade.entry_fill_price), 4),
                 "entry_slippage": round(float(trade.entry_fill_price) - expected_entry_fill_price, 4),
+                "entry_adverse_slippage_fraction": round(float(adverse_slippage_fraction), 6),
                 "virtual_cash_after": round(float(session.virtual_cash), 4),
             },
         )
@@ -2279,6 +2427,7 @@ class MultiTickerPortfolioPaperTrader:
             current_equity=current_equity,
             snapshots=snapshots,
         )
+        self._apply_entry_execution_circuit_breaker(session)
         if session.blocked_new_entries:
             return snapshots, current_equity
 
@@ -2310,6 +2459,8 @@ class MultiTickerPortfolioPaperTrader:
                     continue
                 if self._run_entry(open_trade, session, current_equity):
                     current_equity = _current_equity(session, combined_mark_map)
+                if session.blocked_new_entries:
+                    return snapshots, current_equity
         return snapshots, current_equity
 
     def _flatten_all(self, session: SessionState, stock_frames: dict[str, pd.DataFrame]) -> None:
