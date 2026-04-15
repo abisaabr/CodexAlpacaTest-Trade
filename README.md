@@ -177,6 +177,6 @@ See `docs/MULTI_TICKER_PAPER_PORTFOLIO.md` for the current promoted multi-ticker
 - Paper submission, when explicitly enabled, still routes only to Alpaca paper trading. Live trading is intentionally impossible in this repo.
 - Historical options quotes are not assumed to exist in Alpaca's current public data surface for this repo.
 - The QQQ portfolio runner uses a local virtual sleeve starting at `$25,000` inside the larger paper account, persists daily state under `reports/qqq_portfolio/`, and keeps every strategy flat by the end of the session.
-- The multi-ticker portfolio runner uses the refined shared-account book across `QQQ`, `SPY`, `IWM`, `NVDA`, `TSLA`, and `MSFT`, persists state under `reports/multi_ticker_portfolio/`, and performs a morning self-check before trading.
+- The multi-ticker portfolio runner uses the current promoted shared-account book defined in `config/multi_ticker_paper_portfolio.yaml`, persists state under `reports/multi_ticker_portfolio/`, and performs a morning self-check before trading.
 - Multi-leg spreads and condors route through Alpaca `mleg` paper orders. TLS trust is hardened with `truststore` so scheduled runs also work on Windows machines that rely on the OS certificate store.
 - The repo is intentionally structured so code from older local repos can be migrated into `alpaca_lab/` with minimal reshuffling later.

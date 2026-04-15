@@ -83,6 +83,12 @@ That means:
 - you can move `data/`, `reports/`, and `.env` to another machine with the repo
 - Git still ignores all machine-specific outputs
 
+If you only want the live paper trader on the new machine, you do not need to copy the large historical cleanroom datasets. Those are only needed for local research and backtesting. For the live runner, the essentials are:
+
+- the repo itself
+- a local `.env`
+- optional prior `data/` and `reports/` if you want continuity of state and logs
+
 ## What Stays Local
 
 Do not commit these:
