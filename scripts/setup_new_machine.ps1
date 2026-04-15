@@ -26,13 +26,13 @@ if ($Mode -eq "docker") {
     $null = Get-Command docker -ErrorAction Stop
     docker compose build
     if ($StartServices) {
-        docker compose up -d portfolio-trader portfolio-watchdog
+        docker compose up -d portfolio-trader portfolio-watchdog portfolio-close-guard
     }
     Write-Host ""
     Write-Host "Docker setup is ready."
     Write-Host "Next steps:"
     Write-Host "  1. Fill .env with Alpaca paper credentials and your ntfy topic."
-    Write-Host "  2. Run 'docker compose up -d portfolio-trader portfolio-watchdog' if you did not pass -StartServices."
+    Write-Host "  2. Run 'docker compose up -d portfolio-trader portfolio-watchdog portfolio-close-guard' if you did not pass -StartServices."
     Write-Host "  3. Check 'docker compose ps' and 'docker compose logs -f portfolio-trader'."
     exit 0
 }
@@ -43,6 +43,7 @@ $bootstrapScript = Join-Path $repoRoot "scripts\bootstrap_windows.ps1"
 if ($InstallTasks) {
     & (Join-Path $repoRoot "scripts\install_multi_ticker_paper_task.ps1") -StartTime $TaskStartTime
     & (Join-Path $repoRoot "scripts\install_multi_ticker_health_check_task.ps1")
+    & (Join-Path $repoRoot "scripts\install_multi_ticker_eod_close_guard_task.ps1")
 }
 
 Write-Host ""

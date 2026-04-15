@@ -8,9 +8,10 @@ The easiest way to run this repo on any machine is:
 2. Copy `.env.example` to `.env`.
 3. Fill `.env` with Alpaca paper credentials and your notification settings.
 4. Run the Docker-based setup helper.
-5. Start the two long-running services:
+5. Start the long-running services:
    - `portfolio-trader`
    - `portfolio-watchdog`
+   - `portfolio-close-guard`
 
 That path removes Windows Task Scheduler from the critical path and works the same way on Windows, macOS, and Linux as long as Docker is installed.
 
@@ -38,7 +39,7 @@ Both scripts:
 ## Start The Portable Trader
 
 ```bash
-docker compose up -d portfolio-trader portfolio-watchdog
+docker compose up -d portfolio-trader portfolio-watchdog portfolio-close-guard
 ```
 
 Useful follow-up commands:
@@ -47,6 +48,7 @@ Useful follow-up commands:
 docker compose ps
 docker compose logs -f portfolio-trader
 docker compose logs -f portfolio-watchdog
+docker compose logs -f portfolio-close-guard
 ```
 
 ## Runtime Model
@@ -69,6 +71,14 @@ This service runs `scripts/run_multi_ticker_watchdog.py`, which:
 - watches for stale updates during market hours
 - watches for missing morning, midday, and end-of-day notifications
 - sends alerts through ntfy, email, and Discord if configured
+
+### `portfolio-close-guard`
+
+This service runs `scripts/run_multi_ticker_eod_close_guard.py`, which:
+
+- wakes up near `3:58 PM ET` each market day
+- runs an independent end-of-day flatten and broker-reconciliation sweep
+- keeps retrying until the book is flat or the guard times out with a report
 
 ## Data And Reports
 

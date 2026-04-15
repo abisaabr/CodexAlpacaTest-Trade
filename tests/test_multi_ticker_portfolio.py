@@ -1673,6 +1673,68 @@ def test_startup_check_respects_existing_close_orders_without_duplicate_cleanup(
     assert details["pending_broker_close_orders"] == ["QQQ260417C00600000"]
 
 
+def test_close_unexpected_broker_positions_skips_symbols_with_open_close_orders() -> None:
+    class _LoggerStub:
+        def warning(self, *_args, **_kwargs) -> None:
+            return None
+
+        def info(self, *_args, **_kwargs) -> None:
+            return None
+
+    class _BrokerStub:
+        def __init__(self) -> None:
+            self.submit_count = 0
+
+        def get_positions(self) -> list[dict[str, object]]:
+            return [
+                {
+                    "symbol": "QQQ260417C00600000",
+                    "qty": "1",
+                    "side": "long",
+                    "asset_class": "us_option",
+                }
+            ]
+
+        def get_orders(self, *, status: str = "all", limit: int = 100) -> list[dict[str, object]]:
+            assert status == "open"
+            return [
+                {
+                    "symbol": "QQQ260417C00600000",
+                    "status": "accepted",
+                    "position_intent": "sell_to_close",
+                    "qty": "1",
+                    "filled_qty": "0",
+                }
+            ]
+
+        def build_order_request(self, **kwargs) -> OrderRequest:
+            return OrderRequest(**kwargs)
+
+        def submit_order(self, request: OrderRequest, **_kwargs) -> dict[str, object]:
+            self.submit_count += 1
+            return {"id": "cleanup-duplicate", "status": "accepted"}
+
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.broker = _BrokerStub()
+    trader.logger = _LoggerStub()
+    trader.portfolio_config = default_portfolio_config()
+
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+
+    cleanup_entries = trader._close_unexpected_broker_positions(
+        session=session,
+        trade_date=datetime(2026, 4, 15).date(),
+        reason="auto_flatten_unexpected_end_of_day_position",
+    )
+
+    assert trader.broker.submit_count == 0
+    assert cleanup_entries[0]["status"] == "pending_existing_close_order"
+
+
 def test_force_cleanup_known_trade_books_completion(tmp_path: Path) -> None:
     class _LoggerStub:
         def warning(self, *_args, **_kwargs) -> None:
@@ -1875,6 +1937,32 @@ def test_submit_cleanup_order_retries_after_cancelled_attempt(tmp_path: Path) ->
     assert cleanup_entries[0]["terminal"]["status"] == "canceled"
     assert cleanup_entries[1]["attempt_index"] == 2
     assert cleanup_entries[1]["terminal"]["status"] == "filled"
+
+
+def test_build_cleanup_order_request_uses_limit_after_option_close(monkeypatch) -> None:
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+
+    class _BrokerStub:
+        def build_order_request(self, **kwargs) -> OrderRequest:
+            return OrderRequest(**kwargs)
+
+    trader.broker = _BrokerStub()
+    monkeypatch.setattr(
+        "alpaca_lab.multi_ticker_portfolio.trader._now_et",
+        lambda: datetime(2026, 4, 15, 16, 27, tzinfo=ZoneInfo("America/New_York")),
+    )
+
+    request = trader._build_cleanup_order_request(
+        symbol="QQQ260417C00600000",
+        side="sell",
+        strategy_name="cleanup_after_close",
+        asset_class="option",
+        qty=1.0,
+        position_intent="sell_to_close",
+    )
+
+    assert request.order_type == "limit"
+    assert request.limit_price == 0.01
 
 
 def test_finalize_session_retries_reconciliation_until_broker_is_flat(tmp_path: Path) -> None:

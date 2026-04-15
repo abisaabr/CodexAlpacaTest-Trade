@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from datetime import time as dt_time
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -1860,6 +1860,52 @@ class MultiTickerPortfolioPaperTrader:
         latest = stock_frame.iloc[-1]
         return int(latest["minute_index"]), float(latest["close"])
 
+    def _cleanup_uses_market_orders(self, *, asset_class: str) -> bool:
+        if asset_class != "option":
+            return True
+        now_et = _now_et()
+        market_close = datetime.combine(now_et.date(), dt_time(16, 0), tzinfo=ET)
+        return _rth_open_for(now_et.date()) <= now_et < market_close
+
+    def _build_cleanup_order_request(
+        self,
+        *,
+        symbol: str,
+        side: Literal["buy", "sell"],
+        strategy_name: str,
+        asset_class: Literal["stock", "option"],
+        qty: float,
+        position_intent: str,
+        client_order_key: str | None = None,
+    ) -> OrderRequest:
+        order_type = "market"
+        limit_price: float | None = None
+        if not self._cleanup_uses_market_orders(asset_class=asset_class):
+            order_type = "limit"
+            limit_price = 0.01 if side == "sell" else 1000.0
+        request_kwargs: dict[str, Any] = {
+            "symbol": symbol,
+            "side": side,
+            "strategy_name": strategy_name,
+            "asset_class": asset_class,
+            "qty": qty,
+            "order_type": order_type,
+            "time_in_force": "day",
+            "limit_price": limit_price,
+            "extra": {"position_intent": position_intent},
+        }
+        if client_order_key is not None:
+            request_kwargs["client_order_key"] = client_order_key
+        try:
+            return self.broker.build_order_request(
+                **request_kwargs,
+            )
+        except TypeError as exc:
+            if "client_order_key" not in request_kwargs or "client_order_key" not in str(exc):
+                raise
+            request_kwargs.pop("client_order_key", None)
+            return self.broker.build_order_request(**request_kwargs)
+
     def _force_cleanup_known_trade(
         self,
         *,
@@ -1893,15 +1939,14 @@ class MultiTickerPortfolioPaperTrader:
             leg_side = str(leg["side"])
             order_side = "sell" if leg_side == "long" else "buy"
             position_intent = "sell_to_close" if leg_side == "long" else "buy_to_close"
-            request = self.broker.build_order_request(
+            request = self._build_cleanup_order_request(
                 symbol=symbol,
                 side=order_side,
                 strategy_name=f"{trade.strategy_name}_cleanup_exit",
                 asset_class="option",
                 qty=float(quantity),
-                order_type="market",
-                time_in_force="day",
-                extra={"position_intent": position_intent},
+                position_intent=position_intent,
+                client_order_key=f"{trade.entry_attempt_id or trade.entry_time_et}|{reason}|{symbol}|cleanup",
             )
             result = self._submit_cleanup_order(
                 trade_date=trade_date,
@@ -2024,7 +2069,15 @@ class MultiTickerPortfolioPaperTrader:
         reason: str,
     ) -> int:
         cleaned = 0
+        symbols_with_open_close_orders = self._symbols_with_open_close_orders()
         for trade_payload in list(session.open_trades):
+            leg_symbols = {
+                str(leg.get("symbol") or "").strip()
+                for leg in trade_payload.get("legs", [])
+                if str(leg.get("symbol") or "").strip()
+            }
+            if leg_symbols and leg_symbols.issubset(symbols_with_open_close_orders):
+                continue
             if self._force_cleanup_known_trade(
                 trade_payload=trade_payload,
                 session=session,
@@ -2046,12 +2099,27 @@ class MultiTickerPortfolioPaperTrader:
     ) -> list[dict[str, Any]]:
         expected = expected_position_map or self._expected_broker_position_map(session)
         cleanup_entries: list[dict[str, Any]] = []
+        symbols_with_open_close_orders = self._symbols_with_open_close_orders()
         for position in self.broker.get_positions():
             symbol = str(position.get("symbol") or "").strip()
             if not symbol:
                 continue
             actual_qty = self._signed_broker_position_qty(position)
             if math.isclose(actual_qty, 0.0, abs_tol=1e-9):
+                continue
+            if symbol in symbols_with_open_close_orders:
+                cleanup_entries.append(
+                    {
+                        "symbol": symbol,
+                        "broker_position_qty": round(float(actual_qty), 4),
+                        "expected_session_qty": round(float(expected.get(symbol, 0.0)), 4),
+                        "cleanup_qty": 0.0,
+                        "reason": reason,
+                        "status": "pending_existing_close_order",
+                        "order_id": None,
+                        "filled_avg_price": None,
+                    }
+                )
                 continue
             expected_qty = expected.get(symbol, 0.0)
             cleanup_qty = 0.0
@@ -2075,15 +2143,14 @@ class MultiTickerPortfolioPaperTrader:
             order_side = "sell" if cleanup_qty > 0 else "buy"
             position_intent = "sell_to_close" if cleanup_qty > 0 else "buy_to_close"
             asset_class = self._normalized_broker_asset_class(position)
-            request = self.broker.build_order_request(
+            request = self._build_cleanup_order_request(
                 symbol=symbol,
                 side=order_side,
                 strategy_name="system_position_cleanup",
-                asset_class=asset_class,
+                asset_class=cast(Literal["stock", "option"], asset_class),
                 qty=abs(float(cleanup_qty)),
-                order_type="market",
-                time_in_force="day",
-                extra={"position_intent": position_intent},
+                position_intent=position_intent,
+                client_order_key=f"{symbol}|{effective_reason}|{cleanup_qty}",
             )
             result = self._submit_cleanup_order(
                 trade_date=trade_date,
@@ -2614,10 +2681,12 @@ class MultiTickerPortfolioPaperTrader:
             "forced_exit_attempt_count": 0,
             "forced_exit_failure_count": 0,
             "forced_exit_cleanup_count": 0,
+            "forced_exit_skipped_existing_close_order_count": 0,
         }
         if not session.open_trades:
             return summary
         trade_date = date.fromisoformat(session.trade_date)
+        symbols_with_open_close_orders = self._symbols_with_open_close_orders()
         snapshots: dict[str, SymbolSnapshot] = {}
         for symbol in {trade["underlying_symbol"] for trade in session.open_trades}:
             stock_frame = stock_frames.get(symbol, pd.DataFrame())
@@ -2632,6 +2701,14 @@ class MultiTickerPortfolioPaperTrader:
         for trade_payload in list(session.open_trades):
             snapshot = snapshots.get(trade_payload["underlying_symbol"])
             if snapshot is None:
+                continue
+            leg_symbols = {
+                str(leg.get("symbol") or "").strip()
+                for leg in trade_payload.get("legs", [])
+                if str(leg.get("symbol") or "").strip()
+            }
+            if leg_symbols and leg_symbols.issubset(symbols_with_open_close_orders):
+                summary["forced_exit_skipped_existing_close_order_count"] += 1
                 continue
             summary["forced_exit_attempt_count"] += 1
             if self._run_exit(trade_payload, session, snapshot, "forced_flatten"):
@@ -2648,6 +2725,76 @@ class MultiTickerPortfolioPaperTrader:
             ):
                 summary["forced_exit_cleanup_count"] += 1
         return summary
+
+    def _run_end_of_day_cleanup_safeguard(
+        self,
+        *,
+        session: SessionState,
+        trade_date: date,
+        stock_frames: dict[str, pd.DataFrame] | None,
+    ) -> dict[str, Any]:
+        expected_positions_before_flatten = self._expected_broker_position_map(session)
+        flatten_summary = {
+            "forced_exit_attempt_count": 0,
+            "forced_exit_failure_count": 0,
+            "forced_exit_cleanup_count": 0,
+        }
+        if stock_frames is not None:
+            flatten_summary = self._flatten_all(session, stock_frames)
+        cleanup_summary: dict[str, Any] = dict(flatten_summary)
+        residual_broker_positions: list[dict[str, Any]] = []
+        reconciliation_passes: list[dict[str, Any]] = []
+        if self.portfolio_config.execution.auto_flatten_unexpected_positions:
+            known_cleanup_total = int(flatten_summary["forced_exit_cleanup_count"])
+            unexpected_cleanup_entries: list[dict[str, Any]] = []
+            for pass_index in range(1, 4):
+                known_cleanup_count = self._cleanup_known_open_trades(
+                    session=session,
+                    trade_date=trade_date,
+                    stock_frames=stock_frames,
+                    reason=AUTO_FLATTEN_KNOWN_EOD_REASON,
+                )
+                known_cleanup_total += known_cleanup_count
+                unexpected_cleanup_batch = self._close_unexpected_broker_positions(
+                    session=session,
+                    trade_date=trade_date,
+                    reason=AUTO_FLATTEN_UNEXPECTED_EOD_REASON,
+                    flatten_all_remaining=True,
+                    expected_position_map=expected_positions_before_flatten,
+                )
+                unexpected_cleanup_entries.extend(unexpected_cleanup_batch)
+                residual_broker_positions = self._active_broker_positions()
+                reconciliation_passes.append(
+                    {
+                        "pass_index": pass_index,
+                        "known_trade_cleanup_count": known_cleanup_count,
+                        "unexpected_position_cleanup_count": len(unexpected_cleanup_batch),
+                        "open_trade_count_after_pass": len(session.open_trades),
+                        "residual_broker_position_count": len(residual_broker_positions),
+                        "residual_broker_symbols": [
+                            position["symbol"] for position in residual_broker_positions
+                        ],
+                    }
+                )
+                if not session.open_trades and not residual_broker_positions:
+                    break
+            cleanup_summary.update(
+                {
+                    "known_trade_cleanup_count": known_cleanup_total,
+                    "unexpected_position_cleanup_count": len(unexpected_cleanup_entries),
+                    "unexpected_position_cleanup": unexpected_cleanup_entries,
+                    "reconciliation_passes": reconciliation_passes,
+                }
+            )
+        if residual_broker_positions:
+            cleanup_summary["residual_broker_positions"] = residual_broker_positions
+            self._alert(
+                session,
+                "error",
+                "End-of-day reconciliation incomplete; broker still shows open positions after cleanup attempts",
+            )
+        cleanup_summary["shutdown_reconciled"] = not session.open_trades and not residual_broker_positions
+        return cleanup_summary
 
     def _load_trade_reconciliation_events(self, trade_date: date) -> pd.DataFrame:
         payload = _read_json(self._trade_reconciliation_events_path(trade_date), [])
@@ -3250,82 +3397,28 @@ class MultiTickerPortfolioPaperTrader:
         stock_frames: dict[str, pd.DataFrame] | None = None,
     ) -> dict[str, Any]:
         trade_date = date.fromisoformat(session.trade_date)
-        expected_positions_before_flatten = self._expected_broker_position_map(session)
-        flatten_summary = {
-            "forced_exit_attempt_count": 0,
-            "forced_exit_failure_count": 0,
-            "forced_exit_cleanup_count": 0,
-        }
-        if stock_frames is not None:
-            flatten_summary = self._flatten_all(session, stock_frames)
-        cleanup_summary: dict[str, Any] = dict(flatten_summary)
-        residual_broker_positions: list[dict[str, Any]] = []
-        reconciliation_passes: list[dict[str, Any]] = []
-        if self.portfolio_config.execution.auto_flatten_unexpected_positions:
-            known_cleanup_total = int(flatten_summary["forced_exit_cleanup_count"])
-            unexpected_cleanup_entries: list[dict[str, Any]] = []
-            for pass_index in range(1, 4):
-                known_cleanup_count = self._cleanup_known_open_trades(
-                    session=session,
-                    trade_date=trade_date,
-                    stock_frames=stock_frames,
-                    reason=AUTO_FLATTEN_KNOWN_EOD_REASON,
-                )
-                known_cleanup_total += known_cleanup_count
-                unexpected_cleanup_batch = self._close_unexpected_broker_positions(
-                    session=session,
-                    trade_date=trade_date,
-                    reason=AUTO_FLATTEN_UNEXPECTED_EOD_REASON,
-                    flatten_all_remaining=True,
-                    expected_position_map=expected_positions_before_flatten,
-                )
-                unexpected_cleanup_entries.extend(unexpected_cleanup_batch)
-                residual_broker_positions = self._active_broker_positions()
-                reconciliation_passes.append(
-                    {
-                        "pass_index": pass_index,
-                        "known_trade_cleanup_count": known_cleanup_count,
-                        "unexpected_position_cleanup_count": len(unexpected_cleanup_batch),
-                        "open_trade_count_after_pass": len(session.open_trades),
-                        "residual_broker_position_count": len(residual_broker_positions),
-                        "residual_broker_symbols": [
-                            position["symbol"] for position in residual_broker_positions
-                        ],
-                    }
-                )
-                if not session.open_trades and not residual_broker_positions:
-                    break
-            cleanup_summary.update(
-                {
-                    "known_trade_cleanup_count": known_cleanup_total,
-                    "unexpected_position_cleanup_count": len(unexpected_cleanup_entries),
-                    "unexpected_position_cleanup": unexpected_cleanup_entries,
-                    "reconciliation_passes": reconciliation_passes,
-                }
-            )
-        if residual_broker_positions:
-            cleanup_summary["residual_broker_positions"] = residual_broker_positions
-            self._alert(
-                session,
-                "error",
-                "End-of-day reconciliation incomplete; broker still shows open positions after cleanup attempts",
-            )
-        shutdown_reconciled = not session.open_trades and not residual_broker_positions
-        cleanup_summary["shutdown_reconciled"] = shutdown_reconciled
+        cleanup_summary = self._run_end_of_day_cleanup_safeguard(
+            session=session,
+            trade_date=trade_date,
+            stock_frames=stock_frames,
+        )
+        shutdown_reconciled = bool(cleanup_summary.get("shutdown_reconciled", False))
         ending_equity = session.virtual_cash
         ledger.realized_equity = ending_equity
         ledger.high_watermark = max(ledger.high_watermark, ending_equity)
-        ledger.closed_days.append(
-            {
-                "trade_date": session.trade_date,
-                "starting_equity": session.starting_equity,
-                "ending_equity": ending_equity,
-                "net_pnl": ending_equity - session.starting_equity,
-                "completed_trades": len(session.completed_trades),
-                "blocked_new_entries": session.blocked_new_entries,
-                "block_reason": session.block_reason,
-            }
-        )
+        closed_day_entry = {
+            "trade_date": session.trade_date,
+            "starting_equity": session.starting_equity,
+            "ending_equity": ending_equity,
+            "net_pnl": ending_equity - session.starting_equity,
+            "completed_trades": len(session.completed_trades),
+            "blocked_new_entries": session.blocked_new_entries,
+            "block_reason": session.block_reason,
+        }
+        ledger.closed_days = [
+            row for row in ledger.closed_days if str(row.get("trade_date")) != session.trade_date
+        ]
+        ledger.closed_days.append(closed_day_entry)
         self.save_ledger(ledger)
         self.save_session(session)
         run_dir = self._session_run_dir(date.fromisoformat(session.trade_date))

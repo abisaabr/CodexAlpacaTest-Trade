@@ -64,3 +64,31 @@ services:
       - --notify
     restart: unless-stopped
     stop_grace_period: 30s
+
+  portfolio-close-guard:
+    build:
+      context: .
+    image: codex-alpaca-test-trade:latest
+    init: true
+    depends_on:
+      portfolio-trader:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-America/New_York}
+      EOD_CLOSE_GUARD_IDLE_SECONDS: ${EOD_CLOSE_GUARD_IDLE_SECONDS:-60}
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+    command:
+      - python
+      - scripts/run_multi_ticker_eod_close_guard.py
+      - --portfolio-config
+      - config/multi_ticker_paper_portfolio.yaml
+      - --submit-paper-orders
+      - --loop-daily
+      - --idle-seconds
+      - ${EOD_CLOSE_GUARD_IDLE_SECONDS:-60}
+    restart: unless-stopped
+    stop_grace_period: 30s

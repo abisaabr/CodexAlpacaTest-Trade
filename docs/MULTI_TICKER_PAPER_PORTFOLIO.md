@@ -47,13 +47,14 @@ For the easiest cross-machine deployment, the repo now includes:
 - `docker-compose.yml`
 - `scripts/run_multi_ticker_portable_daemon.py`
 - `scripts/run_multi_ticker_watchdog.py`
+- `scripts/run_multi_ticker_eod_close_guard.py`
 - `scripts/setup_new_machine.ps1`
 - `scripts/setup_new_machine.sh`
 
 The recommended portable runtime is:
 
 ```bash
-docker compose up -d portfolio-trader portfolio-watchdog
+docker compose up -d portfolio-trader portfolio-watchdog portfolio-close-guard
 ```
 
 That keeps the strategy book, state, and alerts identical across machines while avoiding OS-specific schedulers.
@@ -61,6 +62,14 @@ That keeps the strategy book, state, and alerts identical across machines while 
 ## Health Check
 
 An hourly local health-check runner is available at `scripts/run_multi_ticker_health_check.py`. It verifies the main scheduled task, checks whether the paper trader is running and updating its session during market hours, and sends ntfy alerts when something is wrong. Safe operational fixes such as reinstalling the main scheduled task or restarting a missing trader process can be enabled with `--restart-if-needed`.
+
+A separate end-of-day close safeguard is also available:
+
+- `scripts/run_multi_ticker_eod_close_guard.py`
+- `scripts/run_multi_ticker_eod_close_guard.ps1`
+- `scripts/install_multi_ticker_eod_close_guard_task.ps1`
+
+That runner starts near `3:58 PM ET`, runs an independent flatten and broker-reconciliation sweep, and keeps retrying until the book is flat or it times out with a clear report.
 
 ### Promoted Strategies
 
@@ -464,6 +473,9 @@ Two findings drove those settings:
   `scripts/run_multi_ticker_portfolio_session.ps1`
 - Windows installer:
   `scripts/install_multi_ticker_paper_task.ps1`
+- EOD close guard:
+  `scripts/run_multi_ticker_eod_close_guard.py`
+  `scripts/install_multi_ticker_eod_close_guard_task.ps1`
 - State and reports:
   `reports/multi_ticker_portfolio/`
 
@@ -485,4 +497,10 @@ Install the weekday task:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install_multi_ticker_paper_task.ps1 -TaskName "Multi-Ticker Portfolio Paper Trader" -StartTime "09:20"
+```
+
+Install the dedicated close guard:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install_multi_ticker_eod_close_guard_task.ps1 -TaskName "Multi-Ticker Portfolio EOD Close Guard" -StartTime "15:58"
 ```
