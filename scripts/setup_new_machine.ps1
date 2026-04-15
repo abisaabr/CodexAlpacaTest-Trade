@@ -32,8 +32,9 @@ if ($Mode -eq "docker") {
     Write-Host "Docker setup is ready."
     Write-Host "Next steps:"
     Write-Host "  1. Fill .env with Alpaca paper credentials and your ntfy topic."
-    Write-Host "  2. Run 'docker compose up -d portfolio-trader portfolio-watchdog portfolio-close-guard' if you did not pass -StartServices."
-    Write-Host "  3. Check 'docker compose ps' and 'docker compose logs -f portfolio-trader'."
+    Write-Host "  2. If this is a standby machine, run 'docker compose run --rm portfolio-trader python scripts/run_multi_ticker_standby_failover_check.py'."
+    Write-Host "  3. Run 'docker compose up -d portfolio-trader portfolio-watchdog portfolio-close-guard' if you did not pass -StartServices."
+    Write-Host "  4. Check 'docker compose ps' and 'docker compose logs -f portfolio-trader'."
     exit 0
 }
 
@@ -51,8 +52,9 @@ Write-Host "Native Windows setup is ready."
 Write-Host "Next steps:"
 Write-Host "  1. Activate .venv in this shell with .\.venv\Scripts\Activate.ps1"
 Write-Host "  2. Fill .env with Alpaca paper credentials and your ntfy topic."
-Write-Host "  3. Run python scripts\doctor.py --skip-connectivity"
-Write-Host "  4. Run python -m pytest"
+Write-Host "  3. If this is a standby machine, run python scripts\run_multi_ticker_standby_failover_check.py"
+Write-Host "  4. Run python scripts\doctor.py --skip-connectivity"
+Write-Host "  5. Run python -m pytest"
 if (-not $InstallTasks) {
-    Write-Host "  5. Optional: rerun this script with -Mode native -InstallTasks to install the weekday scheduler."
+    Write-Host "  6. Optional: rerun this script with -Mode native -InstallTasks to install the weekday scheduler."
 }

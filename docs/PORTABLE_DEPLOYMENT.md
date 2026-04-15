@@ -5,11 +5,11 @@
 The easiest way to run this repo on any machine is:
 
 1. Clone the repo from GitHub.
-2. Copy `.env.example` to `.env`.
-3. Fill `.env` with Alpaca paper credentials and your notification settings.
+2. Run the Docker-based setup helper.
+3. Copy `.env.example` to `.env` if needed and fill `.env` with Alpaca paper credentials and your notification settings.
 4. For standby-safe multi-machine deployment, point both machines at the same ownership lease path.
-4. Run the Docker-based setup helper.
-5. Start the long-running services:
+5. Run the standby failover check on the standby machine.
+6. Start the long-running services:
    - `portfolio-trader`
    - `portfolio-watchdog`
    - `portfolio-close-guard`
@@ -55,6 +55,26 @@ What this does:
 - the active machine renews the lease continuously during the session
 - the standby machine sees the active lease and stands down instead of sending orders
 - if the active machine stops renewing, the standby machine can take over after the lease TTL expires
+
+Before starting the standby machine, run:
+
+```bash
+docker compose run --rm portfolio-trader python scripts/run_multi_ticker_standby_failover_check.py
+```
+
+That check verifies:
+
+- ownership is enabled
+- the lease path is absolute and not repo-local
+- the standby machine has a machine label
+- the shared lease file is visible
+- the standby machine can see the current owner when the active machine already holds the lease
+
+If you want to compare against an exact expected lease path, add:
+
+```bash
+docker compose run --rm portfolio-trader python scripts/run_multi_ticker_standby_failover_check.py --expected-lease-path "C:\Users\you\OneDrive\CodexAlpaca\leases\multi_ticker_portfolio.json"
+```
 
 ## Start The Portable Trader
 

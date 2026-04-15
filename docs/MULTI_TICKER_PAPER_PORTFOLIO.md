@@ -68,6 +68,20 @@ For true standby-safe failover, set the same shared ownership lease path on both
 
 The cleanest practical path is a OneDrive-synced lease file. With that in place, one machine owns the live paper portfolio at a time, and the other machine stands down automatically until the lease expires.
 
+Before you start a standby machine, run:
+
+```bash
+python scripts/run_multi_ticker_standby_failover_check.py
+```
+
+That checklist verifies the standby box is pointed at a shared lease instead of a repo-local file and that it can see the active machine's ownership record when one already exists.
+
+If you are using the Docker deployment path, the equivalent command is:
+
+```bash
+docker compose run --rm portfolio-trader python scripts/run_multi_ticker_standby_failover_check.py
+```
+
 ## Health Check
 
 An hourly local health-check runner is available at `scripts/run_multi_ticker_health_check.py`. It verifies the main scheduled task, checks whether the paper trader is running and updating its session during market hours, and sends ntfy alerts when something is wrong. Safe operational fixes such as reinstalling the main scheduled task or restarting a missing trader process can be enabled with `--restart-if-needed`.

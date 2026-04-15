@@ -40,8 +40,9 @@ if [[ "$MODE" == "docker" ]]; then
   echo "Docker setup is ready."
   echo "Next steps:"
   echo "  1. Fill .env with Alpaca paper credentials and your ntfy topic."
-  echo "  2. Run 'docker compose up -d portfolio-trader portfolio-watchdog portfolio-close-guard' if you did not pass --start-services."
-  echo "  3. Check 'docker compose ps' and 'docker compose logs -f portfolio-trader'."
+  echo "  2. If this is a standby machine, run 'docker compose run --rm portfolio-trader python scripts/run_multi_ticker_standby_failover_check.py'."
+  echo "  3. Run 'docker compose up -d portfolio-trader portfolio-watchdog portfolio-close-guard' if you did not pass --start-services."
+  echo "  4. Check 'docker compose ps' and 'docker compose logs -f portfolio-trader'."
   exit 0
 fi
 
@@ -56,6 +57,7 @@ echo "Native shell setup is ready."
 echo "Next steps:"
 echo "  1. Activate .venv with 'source .venv/bin/activate'"
 echo "  2. Fill .env with Alpaca paper credentials and your ntfy topic."
-echo "  3. Run 'python scripts/doctor.py --skip-connectivity'"
-echo "  4. Run 'python -m pytest'"
-echo "  5. For the always-on trader on macOS/Linux, prefer 'docker compose up -d portfolio-trader portfolio-watchdog portfolio-close-guard'."
+echo "  3. If this is a standby machine, run 'python scripts/run_multi_ticker_standby_failover_check.py'"
+echo "  4. Run 'python scripts/doctor.py --skip-connectivity'"
+echo "  5. Run 'python -m pytest'"
+echo "  6. For the always-on trader on macOS/Linux, prefer 'docker compose up -d portfolio-trader portfolio-watchdog portfolio-close-guard'."
