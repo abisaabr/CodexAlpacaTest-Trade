@@ -24,8 +24,9 @@ This runner now trades the validated shared-account book across:
 - `SHOP`
 - `CRM`
 - `SCHW`
+- `NKE`
 
-The live book uses a shared virtual `$25,000` sleeve and `80` strategy entries, including three explicit choppy aliases that intentionally reuse validated same-day single-leg setups under separate regime labels.
+The live book uses a shared virtual `$25,000` sleeve and `82` strategy entries, including three explicit choppy aliases that intentionally reuse validated same-day single-leg setups under separate regime labels.
 
 ## Notifications
 
@@ -257,6 +258,12 @@ That runner starts near `3:58 PM ET`, runs an independent flatten and broker-rec
   `schw__fast__trend_long_call_next_expiry`
 - Choppy:
   `schw__base__orb_long_put_same_day`
+
+#### NKE
+- Bull:
+  `nke__fast__trend_long_call_next_expiry`
+- Bear:
+  `nke__base__trend_long_put_next_expiry`
 
 ## Research Result
 

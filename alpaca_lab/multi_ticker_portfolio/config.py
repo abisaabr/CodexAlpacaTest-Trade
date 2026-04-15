@@ -188,6 +188,7 @@ class ExecutionConfig(BaseModel):
         "SHOP",
         "CRM",
         "SCHW",
+        "NKE",
     )
     option_feed: str = "indicative"
     stock_feed: str | None = None
@@ -246,7 +247,7 @@ class MultiTickerPortfolioConfig(BaseModel):
     name: str = "multi_ticker_portfolio_paper_trader"
     description: str = (
         "Shared-account intraday options paper portfolio across QQQ, SPY, IWM, NVDA, TSLA, MSFT, BAC, "
-        "PLTR, GLD, ARKK, XLE, GDX, SLV, AMZN, JPM, XOM, ORCL, SHOP, CRM, and SCHW using the validated "
+        "PLTR, GLD, ARKK, XLE, GDX, SLV, AMZN, JPM, XOM, ORCL, SHOP, CRM, SCHW, and NKE using the validated "
         "shared-account winners."
     )
     risk: RiskConfig = Field(default_factory=RiskConfig)
@@ -437,6 +438,8 @@ def _selected_strategy_specs() -> tuple[dict[str, object], ...]:
             "regime": "choppy",
             "name": "schw__base__orb_long_put_same_day",
         },
+        {"underlying_symbol": "NKE", "timing_profile": "fast", "base_name": "trend_long_call_next_expiry"},
+        {"underlying_symbol": "NKE", "timing_profile": "base", "base_name": "trend_long_put_next_expiry"},
     )
 
 

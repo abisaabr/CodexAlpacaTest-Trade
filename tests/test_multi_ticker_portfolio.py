@@ -122,6 +122,7 @@ def test_default_multi_ticker_portfolio_contains_all_symbols() -> None:
         "SHOP",
         "CRM",
         "SCHW",
+        "NKE",
     )
     assert all(counts[symbol] >= 1 for symbol in config.execution.underlying_symbols)
     assert counts["QQQ"] >= 3
@@ -135,6 +136,7 @@ def test_default_multi_ticker_portfolio_contains_all_symbols() -> None:
     assert counts["SHOP"] >= 5
     assert counts["CRM"] >= 5
     assert counts["SCHW"] >= 2
+    assert counts["NKE"] >= 2
 
 
 def test_default_multi_ticker_portfolio_includes_xle_choppy_alias() -> None:
