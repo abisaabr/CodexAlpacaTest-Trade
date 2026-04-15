@@ -95,3 +95,17 @@ def test_trader_run_returns_ownership_blocked_when_other_owner_holds_lease(tmp_p
 
     assert result["status"] == "ownership_blocked"
     assert result["lease"]["blocked_by_owner_id"] == "owner-a"
+
+
+def test_file_ownership_lease_without_existing_owner_is_not_blocked(tmp_path: Path) -> None:
+    lease = FileOwnershipLease(
+        path=tmp_path / "shared_lease.json",
+        owner_id="owner-a",
+        owner_label="machine-a",
+        ttl_seconds=180,
+    )
+
+    status = lease.inspect()
+
+    assert status.owner_id is None
+    assert status.blocked is False

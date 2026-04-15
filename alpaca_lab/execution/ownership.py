@@ -47,7 +47,9 @@ class OwnershipLeaseStatus:
 
     @property
     def blocked(self) -> bool:
-        return self.enabled and not self.acquired and not self.held_by_self
+        return self.enabled and not self.acquired and not self.held_by_self and (
+            self.blocked_by_owner_id is not None or self.blocked_by_owner_label is not None
+        )
 
 
 class FileOwnershipLease:
