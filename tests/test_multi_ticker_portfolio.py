@@ -8,10 +8,12 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from alpaca_lab.config import LabSettings
 from alpaca_lab.multi_ticker_portfolio.config import default_portfolio_config, load_portfolio_config
 from alpaca_lab.multi_ticker_portfolio.signals import signal_is_true
 from alpaca_lab.multi_ticker_portfolio.trader import (
     MultiTickerPortfolioPaperTrader,
+    PortfolioLedger,
     SessionState,
     SymbolSnapshot,
 )
@@ -595,3 +597,104 @@ def test_backfill_open_trade_reconciliation_assigns_attempt_ids(tmp_path: Path) 
     assert len(events) == 2
     assert events[0]["decision_reason"] == "backfilled_open_trade"
     assert events[1]["status"] == "filled"
+
+
+def test_fetch_today_stock_frames_returns_empty_before_rth_without_api_call(monkeypatch) -> None:
+    class _BrokerStub:
+        def __init__(self) -> None:
+            self.called = False
+
+        def get_stock_bars(self, *_args, **_kwargs):
+            self.called = True
+            raise AssertionError("get_stock_bars should not be called before the RTH open")
+
+    broker = _BrokerStub()
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.underlyings = ["QQQ", "SPY"]
+    trader.broker = broker
+    trader.portfolio_config = default_portfolio_config()
+    trader.settings = LabSettings()
+
+    monkeypatch.setattr(
+        "alpaca_lab.multi_ticker_portfolio.trader._now_et",
+        lambda: datetime(2026, 4, 15, 9, 20, tzinfo=ZoneInfo("America/New_York")),
+    )
+
+    frames = trader._fetch_today_stock_frames(datetime(2026, 4, 15).date())
+
+    assert broker.called is False
+    assert set(frames.keys()) == {"QQQ", "SPY"}
+    assert all(frame.empty for frame in frames.values())
+
+
+def test_run_rechecks_clock_after_preopen_sleep_before_fetching_stock_bars(monkeypatch, tmp_path: Path) -> None:
+    class _BrokerStub:
+        def __init__(self) -> None:
+            self.clock_calls = 0
+
+        def get_clock(self) -> dict[str, object]:
+            self.clock_calls += 1
+            if self.clock_calls == 1:
+                return {
+                    "is_open": False,
+                    "timestamp": "2026-04-15T09:20:00-04:00",
+                    "next_open": "2026-04-15T09:30:00-04:00",
+                    "next_close": "2026-04-15T16:00:00-04:00",
+                }
+            return {
+                "is_open": True,
+                "timestamp": "2026-04-15T09:30:05-04:00",
+                "next_open": "2026-04-16T09:30:00-04:00",
+                "next_close": "2026-04-15T16:00:00-04:00",
+            }
+
+    config = default_portfolio_config()
+    config = config.model_copy(
+        update={
+            "execution": config.execution.model_copy(
+                update={
+                    "underlying_symbols": ("QQQ",),
+                    "state_root": tmp_path / "state",
+                    "run_root": tmp_path / "runs",
+                    "poll_interval_seconds": 1,
+                }
+            )
+        }
+    )
+    broker = _BrokerStub()
+    trader = MultiTickerPortfolioPaperTrader(
+        LabSettings(),
+        config,
+        broker=broker,
+        submit_paper_orders=False,
+    )
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+
+    monkeypatch.setattr(
+        "alpaca_lab.multi_ticker_portfolio.trader._now_et",
+        lambda: datetime(2026, 4, 15, 9, 20, tzinfo=ZoneInfo("America/New_York")),
+    )
+    monkeypatch.setattr("alpaca_lab.multi_ticker_portfolio.trader.time.sleep", lambda _seconds: None)
+    trader.load_ledger = lambda: PortfolioLedger(realized_equity=25_000.0, high_watermark=25_000.0)
+    trader.load_or_create_session = lambda *_args, **_kwargs: session
+    trader.save_session = lambda *_args, **_kwargs: tmp_path / "session.json"
+    trader._backfill_open_trade_reconciliation = lambda *_args, **_kwargs: False
+    trader._build_symbol_snapshot = lambda **_kwargs: None
+    trader._perform_startup_check = lambda **_kwargs: ("failed", {"failures": ["test failure"]})
+    trader._notify_lines = lambda *_args, **_kwargs: False
+    trader._alert = lambda *_args, **_kwargs: None
+
+    def _fetch_stock_frames(_trade_date):
+        assert broker.clock_calls >= 2
+        return {"QQQ": pd.DataFrame()}
+
+    trader._fetch_today_stock_frames = _fetch_stock_frames
+
+    result = trader.run(run_once=False)
+
+    assert result["status"] == "startup_check_failed"
+    assert broker.clock_calls >= 2

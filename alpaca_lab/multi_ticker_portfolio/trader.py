@@ -508,6 +508,8 @@ class MultiTickerPortfolioPaperTrader:
     def _fetch_today_stock_frames(self, trade_date: date) -> dict[str, pd.DataFrame]:
         start = _rth_open_for(trade_date).astimezone(UTC)
         end = _now_et().astimezone(UTC)
+        if end <= start:
+            return {symbol: build_stock_frame([]) for symbol in self.underlyings}
         payload = self.broker.get_stock_bars(
             self.underlyings,
             start=start,
@@ -2044,7 +2046,7 @@ class MultiTickerPortfolioPaperTrader:
             session.blocked_new_entries = False
             session.block_reason = None
             self.save_session(session)
-        if not bool(clock.get("is_open", False)):
+        while not bool(clock.get("is_open", False)):
             if now_et < _rth_open_for(trade_date):
                 seconds_to_open = (_rth_open_for(trade_date) - now_et).total_seconds()
                 if run_once:
@@ -2054,11 +2056,20 @@ class MultiTickerPortfolioPaperTrader:
                         "seconds_to_open": int(seconds_to_open),
                     }
                 time.sleep(max(1.0, min(60.0, seconds_to_open)))
-            else:
-                stock_frames = self._fetch_today_stock_frames(trade_date)
-                summary = self.finalize_session(session, ledger, stock_frames=stock_frames)
-                summary["status"] = "after_close"
-                return summary
+                clock = self.broker.get_clock()
+                refreshed_trade_date = _trade_date_from_clock(clock)
+                if refreshed_trade_date != trade_date:
+                    trade_date = refreshed_trade_date
+                    session = self.load_or_create_session(trade_date, ledger)
+                    if self._backfill_open_trade_reconciliation(session):
+                        self.save_session(session)
+                now_et = _now_et()
+                continue
+
+            stock_frames = self._fetch_today_stock_frames(trade_date)
+            summary = self.finalize_session(session, ledger, stock_frames=stock_frames)
+            summary["status"] = "after_close"
+            return summary
 
         while True:
             stock_frames = self._fetch_today_stock_frames(trade_date)
