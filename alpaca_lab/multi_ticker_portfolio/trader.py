@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import getpass
 import json
 import math
+import platform
 import time
 from collections import Counter
 from dataclasses import asdict, dataclass, field
@@ -15,6 +17,11 @@ import pandas as pd
 
 from alpaca_lab.brokers.alpaca import AlpacaBrokerAdapter, OrderRequest
 from alpaca_lab.config import LabSettings
+from alpaca_lab.execution.ownership import (
+    FileOwnershipLease,
+    NoopOwnershipLease,
+    OwnershipLeaseStatus,
+)
 from alpaca_lab.logging_utils import get_logger
 from alpaca_lab.multi_ticker_portfolio.config import (
     MultiTickerPortfolioConfig,
@@ -301,6 +308,25 @@ class MultiTickerPortfolioPaperTrader:
         self.contract_cache: dict[tuple[str, str], list[dict[str, Any]]] = {}
         self.contract_cache_loaded_at: dict[str, datetime] = {}
         self.underlyings = list(portfolio_config.execution.underlying_symbols)
+        if portfolio_config.ownership.enabled:
+            self.ownership_lease = FileOwnershipLease(
+                path=portfolio_config.ownership.lease_path,
+                owner_label=portfolio_config.ownership.machine_label,
+                ttl_seconds=portfolio_config.ownership.lease_ttl_seconds,
+            )
+        else:
+            self.ownership_lease = NoopOwnershipLease()
+
+    def _ownership_metadata(self, *, role: str) -> dict[str, Any]:
+        return {
+            "role": role,
+            "hostname": platform.node(),
+            "username": getpass.getuser(),
+            "repo_root": str(Path(__file__).resolve().parents[2]),
+        }
+
+    def acquire_runtime_ownership(self, *, role: str) -> OwnershipLeaseStatus:
+        return self.ownership_lease.acquire(role=role, metadata=self._ownership_metadata(role=role))
 
     def load_ledger(self) -> PortfolioLedger:
         payload = _read_json(
@@ -3497,6 +3523,18 @@ class MultiTickerPortfolioPaperTrader:
         now_et = _now_et()
         ledger = self.load_ledger()
         session = self.load_or_create_session(trade_date, ledger)
+        lease_status = self.acquire_runtime_ownership(role="portfolio_trader")
+        if lease_status.blocked:
+            return {
+                "status": "ownership_blocked",
+                "trade_date": trade_date.isoformat(),
+                "lease": {
+                    "lease_path": lease_status.lease_path,
+                    "blocked_by_owner_id": lease_status.blocked_by_owner_id,
+                    "blocked_by_owner_label": lease_status.blocked_by_owner_label,
+                    "expires_at": lease_status.expires_at,
+                },
+            }
         if self._backfill_open_trade_reconciliation(session):
             self.save_session(session)
         startup_block_markers = (
@@ -3518,6 +3556,18 @@ class MultiTickerPortfolioPaperTrader:
             session.block_reason = None
             self.save_session(session)
         while not bool(clock.get("is_open", False)):
+            lease_status = self.acquire_runtime_ownership(role="portfolio_trader")
+            if lease_status.blocked:
+                return {
+                    "status": "ownership_blocked",
+                    "trade_date": trade_date.isoformat(),
+                    "lease": {
+                        "lease_path": lease_status.lease_path,
+                        "blocked_by_owner_id": lease_status.blocked_by_owner_id,
+                        "blocked_by_owner_label": lease_status.blocked_by_owner_label,
+                        "expires_at": lease_status.expires_at,
+                    },
+                }
             if now_et < _rth_open_for(trade_date):
                 seconds_to_open = (_rth_open_for(trade_date) - now_et).total_seconds()
                 if run_once:
@@ -3543,6 +3593,18 @@ class MultiTickerPortfolioPaperTrader:
             return summary
 
         while True:
+            lease_status = self.acquire_runtime_ownership(role="portfolio_trader")
+            if lease_status.blocked:
+                return {
+                    "status": "ownership_blocked",
+                    "trade_date": trade_date.isoformat(),
+                    "lease": {
+                        "lease_path": lease_status.lease_path,
+                        "blocked_by_owner_id": lease_status.blocked_by_owner_id,
+                        "blocked_by_owner_label": lease_status.blocked_by_owner_label,
+                        "expires_at": lease_status.expires_at,
+                    },
+                }
             stock_frames = self._fetch_today_stock_frames(trade_date)
             broker_account = self.broker.get_account()
             broker_equity = self._extract_broker_equity(broker_account)

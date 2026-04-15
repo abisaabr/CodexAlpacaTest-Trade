@@ -7,6 +7,7 @@ The easiest way to run this repo on any machine is:
 1. Clone the repo from GitHub.
 2. Copy `.env.example` to `.env`.
 3. Fill `.env` with Alpaca paper credentials and your notification settings.
+4. For standby-safe multi-machine deployment, point both machines at the same ownership lease path.
 4. Run the Docker-based setup helper.
 5. Start the long-running services:
    - `portfolio-trader`
@@ -35,6 +36,25 @@ Both scripts:
 - create `.env` from `.env.example` when needed
 - build the Docker image
 - print the exact next commands to start services
+
+## Shared Ownership Lease
+
+To keep two machines from trading the same Alpaca paper account at the same time, both machines should share the same ownership lease path.
+
+The easiest approach is a cloud-synced folder such as OneDrive:
+
+```env
+MULTI_TICKER_OWNERSHIP_ENABLED=true
+MULTI_TICKER_OWNERSHIP_LEASE_PATH=C:\Users\you\OneDrive\CodexAlpaca\leases\multi_ticker_portfolio.json
+MULTI_TICKER_OWNERSHIP_TTL_SECONDS=180
+MULTI_TICKER_MACHINE_LABEL=trading-laptop
+```
+
+What this does:
+
+- the active machine renews the lease continuously during the session
+- the standby machine sees the active lease and stands down instead of sending orders
+- if the active machine stops renewing, the standby machine can take over after the lease TTL expires
 
 ## Start The Portable Trader
 

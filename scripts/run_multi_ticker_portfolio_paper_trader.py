@@ -50,6 +50,8 @@ def main() -> None:
     )
     result = trader.run(run_once=args.run_once)
     print(json.dumps(result, indent=2))
+    if str(result.get("status")) == "ownership_blocked":
+        raise SystemExit(42)
 
 
 if __name__ == "__main__":

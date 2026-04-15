@@ -115,6 +115,13 @@ def main() -> None:
             print(json.dumps(result, indent=2))
 
             status = str(result.get("status", ""))
+            if status == "ownership_blocked":
+                _sleep_for(
+                    max(60, min(args.idle_sleep_seconds, 300)),
+                    "multi_ticker_portable_daemon",
+                    "standing by because another machine owns the portfolio lease",
+                )
+                continue
             if status in {"session_complete", "after_close", "startup_check_failed"}:
                 last_finished_trade_date = trade_date
             else:

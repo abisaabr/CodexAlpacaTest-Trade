@@ -59,6 +59,15 @@ docker compose up -d portfolio-trader portfolio-watchdog portfolio-close-guard
 
 That keeps the strategy book, state, and alerts identical across machines while avoiding OS-specific schedulers.
 
+For true standby-safe failover, set the same shared ownership lease path on both machines. The runtime supports this through:
+
+- `MULTI_TICKER_OWNERSHIP_ENABLED`
+- `MULTI_TICKER_OWNERSHIP_LEASE_PATH`
+- `MULTI_TICKER_OWNERSHIP_TTL_SECONDS`
+- `MULTI_TICKER_MACHINE_LABEL`
+
+The cleanest practical path is a OneDrive-synced lease file. With that in place, one machine owns the live paper portfolio at a time, and the other machine stands down automatically until the lease expires.
+
 ## Health Check
 
 An hourly local health-check runner is available at `scripts/run_multi_ticker_health_check.py`. It verifies the main scheduled task, checks whether the paper trader is running and updating its session during market hours, and sends ntfy alerts when something is wrong. Safe operational fixes such as reinstalling the main scheduled task or restarting a missing trader process can be enabled with `--restart-if-needed`.
@@ -465,6 +474,8 @@ Two findings drove those settings:
 
 - Portfolio config:
   `config/multi_ticker_paper_portfolio.yaml`
+- Shared ownership lease:
+  top-level `ownership` config plus optional `.env` overrides
 - Risk controls:
   `config/risk_controls/multi_ticker_portfolio.yaml`
 - Runner:

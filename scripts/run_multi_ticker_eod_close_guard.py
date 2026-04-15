@@ -72,6 +72,18 @@ def _run_close_guard_once(args: argparse.Namespace) -> dict[str, object]:
         submit_paper_orders=args.submit_paper_orders or portfolio_config.execution.submit_paper_orders,
     )
     logger = trader.logger
+    lease_status = trader.acquire_runtime_ownership(role="eod_close_guard")
+    if lease_status.blocked:
+        return {
+            "status": "ownership_blocked",
+            "trade_date": None,
+            "lease": {
+                "lease_path": lease_status.lease_path,
+                "blocked_by_owner_id": lease_status.blocked_by_owner_id,
+                "blocked_by_owner_label": lease_status.blocked_by_owner_label,
+                "expires_at": lease_status.expires_at,
+            },
+        }
     deadline = _now_et() + timedelta(minutes=max(1, args.max_runtime_minutes))
     ledger = trader.load_ledger()
     clock = trader.broker.get_clock()
@@ -79,6 +91,19 @@ def _run_close_guard_once(args: argparse.Namespace) -> dict[str, object]:
     passes: list[dict[str, object]] = []
 
     while True:
+        lease_status = trader.acquire_runtime_ownership(role="eod_close_guard")
+        if lease_status.blocked:
+            return {
+                "status": "ownership_blocked",
+                "trade_date": trade_date.isoformat(),
+                "lease": {
+                    "lease_path": lease_status.lease_path,
+                    "blocked_by_owner_id": lease_status.blocked_by_owner_id,
+                    "blocked_by_owner_label": lease_status.blocked_by_owner_label,
+                    "expires_at": lease_status.expires_at,
+                },
+                "passes": passes,
+            }
         session = trader.load_or_create_session(trade_date, ledger)
         stock_frames = trader._fetch_today_stock_frames(trade_date)
         cleanup_summary = trader._run_end_of_day_cleanup_safeguard(
@@ -115,7 +140,7 @@ def main() -> None:
     if not args.loop_daily:
         result = _run_close_guard_once(args)
         print(json.dumps(result, indent=2))
-        if result["status"] != "reconciled":
+        if result["status"] not in {"reconciled", "ownership_blocked"}:
             raise SystemExit(1)
         return
 

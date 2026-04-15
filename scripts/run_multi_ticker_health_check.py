@@ -17,6 +17,7 @@ bootstrap_repo_root()
 
 from alpaca_lab.brokers.alpaca import AlpacaBrokerAdapter
 from alpaca_lab.config import load_settings
+from alpaca_lab.execution.ownership import FileOwnershipLease, NoopOwnershipLease
 from alpaca_lab.logging_utils import configure_logging, get_logger
 from alpaca_lab.multi_ticker_portfolio import load_portfolio_config
 from alpaca_lab.notifications import NtfyNotifier
@@ -276,6 +277,16 @@ def main() -> None:
     portfolio_config = load_portfolio_config(args.portfolio_config)
     broker = AlpacaBrokerAdapter(settings, dry_run=True)
     notifier = NtfyNotifier(settings)
+    if portfolio_config.ownership.enabled:
+        ownership_lease = FileOwnershipLease(
+            path=portfolio_config.ownership.lease_path,
+            owner_label=portfolio_config.ownership.machine_label,
+            ttl_seconds=portfolio_config.ownership.lease_ttl_seconds,
+        )
+    else:
+        ownership_lease = NoopOwnershipLease()
+    ownership_status = ownership_lease.inspect()
+    standby_mode = ownership_status.blocked and not ownership_status.held_by_self
 
     now_et = _now_et()
     health_root = Path(portfolio_config.execution.run_root).parent / "health"
@@ -329,7 +340,15 @@ def main() -> None:
     session_payload = _session_snapshot(session_path) if session_path.exists() else None
 
     if market_open:
-        if not trader_processes:
+        if standby_mode and trader_processes:
+            issues.append(
+                _issue(
+                    "standby_runner_active",
+                    "This machine is in standby because another machine owns the lease, but a local trader process is still running.",
+                    severity="error",
+                )
+            )
+        elif not trader_processes:
             issues.append(_issue("trader_not_running", "No active portfolio trader process was found during market hours.", severity="error"))
             if args.restart_if_needed:
                 pid = _start_runner(PROJECT_ROOT)
@@ -353,7 +372,7 @@ def main() -> None:
                         )
                     )
 
-        if session_payload is None:
+        if not standby_mode and session_payload is None:
             issues.append(
                 _issue(
                     "session_missing",
@@ -361,7 +380,7 @@ def main() -> None:
                     severity="error",
                 )
             )
-        else:
+        elif not standby_mode:
             session_mtime = datetime.fromisoformat(session_payload["session_mtime_et"])
             max_age_seconds = max(300, portfolio_config.execution.poll_interval_seconds * 6)
             age_seconds = (now_et - session_mtime).total_seconds()
@@ -396,7 +415,12 @@ def main() -> None:
                     severity="error",
                 )
             )
-        if now_et.hour >= 16 and session_payload is not None and not session_payload.get("notified_end_of_day", False):
+        if (
+            not standby_mode
+            and now_et.hour >= 16
+            and session_payload is not None
+            and not session_payload.get("notified_end_of_day", False)
+        ):
             issues.append(
                 _issue(
                     "end_of_day_notification_missing",
@@ -419,6 +443,17 @@ def main() -> None:
         "market_open": market_open,
         "trade_date": trade_date.isoformat(),
         "clock_error": clock_error,
+        "ownership": {
+            "enabled": ownership_status.enabled,
+            "held_by_self": ownership_status.held_by_self,
+            "blocked": ownership_status.blocked,
+            "owner_id": ownership_status.owner_id,
+            "owner_label": ownership_status.owner_label,
+            "blocked_by_owner_id": ownership_status.blocked_by_owner_id,
+            "blocked_by_owner_label": ownership_status.blocked_by_owner_label,
+            "lease_path": ownership_status.lease_path,
+            "expires_at": ownership_status.expires_at,
+        },
         "task_info": task_info,
         "trader_processes": trader_processes,
         "session": session_payload,

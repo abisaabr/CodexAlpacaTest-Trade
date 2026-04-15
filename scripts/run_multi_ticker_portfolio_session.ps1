@@ -74,6 +74,12 @@ while ($true) {
         break
     }
 
+    if ($exitCode -eq 42) {
+        Write-SupervisorLog "Runner is in standby because another machine currently owns the portfolio lease. Sleeping for 120 seconds before re-checking."
+        Start-Sleep -Seconds 120
+        continue
+    }
+
     $restartCount += 1
     Write-SupervisorLog ("Runner exited early with code {0}; restarting in 30 seconds (attempt {1})." -f $exitCode, $restartCount)
     Start-Sleep -Seconds 30

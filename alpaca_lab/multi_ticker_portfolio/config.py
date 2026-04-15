@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 from datetime import date as dt_date
 from pathlib import Path
 from typing import Literal
 
 import yaml
+from dotenv import dotenv_values
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -224,6 +226,20 @@ class ExecutionConfig(BaseModel):
         return Path(str(value))
 
 
+class OwnershipConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    lease_path: Path = Path("reports/multi_ticker_portfolio/state/ownership_lease.json")
+    lease_ttl_seconds: int = 180
+    machine_label: str | None = None
+
+    @field_validator("lease_path", mode="before")
+    @classmethod
+    def normalize_path(cls, value: object) -> Path:
+        return Path(str(value))
+
+
 class MultiTickerPortfolioConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -235,6 +251,7 @@ class MultiTickerPortfolioConfig(BaseModel):
     )
     risk: RiskConfig = Field(default_factory=RiskConfig)
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
+    ownership: OwnershipConfig = Field(default_factory=OwnershipConfig)
     strategies: tuple[StrategyConfig, ...]
 
     @property
@@ -497,4 +514,27 @@ def load_portfolio_config(path: str | Path | None = None) -> MultiTickerPortfoli
         payload = _deep_merge(payload, risk_payload)
     if "strategies" not in payload:
         payload["strategies"] = [strategy.model_dump() for strategy in _default_strategies()]
+    repo_root = Path(__file__).resolve().parents[2]
+    env_file_payload = dotenv_values(repo_root / ".env") if (repo_root / ".env").exists() else {}
+
+    def _env_override(name: str) -> str | None:
+        value = os.environ.get(name)
+        if value not in (None, ""):
+            return value
+        raw = env_file_payload.get(name)
+        if raw in (None, ""):
+            return None
+        return str(raw)
+
+    ownership_payload = payload.setdefault("ownership", {})
+    if not isinstance(ownership_payload, dict):
+        raise ValueError("Ownership config must contain a top-level mapping.")
+    if _env_override("MULTI_TICKER_OWNERSHIP_LEASE_PATH"):
+        ownership_payload["lease_path"] = _env_override("MULTI_TICKER_OWNERSHIP_LEASE_PATH")
+    if _env_override("MULTI_TICKER_OWNERSHIP_ENABLED"):
+        ownership_payload["enabled"] = _env_override("MULTI_TICKER_OWNERSHIP_ENABLED")
+    if _env_override("MULTI_TICKER_OWNERSHIP_TTL_SECONDS"):
+        ownership_payload["lease_ttl_seconds"] = _env_override("MULTI_TICKER_OWNERSHIP_TTL_SECONDS")
+    if _env_override("MULTI_TICKER_MACHINE_LABEL"):
+        ownership_payload["machine_label"] = _env_override("MULTI_TICKER_MACHINE_LABEL")
     return MultiTickerPortfolioConfig.model_validate(payload)
