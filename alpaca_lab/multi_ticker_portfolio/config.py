@@ -140,7 +140,7 @@ class RiskConfig(BaseModel):
             ),
             RiskBucketConfig(
                 name="financials",
-                symbols=("BAC", "JPM"),
+                symbols=("BAC", "JPM", "SCHW"),
                 max_open_risk_fraction=0.06,
             ),
         )
@@ -185,6 +185,7 @@ class ExecutionConfig(BaseModel):
         "ORCL",
         "SHOP",
         "CRM",
+        "SCHW",
     )
     option_feed: str = "indicative"
     stock_feed: str | None = None
@@ -229,7 +230,7 @@ class MultiTickerPortfolioConfig(BaseModel):
     name: str = "multi_ticker_portfolio_paper_trader"
     description: str = (
         "Shared-account intraday options paper portfolio across QQQ, SPY, IWM, NVDA, TSLA, MSFT, BAC, "
-        "PLTR, GLD, ARKK, XLE, GDX, SLV, AMZN, JPM, XOM, ORCL, SHOP, and CRM using the validated "
+        "PLTR, GLD, ARKK, XLE, GDX, SLV, AMZN, JPM, XOM, ORCL, SHOP, CRM, and SCHW using the validated "
         "shared-account winners."
     )
     risk: RiskConfig = Field(default_factory=RiskConfig)
@@ -410,6 +411,14 @@ def _selected_strategy_specs() -> tuple[dict[str, object], ...]:
             "base_name": "orb_long_put_same_day",
             "regime": "choppy",
             "name": "crm__base__orb_long_put_same_day",
+        },
+        {"underlying_symbol": "SCHW", "timing_profile": "fast", "base_name": "trend_long_call_next_expiry"},
+        {
+            "underlying_symbol": "SCHW",
+            "timing_profile": "base",
+            "base_name": "orb_long_put_same_day",
+            "regime": "choppy",
+            "name": "schw__base__orb_long_put_same_day",
         },
     )
 

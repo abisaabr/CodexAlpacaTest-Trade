@@ -19,7 +19,7 @@ risk:
       symbols: [GLD, GDX, SLV, XLE, XOM]
       max_open_risk_fraction: 0.08
     - name: financials
-      symbols: [BAC, JPM]
+      symbols: [BAC, JPM, SCHW]
       max_open_risk_fraction: 0.06
   min_required_buying_power: 7500
   broker_min_equity_to_trade: 26000

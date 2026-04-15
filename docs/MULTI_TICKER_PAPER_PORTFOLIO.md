@@ -23,8 +23,9 @@ This runner now trades the validated shared-account book across:
 - `ORCL`
 - `SHOP`
 - `CRM`
+- `SCHW`
 
-The live book uses a shared virtual `$25,000` sleeve and `78` strategy entries, including two explicit choppy aliases that intentionally reuse validated same-day single-leg setups under separate regime labels.
+The live book uses a shared virtual `$25,000` sleeve and `80` strategy entries, including three explicit choppy aliases that intentionally reuse validated same-day single-leg setups under separate regime labels.
 
 ## Notifications
 
@@ -219,6 +220,12 @@ An hourly local health-check runner is available at `scripts/run_multi_ticker_he
 - Choppy:
   `crm__base__orb_long_put_same_day`
 
+#### SCHW
+- Bull:
+  `schw__fast__trend_long_call_next_expiry`
+- Choppy:
+  `schw__base__orb_long_put_same_day`
+
 ## Research Result
 
 The current deployment book now comes from two promotion rounds:
@@ -248,6 +255,8 @@ Phase-one numbers on the common `120`-session out-of-sample window shared by the
   `-13.93%` max drawdown
 
 The promoted additions from phase one were `BAC`, `PLTR`, `GLD`, `ARKK`, and `XLE`.
+
+The newest archive-backed promotion was `SCHW`. On the current shared-account incremental gate it improved the live book over a `100`-session common out-of-sample overlap from `$317,938.78` to `$319,277.56`, while holding max drawdown roughly flat (`-12.33%` to `-12.34%`).
 
 Phase-two cached-candidate validation used a stricter common `105`-session out-of-sample window shared by the live book plus `C`, `GDX`, `TLT`, `SLV`, and `PFE`:
 
