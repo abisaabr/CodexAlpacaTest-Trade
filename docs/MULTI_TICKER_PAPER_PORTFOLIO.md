@@ -353,6 +353,16 @@ The runner starts with a morning self-check and refuses to trade if:
 
 By default, the runner now tries to auto-clean unexpected paper positions before failing startup, and it performs an end-of-day broker reconciliation sweep. Known leftover trades are force-closed with `auto_flatten_known_end_of_day_position`, and truly orphaned broker positions are closed and journaled with an `auto_flatten_unexpected_*` reason in `reports/multi_ticker_portfolio/runs/<trade-date>/broker_position_cleanup.json`.
 
+At the end of the day, the runner now also writes a dedicated guardrail scorecard bundle:
+
+- `multi_ticker_portfolio_guardrail_scorecard.json`
+- `multi_ticker_portfolio_guardrail_scorecard.md`
+- `multi_ticker_portfolio_guardrail_scorecard_guardrail_firings.csv`
+- `multi_ticker_portfolio_guardrail_scorecard_guardrail_reason_counts.csv`
+- `multi_ticker_portfolio_guardrail_scorecard_guardrail_recommendations.csv`
+
+That scorecard explains which guardrails fired, why they fired, whether the issue was already auto-fixed by the runner, and which items still need manual review. This is the “keep learning” layer for the live paper trader: it creates a compact daily feedback loop without silently changing trading logic on its own.
+
 It also sends outbound notifications for:
 
 - successful morning start
@@ -419,6 +429,14 @@ The new concentration controls work before order submission, not after. Entries 
 The projected Greek caps add a second layer on top of that position sizing. Before a new order goes out, the runner estimates what total portfolio delta and vega would become if the trade fills at the planned quantity. If the projected book would move past the hard cap, the entry is blocked. Separately, the execution circuit breaker watches the live plumbing. If entries stop filling normally or recent fills slip badly against us, the runner stops opening fresh positions for the rest of the day while still managing exits and end-of-day cleanup.
 
 The late-day entry cutoff is a simpler quality filter: same-day contracts are blocked after minute `300`, and all other new entries are blocked after minute `345`. That keeps us from opening fresh risk too close to the close unless we explicitly relax the thresholds. The event blackout list is operator-controlled on purpose. You can add one-off windows for things like CPI, FOMC, or single-name earnings by date, minute range, symbol, regime, timing profile, or DTE mode without changing code.
+
+For auto-patching, the system currently draws a safety line on purpose:
+
+- runtime and scheduler issues can self-heal automatically through the health-check tooling
+- orphaned paper positions can auto-flatten and journal the reason
+- trading-logic changes are not auto-written intraday
+
+That keeps the runner “smart” without letting it quietly rewrite live strategy behavior during market hours.
 
 Two findings drove those settings:
 

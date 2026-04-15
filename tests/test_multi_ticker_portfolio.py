@@ -1120,6 +1120,86 @@ def test_trade_reconciliation_outputs_roll_up_signals_and_pnl(tmp_path: Path) ->
     assert float(strategy_df.loc[strategy_df["strategy_name"] == "jpm__fast__trend_long_call_next_expiry", "net_pnl"].iloc[0]) == 85.4
 
 
+def test_guardrail_scorecard_rolls_up_firings_and_recommendations() -> None:
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trade_date = datetime.fromisoformat("2026-04-13T00:00:00").date()
+    events_df = pd.DataFrame(
+        [
+            {
+                "timestamp_et": "2026-04-13T10:00:00-04:00",
+                "event_type": "signal_decision",
+                "attempt_id": "attempt-guardrail-1",
+                "strategy_name": "qqq__fast__trend_long_call_next_expiry",
+                "underlying_symbol": "QQQ",
+                "regime": "bull",
+                "current_minute": 45,
+                "decision": "skipped",
+                "decision_reason": "projected_delta_hard_cap",
+            },
+            {
+                "timestamp_et": "2026-04-13T15:20:00-04:00",
+                "event_type": "signal_decision",
+                "attempt_id": "attempt-guardrail-2",
+                "strategy_name": "qqq__slow__orb_long_put_same_day",
+                "underlying_symbol": "QQQ",
+                "regime": "bear",
+                "current_minute": 350,
+                "decision": "skipped",
+                "decision_reason": "late_day_entry_cutoff",
+            },
+        ]
+    )
+    session = SessionState(
+        trade_date="2026-04-13",
+        starting_equity=25_000.0,
+        virtual_cash=24_950.0,
+        blocked_new_entries=True,
+        block_reason="entry_execution_circuit_breaker: 3 consecutive entry failures (last status rejected)",
+        execution_guardrails={
+            "circuit_breaker_triggered": True,
+            "entry_failure_streak": 3,
+        },
+        alerts=[
+            {
+                "timestamp_et": "2026-04-13T15:25:00-04:00",
+                "level": "warning",
+                "message": "End-Of-Day notification delivery failed",
+            }
+        ],
+        last_updated_at="2026-04-13T16:01:00-04:00",
+    )
+    cleanup_summary = {
+        "known_trade_cleanup_count": 1,
+        "unexpected_position_cleanup_count": 1,
+        "unexpected_position_cleanup": [
+            {
+                "timestamp_et": "2026-04-13T16:00:30-04:00",
+                "symbol": "QQQ260417C00600000",
+                "status": "filled",
+                "reason": "auto_flatten_unexpected_end_of_day_position",
+            }
+        ],
+    }
+
+    summary, tables = trader._build_guardrail_scorecard_outputs(
+        session=session,
+        trade_date=trade_date,
+        events_df=events_df,
+        cleanup_summary=cleanup_summary,
+    )
+
+    firings_df = tables["guardrail_firings"]
+    recommendations_df = tables["guardrail_recommendations"]
+
+    assert summary["guardrail_fire_count"] == 6
+    assert summary["guardrail_reason_count"] >= 5
+    assert summary["needs_manual_review"] is True
+    assert int((firings_df["source"] == "cleanup").sum()) == 2
+    assert "projected_delta_hard_cap" in set(firings_df["reason"].astype(str))
+    assert any(recommendations_df["action"] == "already_auto_fixed")
+    assert any(recommendations_df["action"] == "manual_review")
+
+
 def test_backfill_open_trade_reconciliation_assigns_attempt_ids(tmp_path: Path) -> None:
     trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
     trader.run_root = tmp_path / "runs"

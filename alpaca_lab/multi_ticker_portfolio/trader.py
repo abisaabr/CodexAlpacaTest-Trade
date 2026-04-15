@@ -2773,6 +2773,311 @@ class MultiTickerPortfolioPaperTrader:
         }
         return events_df, reconciliation_df, ticker_df, strategy_df, summary
 
+    def _classify_guardrail_reason(self, reason: str | None) -> str | None:
+        if reason is None:
+            return None
+        text = str(reason).strip()
+        if not text:
+            return None
+        lower = text.lower()
+        if lower in {"max_open_positions", "max_positions_per_regime", "max_positions_per_symbol"}:
+            return "capacity"
+        if lower == "per_symbol_risk_cap" or lower.startswith("bucket_risk_cap:"):
+            return "concentration"
+        if lower in {
+            PROJECTED_DELTA_HARD_CAP_REASON,
+            PROJECTED_VEGA_HARD_CAP_REASON,
+        }:
+            return "portfolio_greeks"
+        if lower in {LATE_DAY_ENTRY_CUTOFF_REASON} or lower.startswith(f"{EVENT_BLACKOUT_REASON}:"):
+            return "timing_filter"
+        if lower in {"broker_equity_below_trade_floor", "broker_equity_risk_buffer"}:
+            return "equity_buffer"
+        if ENTRY_EXECUTION_CIRCUIT_BREAKER_REASON in lower:
+            return "execution"
+        if SEVERE_LOSS_HALT_REASON in lower or SEVERE_LOSS_FLATTEN_REASON in lower:
+            return "loss_limit"
+        if BROKER_EQUITY_EMERGENCY_STOP_REASON in lower:
+            return "equity_stop"
+        if "notification delivery failed" in lower:
+            return "notification"
+        if "unexpected open positions" in lower or "auto_flatten_" in lower:
+            return "cleanup"
+        return None
+
+    def _build_guardrail_scorecard_outputs(
+        self,
+        *,
+        session: SessionState,
+        trade_date: date,
+        events_df: pd.DataFrame,
+        cleanup_summary: dict[str, Any] | None = None,
+    ) -> tuple[dict[str, Any], dict[str, pd.DataFrame]]:
+        firing_rows: list[dict[str, Any]] = []
+        if not events_df.empty:
+            signal_df = events_df.loc[events_df["event_type"] == "signal_decision"].copy()
+            for _, row in signal_df.iterrows():
+                reason = row.get("decision_reason")
+                category = self._classify_guardrail_reason(reason)
+                if category is None:
+                    continue
+                firing_rows.append(
+                    {
+                        "source": "signal_filter",
+                        "timestamp_et": row.get("timestamp_et"),
+                        "category": category,
+                        "reason": reason,
+                        "strategy_name": row.get("strategy_name"),
+                        "underlying_symbol": row.get("underlying_symbol"),
+                        "regime": row.get("regime"),
+                        "current_minute": row.get("current_minute"),
+                        "detail": row.get("decision"),
+                    }
+                )
+        for alert in session.alerts:
+            message = str(alert.get("message") or "").strip()
+            category = self._classify_guardrail_reason(message)
+            if category is None:
+                continue
+            firing_rows.append(
+                {
+                    "source": "alert",
+                    "timestamp_et": alert.get("timestamp_et"),
+                    "category": category,
+                    "reason": message,
+                    "strategy_name": None,
+                    "underlying_symbol": None,
+                    "regime": None,
+                    "current_minute": None,
+                    "detail": alert.get("level"),
+                }
+            )
+        if session.block_reason:
+            category = self._classify_guardrail_reason(session.block_reason)
+            if category is not None:
+                firing_rows.append(
+                    {
+                        "source": "session_block",
+                        "timestamp_et": session.last_updated_at,
+                        "category": category,
+                        "reason": session.block_reason,
+                        "strategy_name": None,
+                        "underlying_symbol": None,
+                        "regime": None,
+                        "current_minute": None,
+                        "detail": "blocked_new_entries",
+                    }
+                )
+        cleanup_summary = cleanup_summary or {}
+        if cleanup_summary.get("known_trade_cleanup_count"):
+            firing_rows.append(
+                {
+                    "source": "cleanup",
+                    "timestamp_et": session.last_updated_at,
+                    "category": "cleanup",
+                    "reason": AUTO_FLATTEN_KNOWN_EOD_REASON,
+                    "strategy_name": None,
+                    "underlying_symbol": None,
+                    "regime": None,
+                    "current_minute": None,
+                    "detail": f"count={int(cleanup_summary['known_trade_cleanup_count'])}",
+                }
+            )
+        for cleanup_entry in cleanup_summary.get("unexpected_position_cleanup", []) or []:
+            reason = str(cleanup_entry.get("reason") or AUTO_FLATTEN_UNEXPECTED_EOD_REASON)
+            firing_rows.append(
+                {
+                    "source": "cleanup",
+                    "timestamp_et": cleanup_entry.get("timestamp_et", session.last_updated_at),
+                    "category": self._classify_guardrail_reason(reason) or "cleanup",
+                    "reason": reason,
+                    "strategy_name": None,
+                    "underlying_symbol": cleanup_entry.get("symbol"),
+                    "regime": None,
+                    "current_minute": None,
+                    "detail": cleanup_entry.get("status"),
+                }
+            )
+
+        firings_df = pd.DataFrame(firing_rows)
+        if firings_df.empty:
+            firings_df = pd.DataFrame(
+                columns=[
+                    "source",
+                    "timestamp_et",
+                    "category",
+                    "reason",
+                    "strategy_name",
+                    "underlying_symbol",
+                    "regime",
+                    "current_minute",
+                    "detail",
+                ]
+            )
+        reason_counts_df = pd.DataFrame(
+            columns=["category", "reason", "source_count", "fire_count", "symbols", "strategies"]
+        )
+        if not firings_df.empty:
+            grouped_rows: list[dict[str, Any]] = []
+            for (category, reason), group in firings_df.groupby(["category", "reason"], dropna=False):
+                symbols = sorted({str(value) for value in group["underlying_symbol"].dropna().astype(str) if value})
+                strategies = sorted({str(value) for value in group["strategy_name"].dropna().astype(str) if value})
+                grouped_rows.append(
+                    {
+                        "category": category,
+                        "reason": reason,
+                        "source_count": int(group["source"].nunique()),
+                        "fire_count": int(len(group)),
+                        "symbols": ", ".join(symbols),
+                        "strategies": ", ".join(strategies),
+                    }
+                )
+            reason_counts_df = pd.DataFrame(grouped_rows).sort_values(
+                ["fire_count", "category", "reason"], ascending=[False, True, True]
+            ).reset_index(drop=True)
+
+        recommendation_rows: list[dict[str, Any]] = []
+
+        def _recommend(
+            *,
+            priority: str,
+            category: str,
+            recommendation: str,
+            action: str,
+            evidence_count: int,
+        ) -> None:
+            recommendation_rows.append(
+                {
+                    "priority": priority,
+                    "category": category,
+                    "recommendation": recommendation,
+                    "action": action,
+                    "evidence_count": int(evidence_count),
+                }
+            )
+
+        if reason_counts_df.empty:
+            _recommend(
+                priority="info",
+                category="steady_state",
+                recommendation="No guardrails fired today. Keep monitoring the live book and compare tomorrow against the same baseline.",
+                action="monitor_only",
+                evidence_count=0,
+            )
+        else:
+            for _, row in reason_counts_df.iterrows():
+                reason = str(row["reason"])
+                category = str(row["category"])
+                fire_count = int(row["fire_count"])
+                if category in {"loss_limit", "equity_stop"}:
+                    _recommend(
+                        priority="critical",
+                        category=category,
+                        recommendation=(
+                            f"{reason} fired {fire_count} time(s). Review the full session before changing risk. "
+                            "This is a real capital-protection event, not an auto-patch candidate."
+                        ),
+                        action="manual_review",
+                        evidence_count=fire_count,
+                    )
+                elif category == "execution":
+                    _recommend(
+                        priority="high",
+                        category=category,
+                        recommendation=(
+                            f"{reason} fired {fire_count} time(s). Check fills, spreads, and broker responses before loosening execution guards."
+                        ),
+                        action="manual_review",
+                        evidence_count=fire_count,
+                    )
+                elif category == "cleanup":
+                    _recommend(
+                        priority="high",
+                        category=category,
+                        recommendation=(
+                            f"{reason} fired {fire_count} time(s). The runner already auto-cleaned the operational issue, "
+                            "but the wrapper and session logs should be reviewed."
+                        ),
+                        action="already_auto_fixed",
+                        evidence_count=fire_count,
+                    )
+                elif category == "notification":
+                    _recommend(
+                        priority="medium",
+                        category=category,
+                        recommendation=(
+                            f"{reason} fired {fire_count} time(s). Notifications degraded; runtime can keep trading, "
+                            "but delivery plumbing needs follow-up."
+                        ),
+                        action="manual_review",
+                        evidence_count=fire_count,
+                    )
+                elif category in {"concentration", "portfolio_greeks"} and fire_count >= 3:
+                    _recommend(
+                        priority="medium",
+                        category=category,
+                        recommendation=(
+                            f"{reason} blocked {fire_count} entries. The portfolio is crowding one risk bucket, "
+                            "so review diversification before relaxing the cap."
+                        ),
+                        action="monitor_only",
+                        evidence_count=fire_count,
+                    )
+                elif category == "timing_filter" and reason.startswith(f"{EVENT_BLACKOUT_REASON}:"):
+                    _recommend(
+                        priority="info",
+                        category=category,
+                        recommendation=(
+                            f"{reason} blocked {fire_count} entries as designed. Verify the blackout calendar is still correct for upcoming sessions."
+                        ),
+                        action="monitor_only",
+                        evidence_count=fire_count,
+                    )
+                elif category == "timing_filter" and reason == LATE_DAY_ENTRY_CUTOFF_REASON and fire_count >= 3:
+                    _recommend(
+                        priority="info",
+                        category=category,
+                        recommendation=(
+                            f"Late-day entry cutoff blocked {fire_count} entries. Keep it in place unless repeated review shows we are undertrading quality late-day setups."
+                        ),
+                        action="monitor_only",
+                        evidence_count=fire_count,
+                    )
+
+        recommendations_df = pd.DataFrame(recommendation_rows)
+        if recommendations_df.empty:
+            recommendations_df = pd.DataFrame(
+                columns=["priority", "category", "recommendation", "action", "evidence_count"]
+            )
+
+        summary = {
+            "trade_date": trade_date.isoformat(),
+            "guardrail_fire_count": int(len(firings_df)),
+            "guardrail_reason_count": int(len(reason_counts_df)),
+            "signal_filter_count": int((firings_df["source"] == "signal_filter").sum()) if not firings_df.empty else 0,
+            "alert_guardrail_count": int((firings_df["source"] == "alert").sum()) if not firings_df.empty else 0,
+            "cleanup_guardrail_count": int((firings_df["source"] == "cleanup").sum()) if not firings_df.empty else 0,
+            "session_block_count": int((firings_df["source"] == "session_block").sum()) if not firings_df.empty else 0,
+            "final_blocked_new_entries": bool(session.blocked_new_entries),
+            "final_block_reason": session.block_reason,
+            "recommendation_count": int(len(recommendations_df)),
+            "manual_review_recommendation_count": int(
+                (recommendations_df["action"] == "manual_review").sum()
+            ) if not recommendations_df.empty else 0,
+            "already_auto_fixed_count": int(
+                (recommendations_df["action"] == "already_auto_fixed").sum()
+            ) if not recommendations_df.empty else 0,
+            "needs_manual_review": bool(
+                not recommendations_df.empty and (recommendations_df["action"] == "manual_review").any()
+            ),
+            "execution_guardrails": dict(session.execution_guardrails),
+        }
+        return summary, {
+            "guardrail_firings": firings_df,
+            "guardrail_reason_counts": reason_counts_df,
+            "guardrail_recommendations": recommendations_df,
+        }
+
     def _backfill_open_trade_reconciliation(self, session: SessionState) -> bool:
         if not session.open_trades:
             return False
@@ -2911,6 +3216,17 @@ class MultiTickerPortfolioPaperTrader:
         if cleanup_summary:
             summary["end_of_day_cleanup"] = cleanup_summary
         summary.update(reconciliation_summary)
+        guardrail_summary, guardrail_tables = self._build_guardrail_scorecard_outputs(
+            session=session,
+            trade_date=trade_date,
+            events_df=reconciliation_events_df,
+            cleanup_summary=cleanup_summary,
+        )
+        summary["guardrail_fire_count"] = guardrail_summary["guardrail_fire_count"]
+        summary["guardrail_reason_count"] = guardrail_summary["guardrail_reason_count"]
+        summary["guardrail_manual_review_count"] = guardrail_summary["manual_review_recommendation_count"]
+        summary["guardrail_auto_fixed_count"] = guardrail_summary["already_auto_fixed_count"]
+        summary["guardrail_needs_manual_review"] = guardrail_summary["needs_manual_review"]
         write_summary_bundle(
             run_dir,
             name="multi_ticker_portfolio_session_summary",
@@ -2922,6 +3238,12 @@ class MultiTickerPortfolioPaperTrader:
                 "ticker_performance": ticker_performance_df,
                 "strategy_performance": strategy_performance_df,
             },
+        )
+        write_summary_bundle(
+            run_dir,
+            name="multi_ticker_portfolio_guardrail_scorecard",
+            summary=guardrail_summary,
+            table_map=guardrail_tables,
         )
         write_alert_queue(run_dir / "alerts.json", session.alerts)
         failed_phases = getattr(self, "_failed_notification_phases", set())
