@@ -1791,47 +1791,58 @@ class MultiTickerPortfolioPaperTrader:
         request: OrderRequest,
         reason: str,
         metadata: dict[str, Any],
+        max_attempts: int = 3,
     ) -> dict[str, Any]:
-        response = self.broker.submit_order(
-            request,
-            dry_run=not getattr(self, "submit_paper_orders", True),
-            explicitly_requested=getattr(self, "submit_paper_orders", True),
-        )
-        journal_entry: dict[str, Any] = {
-            "reason": reason,
-            "request": self._serialize_order_request(request),
-            "response": response,
-            **metadata,
+        last_result: dict[str, Any] = {
+            "status": "not_filled",
+            "order_id": None,
+            "filled_avg_price": None,
         }
-        if response.get("status") == "dry_run":
-            journal_entry["terminal"] = {"status": "dry_run", "filled_avg_price": None}
-            self._append_broker_position_cleanup_entry(trade_date, journal_entry)
-            return {
-                "status": "dry_run",
-                "order_id": response.get("id"),
-                "filled_avg_price": None,
+        for attempt_index in range(1, max_attempts + 1):
+            response = self.broker.submit_order(
+                request,
+                dry_run=not getattr(self, "submit_paper_orders", True),
+                explicitly_requested=getattr(self, "submit_paper_orders", True),
+            )
+            journal_entry: dict[str, Any] = {
+                "reason": reason,
+                "request": self._serialize_order_request(request),
+                "response": response,
+                "attempt_index": attempt_index,
+                "max_attempts": max_attempts,
+                **metadata,
             }
+            if response.get("status") == "dry_run":
+                journal_entry["terminal"] = {"status": "dry_run", "filled_avg_price": None}
+                self._append_broker_position_cleanup_entry(trade_date, journal_entry)
+                return {
+                    "status": "dry_run",
+                    "order_id": response.get("id"),
+                    "filled_avg_price": None,
+                }
 
-        order_id = str(response.get("id") or "")
-        terminal = self._wait_for_terminal_order_with_timeout(
-            order_id,
-            timeout_seconds=self.portfolio_config.execution.unexpected_position_cleanup_timeout_seconds,
-        )
-        journal_entry["terminal"] = terminal
-        self._append_broker_position_cleanup_entry(trade_date, journal_entry)
-        if self._is_filled(terminal):
-            return {
-                "status": str(terminal.get("status") or "filled"),
+            order_id = str(response.get("id") or "")
+            terminal = self._wait_for_terminal_order_with_timeout(
+                order_id,
+                timeout_seconds=self.portfolio_config.execution.unexpected_position_cleanup_timeout_seconds,
+            )
+            journal_entry["terminal"] = terminal
+            if str(terminal.get("status", "")) in OPEN_STATUSES:
+                self.broker.cancel_order(order_id, dry_run=False, explicitly_requested=True)
+                journal_entry["cancel_requested"] = True
+            self._append_broker_position_cleanup_entry(trade_date, journal_entry)
+            if self._is_filled(terminal):
+                return {
+                    "status": str(terminal.get("status") or "filled"),
+                    "order_id": order_id,
+                    "filled_avg_price": terminal.get("filled_avg_price"),
+                }
+            last_result = {
+                "status": str(terminal.get("status") or "not_filled"),
                 "order_id": order_id,
                 "filled_avg_price": terminal.get("filled_avg_price"),
             }
-        if str(terminal.get("status", "")) in OPEN_STATUSES:
-            self.broker.cancel_order(order_id, dry_run=False, explicitly_requested=True)
-        return {
-            "status": str(terminal.get("status") or "not_filled"),
-            "order_id": order_id,
-            "filled_avg_price": terminal.get("filled_avg_price"),
-        }
+        return last_result
 
     def _effective_exit_snapshot(
         self,
@@ -2112,6 +2123,39 @@ class MultiTickerPortfolioPaperTrader:
                 )
         return cleanup_entries
 
+    def _active_broker_positions(self) -> list[dict[str, Any]]:
+        active_positions: list[dict[str, Any]] = []
+        for position in self.broker.get_positions():
+            symbol = str(position.get("symbol") or "").strip()
+            if not symbol:
+                continue
+            actual_qty = self._signed_broker_position_qty(position)
+            if math.isclose(actual_qty, 0.0, abs_tol=1e-9):
+                continue
+            active_positions.append(
+                {
+                    "symbol": symbol,
+                    "qty": round(float(actual_qty), 4),
+                    "asset_class": self._normalized_broker_asset_class(position),
+                    "raw_position": position,
+                }
+            )
+        return active_positions
+
+    def _symbols_with_open_close_orders(self) -> set[str]:
+        symbols: set[str] = set()
+        get_orders = getattr(self.broker, "get_orders", None)
+        if get_orders is None:
+            return symbols
+        for order in get_orders(status="open", limit=200):
+            symbol = str(order.get("symbol") or "").strip()
+            position_intent = str(order.get("position_intent") or "").strip()
+            if not symbol:
+                continue
+            if position_intent in {"sell_to_close", "buy_to_close"}:
+                symbols.add(symbol)
+        return symbols
+
     def _build_symbol_snapshot(
         self,
         *,
@@ -2179,6 +2223,7 @@ class MultiTickerPortfolioPaperTrader:
 
         account = self.broker.get_account()
         positions = self.broker.get_positions()
+        symbols_with_open_close_orders = self._symbols_with_open_close_orders()
         buying_power = float(account.get("buying_power") or 0.0)
         broker_equity = self._extract_broker_equity(account)
         details["buying_power"] = round(buying_power, 2)
@@ -2205,17 +2250,54 @@ class MultiTickerPortfolioPaperTrader:
                 f"broker equity {broker_equity:.2f} below minimum trading threshold {min_broker_equity:.2f}"
             )
         if positions and self.portfolio_config.execution.auto_flatten_unexpected_positions:
-            cleanup_entries = self._close_unexpected_broker_positions(
-                session=session,
-                trade_date=trade_date,
-                reason=AUTO_FLATTEN_UNEXPECTED_STARTUP_REASON,
-            )
-            if cleanup_entries:
-                details["broker_position_cleanup"] = cleanup_entries
-                positions = self.broker.get_positions()
-                details["broker_position_count"] = len(positions)
+            positions_pending_existing_close = [
+                position
+                for position in positions
+                if str(position.get("symbol") or "").strip() in symbols_with_open_close_orders
+            ]
+            positions_requiring_cleanup = [
+                position
+                for position in positions
+                if str(position.get("symbol") or "").strip() not in symbols_with_open_close_orders
+            ]
+            if positions_pending_existing_close:
+                details["pending_broker_close_orders"] = sorted(
+                    {
+                        str(position.get("symbol") or "").strip()
+                        for position in positions_pending_existing_close
+                        if str(position.get("symbol") or "").strip()
+                    }
+                )
+                pending_symbols_text = ", ".join(details["pending_broker_close_orders"])
+                if now_et <= grace_cutoff:
+                    pending_reasons.append(
+                        f"broker cleanup orders still pending for {pending_symbols_text}"
+                    )
+                else:
+                    failures.append(
+                        f"broker cleanup orders still pending after startup grace period for {pending_symbols_text}"
+                    )
+            if positions_requiring_cleanup:
+                cleanup_entries = self._close_unexpected_broker_positions(
+                    session=session,
+                    trade_date=trade_date,
+                    reason=AUTO_FLATTEN_UNEXPECTED_STARTUP_REASON,
+                )
+                if cleanup_entries:
+                    details["broker_position_cleanup"] = cleanup_entries
+                    positions = self.broker.get_positions()
+                    details["broker_position_count"] = len(positions)
+                symbols_with_open_close_orders = self._symbols_with_open_close_orders()
 
-        position_mismatches = self._broker_position_mismatch_messages(session, positions)
+        positions_relevant_to_startup = [
+            position
+            for position in positions
+            if str(position.get("symbol") or "").strip() not in symbols_with_open_close_orders
+        ]
+        position_mismatches = self._broker_position_mismatch_messages(
+            session,
+            positions_relevant_to_startup,
+        )
         if position_mismatches:
             failures.extend(position_mismatches)
 
@@ -2527,9 +2609,14 @@ class MultiTickerPortfolioPaperTrader:
                     return snapshots, current_equity
         return snapshots, current_equity
 
-    def _flatten_all(self, session: SessionState, stock_frames: dict[str, pd.DataFrame]) -> None:
+    def _flatten_all(self, session: SessionState, stock_frames: dict[str, pd.DataFrame]) -> dict[str, int]:
+        summary = {
+            "forced_exit_attempt_count": 0,
+            "forced_exit_failure_count": 0,
+            "forced_exit_cleanup_count": 0,
+        }
         if not session.open_trades:
-            return
+            return summary
         trade_date = date.fromisoformat(session.trade_date)
         snapshots: dict[str, SymbolSnapshot] = {}
         for symbol in {trade["underlying_symbol"] for trade in session.open_trades}:
@@ -2546,7 +2633,21 @@ class MultiTickerPortfolioPaperTrader:
             snapshot = snapshots.get(trade_payload["underlying_symbol"])
             if snapshot is None:
                 continue
-            self._run_exit(trade_payload, session, snapshot, "forced_flatten")
+            summary["forced_exit_attempt_count"] += 1
+            if self._run_exit(trade_payload, session, snapshot, "forced_flatten"):
+                continue
+            summary["forced_exit_failure_count"] += 1
+            if not self.portfolio_config.execution.auto_flatten_unexpected_positions:
+                continue
+            if self._force_cleanup_known_trade(
+                trade_payload=trade_payload,
+                session=session,
+                trade_date=trade_date,
+                stock_frames=stock_frames,
+                reason=AUTO_FLATTEN_KNOWN_EOD_REASON,
+            ):
+                summary["forced_exit_cleanup_count"] += 1
+        return summary
 
     def _load_trade_reconciliation_events(self, trade_date: date) -> pd.DataFrame:
         payload = _read_json(self._trade_reconciliation_events_path(trade_date), [])
@@ -3150,29 +3251,67 @@ class MultiTickerPortfolioPaperTrader:
     ) -> dict[str, Any]:
         trade_date = date.fromisoformat(session.trade_date)
         expected_positions_before_flatten = self._expected_broker_position_map(session)
+        flatten_summary = {
+            "forced_exit_attempt_count": 0,
+            "forced_exit_failure_count": 0,
+            "forced_exit_cleanup_count": 0,
+        }
         if stock_frames is not None:
-            self._flatten_all(session, stock_frames)
-        cleanup_summary: dict[str, Any] = {}
+            flatten_summary = self._flatten_all(session, stock_frames)
+        cleanup_summary: dict[str, Any] = dict(flatten_summary)
+        residual_broker_positions: list[dict[str, Any]] = []
+        reconciliation_passes: list[dict[str, Any]] = []
         if self.portfolio_config.execution.auto_flatten_unexpected_positions:
-            known_cleanup_count = self._cleanup_known_open_trades(
-                session=session,
-                trade_date=trade_date,
-                stock_frames=stock_frames,
-                reason=AUTO_FLATTEN_KNOWN_EOD_REASON,
-            )
-            unexpected_cleanup_entries = self._close_unexpected_broker_positions(
-                session=session,
-                trade_date=trade_date,
-                reason=AUTO_FLATTEN_UNEXPECTED_EOD_REASON,
-                flatten_all_remaining=True,
-                expected_position_map=expected_positions_before_flatten,
-            )
-            if known_cleanup_count or unexpected_cleanup_entries:
-                cleanup_summary = {
-                    "known_trade_cleanup_count": known_cleanup_count,
+            known_cleanup_total = int(flatten_summary["forced_exit_cleanup_count"])
+            unexpected_cleanup_entries: list[dict[str, Any]] = []
+            for pass_index in range(1, 4):
+                known_cleanup_count = self._cleanup_known_open_trades(
+                    session=session,
+                    trade_date=trade_date,
+                    stock_frames=stock_frames,
+                    reason=AUTO_FLATTEN_KNOWN_EOD_REASON,
+                )
+                known_cleanup_total += known_cleanup_count
+                unexpected_cleanup_batch = self._close_unexpected_broker_positions(
+                    session=session,
+                    trade_date=trade_date,
+                    reason=AUTO_FLATTEN_UNEXPECTED_EOD_REASON,
+                    flatten_all_remaining=True,
+                    expected_position_map=expected_positions_before_flatten,
+                )
+                unexpected_cleanup_entries.extend(unexpected_cleanup_batch)
+                residual_broker_positions = self._active_broker_positions()
+                reconciliation_passes.append(
+                    {
+                        "pass_index": pass_index,
+                        "known_trade_cleanup_count": known_cleanup_count,
+                        "unexpected_position_cleanup_count": len(unexpected_cleanup_batch),
+                        "open_trade_count_after_pass": len(session.open_trades),
+                        "residual_broker_position_count": len(residual_broker_positions),
+                        "residual_broker_symbols": [
+                            position["symbol"] for position in residual_broker_positions
+                        ],
+                    }
+                )
+                if not session.open_trades and not residual_broker_positions:
+                    break
+            cleanup_summary.update(
+                {
+                    "known_trade_cleanup_count": known_cleanup_total,
                     "unexpected_position_cleanup_count": len(unexpected_cleanup_entries),
                     "unexpected_position_cleanup": unexpected_cleanup_entries,
+                    "reconciliation_passes": reconciliation_passes,
                 }
+            )
+        if residual_broker_positions:
+            cleanup_summary["residual_broker_positions"] = residual_broker_positions
+            self._alert(
+                session,
+                "error",
+                "End-of-day reconciliation incomplete; broker still shows open positions after cleanup attempts",
+            )
+        shutdown_reconciled = not session.open_trades and not residual_broker_positions
+        cleanup_summary["shutdown_reconciled"] = shutdown_reconciled
         ending_equity = session.virtual_cash
         ledger.realized_equity = ending_equity
         ledger.high_watermark = max(ledger.high_watermark, ending_equity)
@@ -3215,6 +3354,7 @@ class MultiTickerPortfolioPaperTrader:
         }
         if cleanup_summary:
             summary["end_of_day_cleanup"] = cleanup_summary
+        summary["shutdown_reconciled"] = shutdown_reconciled
         summary.update(reconciliation_summary)
         guardrail_summary, guardrail_tables = self._build_guardrail_scorecard_outputs(
             session=session,
@@ -3247,7 +3387,7 @@ class MultiTickerPortfolioPaperTrader:
         )
         write_alert_queue(run_dir / "alerts.json", session.alerts)
         failed_phases = getattr(self, "_failed_notification_phases", set())
-        if not session.notified_end_of_day and "end-of-day" not in failed_phases:
+        if shutdown_reconciled and not session.notified_end_of_day and "end-of-day" not in failed_phases:
             delivered = self._notify_lines(
                 *self._build_end_of_day_notification_lines(session, ending_equity=ending_equity)
             )

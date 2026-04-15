@@ -1563,6 +1563,116 @@ def test_startup_check_auto_flattens_unexpected_positions(
     assert cleanup_entries[0]["reason"] == "auto_flatten_unexpected_startup_position"
 
 
+def test_startup_check_respects_existing_close_orders_without_duplicate_cleanup(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    class _LoggerStub:
+        def warning(self, *_args, **_kwargs) -> None:
+            return None
+
+        def info(self, *_args, **_kwargs) -> None:
+            return None
+
+    class _BrokerStub:
+        def __init__(self) -> None:
+            self.submit_count = 0
+
+        def get_account(self) -> dict[str, object]:
+            return {"buying_power": 25_000.0}
+
+        def get_positions(self) -> list[dict[str, object]]:
+            return [
+                {
+                    "symbol": "QQQ260417C00600000",
+                    "qty": "1",
+                    "side": "long",
+                    "asset_class": "us_option",
+                }
+            ]
+
+        def get_orders(self, *, status: str = "all", limit: int = 100) -> list[dict[str, object]]:
+            assert status == "open"
+            return [
+                {
+                    "symbol": "QQQ260417C00600000",
+                    "status": "accepted",
+                    "position_intent": "sell_to_close",
+                    "qty": "1",
+                    "filled_qty": "0",
+                }
+            ]
+
+        def build_order_request(self, **kwargs) -> OrderRequest:
+            return OrderRequest(**kwargs)
+
+        def submit_order(self, request: OrderRequest, **_kwargs) -> dict[str, object]:
+            self.submit_count += 1
+            return {"id": "unexpected-cleanup", "status": "accepted"}
+
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={
+                    "underlying_symbols": ("QQQ",),
+                    "run_root": tmp_path / "runs",
+                    "state_root": tmp_path / "state",
+                }
+            ),
+            "strategies": tuple(
+                strategy
+                for strategy in default_portfolio_config().strategies
+                if strategy.underlying_symbol == "QQQ"
+            ),
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.underlyings = ("QQQ",)
+    trader.broker = _BrokerStub()
+    trader.run_root = tmp_path / "runs"
+    trader.submit_paper_orders = True
+    trader.logger = _LoggerStub()
+
+    now_et = datetime(2026, 4, 15, 9, 33, tzinfo=ZoneInfo("America/New_York"))
+    monkeypatch.setattr(
+        "alpaca_lab.multi_ticker_portfolio.trader._now_et",
+        lambda: now_et,
+    )
+    snapshot = SymbolSnapshot(
+        underlying_symbol="QQQ",
+        trade_date=now_et.date(),
+        stock_frame=pd.DataFrame([{"close": 500.0}]),
+        option_chain=pd.DataFrame(
+            [
+                {"dte": 0, "option_type": "call"},
+                {"dte": 0, "option_type": "put"},
+                {"dte": 1, "option_type": "call"},
+                {"dte": 1, "option_type": "put"},
+            ]
+        ),
+        mark_map={},
+        latest_close=500.0,
+        current_minute=3,
+        latest_timestamp_et=now_et,
+    )
+    session = SessionState(
+        trade_date=now_et.date().isoformat(),
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+
+    status, details = trader._perform_startup_check(
+        session=session,
+        trade_date=now_et.date(),
+        snapshots={"QQQ": snapshot},
+    )
+
+    assert status == "pending"
+    assert trader.broker.submit_count == 0
+    assert details["pending_broker_close_orders"] == ["QQQ260417C00600000"]
+
+
 def test_force_cleanup_known_trade_books_completion(tmp_path: Path) -> None:
     class _LoggerStub:
         def warning(self, *_args, **_kwargs) -> None:
@@ -1681,3 +1791,187 @@ def test_force_cleanup_known_trade_books_completion(tmp_path: Path) -> None:
         )
     )
     assert cleanup_entries[0]["reason"] == "auto_flatten_known_end_of_day_position"
+
+
+def test_submit_cleanup_order_retries_after_cancelled_attempt(tmp_path: Path) -> None:
+    class _LoggerStub:
+        def warning(self, *_args, **_kwargs) -> None:
+            return None
+
+        def info(self, *_args, **_kwargs) -> None:
+            return None
+
+    class _BrokerStub:
+        def __init__(self) -> None:
+            self.submit_count = 0
+
+        def submit_order(self, _request: OrderRequest, **_kwargs) -> dict[str, object]:
+            self.submit_count += 1
+            return {"id": f"cleanup-{self.submit_count}", "status": "accepted"}
+
+        def get_order(self, order_id: str) -> dict[str, object]:
+            if order_id == "cleanup-1":
+                return {
+                    "id": order_id,
+                    "status": "canceled",
+                    "qty": "1",
+                    "filled_qty": "0",
+                    "filled_avg_price": None,
+                }
+            return {
+                "id": order_id,
+                "status": "filled",
+                "qty": "1",
+                "filled_qty": "1",
+                "filled_avg_price": "1.11",
+            }
+
+        def cancel_order(self, *_args, **_kwargs) -> dict[str, object]:
+            return {"status": "cancelled"}
+
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={
+                    "run_root": tmp_path / "runs",
+                    "state_root": tmp_path / "state",
+                }
+            )
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.run_root = tmp_path / "runs"
+    trader.submit_paper_orders = True
+    trader.broker = _BrokerStub()
+    trader.logger = _LoggerStub()
+
+    request = OrderRequest(
+        symbol="QQQ260417C00600000",
+        side="sell",
+        qty=1.0,
+        order_type="market",
+        time_in_force="day",
+        asset_class="option",
+        strategy_name="cleanup_retry_test",
+        extra={"position_intent": "sell_to_close"},
+    )
+
+    result = trader._submit_cleanup_order(
+        trade_date=datetime(2026, 4, 15).date(),
+        request=request,
+        reason="auto_flatten_known_end_of_day_position",
+        metadata={"scope": "known_trade"},
+    )
+
+    assert result["status"] == "filled"
+    assert trader.broker.submit_count == 2
+    cleanup_entries = json.loads(
+        (tmp_path / "runs" / "2026-04-15" / "broker_position_cleanup.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert cleanup_entries[0]["attempt_index"] == 1
+    assert cleanup_entries[0]["terminal"]["status"] == "canceled"
+    assert cleanup_entries[1]["attempt_index"] == 2
+    assert cleanup_entries[1]["terminal"]["status"] == "filled"
+
+
+def test_finalize_session_retries_reconciliation_until_broker_is_flat(tmp_path: Path) -> None:
+    class _LoggerStub:
+        def warning(self, *_args, **_kwargs) -> None:
+            return None
+
+        def info(self, *_args, **_kwargs) -> None:
+            return None
+
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={
+                    "run_root": tmp_path / "runs",
+                    "state_root": tmp_path / "state",
+                }
+            )
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.run_root = tmp_path / "runs"
+    trader.state_root = tmp_path / "state"
+    trader.submit_paper_orders = True
+    trader.logger = _LoggerStub()
+    trader.save_ledger = lambda _ledger: None
+    trader.save_session = lambda _session: None
+    trader._session_run_dir = lambda trade_date: tmp_path / "runs" / trade_date.isoformat()
+    trader._flatten_all = lambda _session, _stock_frames: {
+        "forced_exit_attempt_count": 1,
+        "forced_exit_failure_count": 1,
+        "forced_exit_cleanup_count": 0,
+    }
+    trader._cleanup_known_open_trades = lambda **_kwargs: 0
+    close_calls = {"count": 0}
+
+    def _close_unexpected_broker_positions(**_kwargs) -> list[dict[str, object]]:
+        close_calls["count"] += 1
+        if close_calls["count"] == 1:
+            return [
+                {
+                    "symbol": "QQQ260417C00600000",
+                    "reason": "auto_flatten_unexpected_end_of_day_position",
+                    "status": "not_filled",
+                    "order_id": "cleanup-1",
+                    "filled_avg_price": None,
+                }
+            ]
+        return []
+
+    residual_positions = [
+        [
+            {
+                "symbol": "QQQ260417C00600000",
+                "qty": 1.0,
+                "asset_class": "option",
+                "raw_position": {"symbol": "QQQ260417C00600000", "qty": "1"},
+            }
+        ],
+        [],
+    ]
+    trader._close_unexpected_broker_positions = _close_unexpected_broker_positions
+    trader._active_broker_positions = lambda: residual_positions.pop(0)
+    trader._build_trade_reconciliation_outputs = lambda **_kwargs: (
+        pd.DataFrame(),
+        pd.DataFrame(),
+        pd.DataFrame(),
+        pd.DataFrame(),
+        {},
+    )
+    trader._build_guardrail_scorecard_outputs = lambda **_kwargs: (
+        {
+            "guardrail_fire_count": 0,
+            "guardrail_reason_count": 0,
+            "manual_review_recommendation_count": 0,
+            "already_auto_fixed_count": 0,
+            "needs_manual_review": False,
+        },
+        {},
+    )
+    trader._notify_lines = lambda *_lines: True
+    trader._build_end_of_day_notification_lines = lambda session, ending_equity: [
+        f"{session.trade_date} {ending_equity}"
+    ]
+
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_250.0,
+    )
+    ledger = PortfolioLedger(realized_equity=25_000.0, high_watermark=25_000.0)
+
+    summary = trader.finalize_session(session, ledger, stock_frames={})
+
+    assert close_calls["count"] == 2
+    assert summary["shutdown_reconciled"] is True
+    assert summary["end_of_day_cleanup"]["reconciliation_passes"][0]["residual_broker_position_count"] == 1
+    assert summary["end_of_day_cleanup"]["reconciliation_passes"][1]["residual_broker_position_count"] == 0
+    assert session.notified_end_of_day is True
