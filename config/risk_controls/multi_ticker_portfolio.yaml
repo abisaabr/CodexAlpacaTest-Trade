@@ -7,9 +7,25 @@ risk:
   max_open_positions: 10
   max_positions_per_regime: 10
   max_positions_per_symbol: 3
+  max_open_risk_fraction_per_symbol: 0.05
+  bucket_caps:
+    - name: index_beta
+      symbols: [QQQ, SPY, IWM]
+      max_open_risk_fraction: 0.08
+    - name: growth_tech
+      symbols: [NVDA, TSLA, MSFT, AMZN, ORCL, SHOP, CRM, PLTR, ARKK]
+      max_open_risk_fraction: 0.09
+    - name: metals_energy
+      symbols: [GLD, GDX, SLV, XLE, XOM]
+      max_open_risk_fraction: 0.08
+    - name: financials
+      symbols: [BAC, JPM]
+      max_open_risk_fraction: 0.06
   min_required_buying_power: 7500
   broker_min_equity_to_trade: 26000
   broker_equity_emergency_stop: 25500
+  severe_loss_halt_new_entries_pct: 0.035
+  severe_loss_flatten_all_pct: 0.05
   soft_alert_delta_shares: 3200
   soft_alert_vega_dollars_1pct: 620
 

@@ -381,9 +381,17 @@ The live overlay now uses the validated shared-account settings for the expanded
 - dedicated risk controls file:
   `config/risk_controls/multi_ticker_portfolio.yaml`
 - `max_open_risk_fraction: 15%`
+- `max_open_risk_fraction_per_symbol: 5%`
+- bucket caps:
+  `index_beta: 8%`
+  `growth_tech: 9%`
+  `metals_energy: 8%`
+  `financials: 6%`
 - `daily_loss_gate_pct: disabled`
 - `delever_drawdown_pct: 8%`
 - `delever_risk_scale: 50%`
+- `severe_loss_halt_new_entries_pct: 3.5%`
+- `severe_loss_flatten_all_pct: 5%`
 - `max_open_positions: 10`
 - `max_positions_per_regime: 10`
 - `max_positions_per_symbol: 3`
@@ -394,6 +402,8 @@ The live overlay now uses the validated shared-account settings for the expanded
   `vega ~= 620 dollars per 1 vol point`
 
 The virtual research sleeve is still `$25,000`, but the live broker-equity guardrails are intentionally higher. That keeps the runner from opening new day trades when the actual brokerage account is too close to the FINRA PDT minimum of `$25,000`.
+
+The new concentration controls work before order submission, not after. Entries are now reduced or skipped if they would push one symbol or one correlated bucket beyond its configured open-risk cap. The severe-loss kill switch is separate from the normal daily-loss gate: it halts new entries once the sleeve is down `3.5%` on the day, and it force-flattens the book at `5%`.
 
 Two findings drove those settings:
 

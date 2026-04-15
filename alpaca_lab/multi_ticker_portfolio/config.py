@@ -50,6 +50,24 @@ class StrategyConfig(BaseModel):
         return str(value).strip().upper()
 
 
+class RiskBucketConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    symbols: tuple[str, ...]
+    max_open_risk_fraction: float
+
+    @field_validator("symbols", mode="before")
+    @classmethod
+    def normalize_symbols(cls, value: object) -> tuple[str, ...]:
+        if isinstance(value, str):
+            items = [item.strip().upper() for item in value.split(",") if item.strip()]
+            return tuple(items)
+        if isinstance(value, (list, tuple, set)):
+            return tuple(str(item).strip().upper() for item in value if str(item).strip())
+        raise TypeError("symbols must be a comma-separated string or sequence")
+
+
 class RiskConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -61,9 +79,36 @@ class RiskConfig(BaseModel):
     max_open_positions: int = 10
     max_positions_per_regime: int = 10
     max_positions_per_symbol: int = 3
+    max_open_risk_fraction_per_symbol: float | None = 0.05
+    bucket_caps: tuple[RiskBucketConfig, ...] = Field(
+        default_factory=lambda: (
+            RiskBucketConfig(
+                name="index_beta",
+                symbols=("QQQ", "SPY", "IWM"),
+                max_open_risk_fraction=0.08,
+            ),
+            RiskBucketConfig(
+                name="growth_tech",
+                symbols=("NVDA", "TSLA", "MSFT", "AMZN", "ORCL", "SHOP", "CRM", "PLTR", "ARKK"),
+                max_open_risk_fraction=0.09,
+            ),
+            RiskBucketConfig(
+                name="metals_energy",
+                symbols=("GLD", "GDX", "SLV", "XLE", "XOM"),
+                max_open_risk_fraction=0.08,
+            ),
+            RiskBucketConfig(
+                name="financials",
+                symbols=("BAC", "JPM"),
+                max_open_risk_fraction=0.06,
+            ),
+        )
+    )
     min_required_buying_power: float = 7_500.0
     broker_min_equity_to_trade: float | None = 26_000.0
     broker_equity_emergency_stop: float | None = 25_500.0
+    severe_loss_halt_new_entries_pct: float | None = 0.035
+    severe_loss_flatten_all_pct: float | None = 0.05
     soft_alert_delta_shares: float = 3_200.0
     soft_alert_vega_dollars_1pct: float = 620.0
 

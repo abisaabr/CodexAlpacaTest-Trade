@@ -16,7 +16,11 @@ import pandas as pd
 from alpaca_lab.brokers.alpaca import AlpacaBrokerAdapter, OrderRequest
 from alpaca_lab.config import LabSettings
 from alpaca_lab.logging_utils import get_logger
-from alpaca_lab.multi_ticker_portfolio.config import MultiTickerPortfolioConfig, StrategyConfig
+from alpaca_lab.multi_ticker_portfolio.config import (
+    MultiTickerPortfolioConfig,
+    RiskBucketConfig,
+    StrategyConfig,
+)
 from alpaca_lab.multi_ticker_portfolio.signals import (
     build_stock_frame,
     infer_symbol_regime,
@@ -36,6 +40,8 @@ AUTO_FLATTEN_UNEXPECTED_STARTUP_REASON = "auto_flatten_unexpected_startup_positi
 AUTO_FLATTEN_KNOWN_EOD_REASON = "auto_flatten_known_end_of_day_position"
 AUTO_FLATTEN_UNEXPECTED_EOD_REASON = "auto_flatten_unexpected_end_of_day_position"
 BROKER_EQUITY_EMERGENCY_STOP_REASON = "broker_equity_emergency_stop"
+SEVERE_LOSS_HALT_REASON = "severe_loss_halt_new_entries"
+SEVERE_LOSS_FLATTEN_REASON = "severe_loss_flatten_all"
 
 
 @dataclass(slots=True)
@@ -862,6 +868,32 @@ class MultiTickerPortfolioPaperTrader:
     def _symbol_position_count(self, session: SessionState, underlying_symbol: str) -> int:
         return sum(1 for trade in session.open_trades if trade["underlying_symbol"] == underlying_symbol)
 
+    def _trade_open_risk(self, trade_payload: dict[str, Any]) -> float:
+        return float(trade_payload["max_loss_per_combo"]) * int(trade_payload["quantity"])
+
+    def _symbol_open_risk(self, session: SessionState, underlying_symbol: str) -> float:
+        return sum(
+            self._trade_open_risk(trade)
+            for trade in session.open_trades
+            if trade["underlying_symbol"] == underlying_symbol
+        )
+
+    def _bucket_configs_for_symbol(self, underlying_symbol: str) -> list[RiskBucketConfig]:
+        symbol = str(underlying_symbol).upper()
+        return [
+            bucket
+            for bucket in self.portfolio_config.risk.bucket_caps
+            if symbol in bucket.symbols
+        ]
+
+    def _bucket_open_risk(self, session: SessionState, bucket: RiskBucketConfig) -> float:
+        bucket_symbols = set(bucket.symbols)
+        return sum(
+            self._trade_open_risk(trade)
+            for trade in session.open_trades
+            if str(trade["underlying_symbol"]).upper() in bucket_symbols
+        )
+
     def _daily_loss_gate_check(self, session: SessionState, current_equity: float) -> tuple[bool, str | None]:
         gate_pct = self.portfolio_config.risk.daily_loss_gate_pct
         if gate_pct is None or gate_pct <= 0.0:
@@ -870,6 +902,29 @@ class MultiTickerPortfolioPaperTrader:
         if current_equity <= threshold:
             return True, f"daily_loss_gate triggered at equity {current_equity:.2f}"
         return False, None
+
+    def _severe_loss_kill_switch_check(
+        self,
+        session: SessionState,
+        current_equity: float,
+    ) -> tuple[str | None, str | None]:
+        flatten_pct = self.portfolio_config.risk.severe_loss_flatten_all_pct
+        if flatten_pct is not None and flatten_pct > 0.0:
+            flatten_threshold = session.starting_equity * (1.0 - flatten_pct)
+            if current_equity <= flatten_threshold:
+                return (
+                    "flatten",
+                    f"{SEVERE_LOSS_FLATTEN_REASON} triggered at equity {current_equity:.2f}",
+                )
+        halt_pct = self.portfolio_config.risk.severe_loss_halt_new_entries_pct
+        if halt_pct is not None and halt_pct > 0.0:
+            halt_threshold = session.starting_equity * (1.0 - halt_pct)
+            if current_equity <= halt_threshold:
+                return (
+                    "halt",
+                    f"{SEVERE_LOSS_HALT_REASON} triggered at equity {current_equity:.2f}",
+                )
+        return None, None
 
     def _extract_broker_equity(self, account: dict[str, Any]) -> float | None:
         for key in ("equity", "portfolio_value", "last_equity"):
@@ -990,12 +1045,35 @@ class MultiTickerPortfolioPaperTrader:
         reserved_risk = sum(
             float(trade["max_loss_per_combo"]) * int(trade["quantity"]) for trade in session.open_trades
         )
+        symbol_reserved_risk = self._symbol_open_risk(session, strategy.underlying_symbol)
         remaining_risk = max(
             0.0,
             current_equity * self.portfolio_config.risk.max_open_risk_fraction * risk_scale - reserved_risk,
         )
         per_trade_budget = current_equity * strategy.risk_fraction * risk_scale
         allocatable_risk = min(remaining_risk, per_trade_budget)
+        limiting_reason: str | None = None
+        symbol_remaining_risk: float | None = None
+        per_symbol_cap = self.portfolio_config.risk.max_open_risk_fraction_per_symbol
+        if per_symbol_cap is not None and per_symbol_cap > 0.0:
+            symbol_remaining_risk = max(
+                0.0,
+                current_equity * per_symbol_cap * risk_scale - symbol_reserved_risk,
+            )
+            if symbol_remaining_risk < allocatable_risk:
+                limiting_reason = "per_symbol_risk_cap"
+            allocatable_risk = min(allocatable_risk, symbol_remaining_risk)
+        bucket_remaining_risk: dict[str, float] = {}
+        for bucket in self._bucket_configs_for_symbol(strategy.underlying_symbol):
+            bucket_reserved_risk = self._bucket_open_risk(session, bucket)
+            remaining_bucket_risk = max(
+                0.0,
+                current_equity * bucket.max_open_risk_fraction * risk_scale - bucket_reserved_risk,
+            )
+            bucket_remaining_risk[bucket.name] = round(remaining_bucket_risk, 4)
+            if remaining_bucket_risk < allocatable_risk:
+                limiting_reason = f"bucket_risk_cap:{bucket.name}"
+            allocatable_risk = min(allocatable_risk, remaining_bucket_risk)
         min_broker_equity = self._broker_min_equity_to_trade()
         broker_remaining_risk: float | None = None
         if broker_equity is not None and min_broker_equity is not None:
@@ -1011,12 +1089,24 @@ class MultiTickerPortfolioPaperTrader:
                 event["decision_reason"] = "broker_equity_risk_buffer"
                 event["broker_min_equity_to_trade"] = round(min_broker_equity or 0.0, 4)
                 event["broker_remaining_risk"] = round(broker_remaining_risk, 4)
+            elif symbol_remaining_risk is not None and symbol_remaining_risk < max_loss_per_combo:
+                event["decision_reason"] = "per_symbol_risk_cap"
+                event["symbol_reserved_risk"] = round(symbol_reserved_risk, 4)
+                event["symbol_remaining_risk"] = round(symbol_remaining_risk, 4)
+            elif limiting_reason is not None and limiting_reason.startswith("bucket_risk_cap:"):
+                event["decision_reason"] = limiting_reason
+                event["bucket_remaining_risk"] = bucket_remaining_risk
             else:
-                event["decision_reason"] = "risk_budget_too_small"
+                event["decision_reason"] = limiting_reason or "risk_budget_too_small"
             event["risk_scale"] = round(risk_scale, 6)
             event["reserved_risk"] = round(reserved_risk, 4)
+            event["symbol_reserved_risk"] = round(symbol_reserved_risk, 4)
             event["remaining_risk"] = round(remaining_risk, 4)
             event["per_trade_budget"] = round(per_trade_budget, 4)
+            if symbol_remaining_risk is not None:
+                event["symbol_remaining_risk"] = round(symbol_remaining_risk, 4)
+            if bucket_remaining_risk:
+                event["bucket_remaining_risk"] = bucket_remaining_risk
             return None, event
         debit_cash = max(0.0, entry_debit * CONTRACT_MULTIPLIER)
         quantity_by_cash = (
@@ -1057,11 +1147,16 @@ class MultiTickerPortfolioPaperTrader:
                 "quantity_planned": int(quantity),
                 "risk_scale": round(risk_scale, 6),
                 "reserved_risk": round(reserved_risk, 4),
+                "symbol_reserved_risk": round(symbol_reserved_risk, 4),
                 "remaining_risk": round(remaining_risk, 4),
                 "per_trade_budget": round(per_trade_budget, 4),
                 "allocatable_risk": round(allocatable_risk, 4),
                 "quantity_by_risk": int(quantity_by_risk),
                 "quantity_by_cash": int(quantity_by_cash),
+                "symbol_remaining_risk": round(symbol_remaining_risk, 4)
+                if symbol_remaining_risk is not None
+                else None,
+                "bucket_remaining_risk": bucket_remaining_risk or None,
                 "broker_remaining_risk": round(broker_remaining_risk, 4)
                 if broker_remaining_risk is not None
                 else None,
@@ -2085,8 +2180,42 @@ class MultiTickerPortfolioPaperTrader:
         current_equity = _current_equity(session, combined_mark_map)
         loss_gate, reason = self._daily_loss_gate_check(session, current_equity)
         if loss_gate:
-            session.blocked_new_entries = True
-            session.block_reason = reason
+            self._record_guardrail_block(
+                session,
+                level="warning",
+                reason=reason or "daily loss gate triggered",
+            )
+        severe_action, severe_reason = self._severe_loss_kill_switch_check(session, current_equity)
+        if severe_action == "flatten":
+            self._record_guardrail_block(
+                session,
+                level="error",
+                reason=severe_reason or SEVERE_LOSS_FLATTEN_REASON,
+            )
+            self._cleanup_known_open_trades(
+                session=session,
+                trade_date=trade_date,
+                stock_frames=stock_frames,
+                reason=SEVERE_LOSS_FLATTEN_REASON,
+            )
+            self._close_unexpected_broker_positions(
+                session=session,
+                trade_date=trade_date,
+                reason=SEVERE_LOSS_FLATTEN_REASON,
+                flatten_all_remaining=True,
+            )
+            combined_mark_map = {
+                symbol: mark
+                for snapshot in snapshots.values()
+                for symbol, mark in snapshot.mark_map.items()
+            }
+            current_equity = _current_equity(session, combined_mark_map)
+        elif severe_action == "halt":
+            self._record_guardrail_block(
+                session,
+                level="warning",
+                reason=severe_reason or SEVERE_LOSS_HALT_REASON,
+            )
         min_broker_equity = self._broker_min_equity_to_trade()
         emergency_broker_equity = self._broker_equity_emergency_stop()
         if (

@@ -15,6 +15,7 @@ from alpaca_lab.multi_ticker_portfolio.signals import signal_is_true
 from alpaca_lab.multi_ticker_portfolio.trader import (
     MultiTickerPortfolioPaperTrader,
     PortfolioLedger,
+    SelectedLeg,
     SessionState,
     SymbolSnapshot,
 )
@@ -193,6 +194,138 @@ def test_disabled_daily_loss_gate_never_blocks_entries() -> None:
 
     assert blocked is False
     assert reason is None
+
+
+def test_evaluate_entry_respects_per_symbol_risk_cap() -> None:
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={"underlying_symbols": ("QQQ",)}
+            ),
+            "strategies": tuple(
+                strategy
+                for strategy in default_portfolio_config().strategies
+                if strategy.name == "qqq__fast__trend_long_call_next_expiry"
+            ),
+        }
+    )
+    strategy = config.strategies[0]
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader._select_legs = lambda *_args, **_kwargs: [
+        SelectedLeg(
+            symbol="QQQ260417C00600000",
+            expiration_date="2026-04-17",
+            option_type="call",
+            side="long",
+            strike_price=600.0,
+            target_delta=0.60,
+            bid=2.95,
+            ask=3.05,
+            mark=3.0,
+            delta=0.58,
+            gamma=0.06,
+            theta=-0.09,
+            vega=0.12,
+            quote_time=None,
+        )
+    ]
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+        open_trades=[
+            {
+                "strategy_name": "qqq__slow__trend_long_call_next_expiry",
+                "underlying_symbol": "QQQ",
+                "regime": "bull",
+                "quantity": 1,
+                "max_loss_per_combo": 1_100.0,
+            }
+        ],
+    )
+    ledger = PortfolioLedger(realized_equity=25_000.0, high_watermark=25_000.0)
+
+    open_trade, event = trader._evaluate_entry(
+        strategy=strategy,
+        session=session,
+        ledger=ledger,
+        option_chain=pd.DataFrame(),
+        spot_price=500.0,
+        current_minute=60,
+        current_equity=25_000.0,
+        broker_equity=30_000.0,
+        attempt_id="attempt-symbol-cap",
+    )
+
+    assert open_trade is None
+    assert event["decision_reason"] == "per_symbol_risk_cap"
+
+
+def test_evaluate_entry_respects_bucket_risk_cap() -> None:
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={"underlying_symbols": ("QQQ", "SPY")}
+            ),
+            "strategies": tuple(
+                strategy
+                for strategy in default_portfolio_config().strategies
+                if strategy.name == "qqq__fast__trend_long_call_next_expiry"
+            ),
+        }
+    )
+    strategy = config.strategies[0]
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader._select_legs = lambda *_args, **_kwargs: [
+        SelectedLeg(
+            symbol="QQQ260417C00600000",
+            expiration_date="2026-04-17",
+            option_type="call",
+            side="long",
+            strike_price=600.0,
+            target_delta=0.60,
+            bid=2.95,
+            ask=3.05,
+            mark=3.0,
+            delta=0.58,
+            gamma=0.06,
+            theta=-0.09,
+            vega=0.12,
+            quote_time=None,
+        )
+    ]
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+        open_trades=[
+            {
+                "strategy_name": "spy__fast__trend_long_call_next_expiry",
+                "underlying_symbol": "SPY",
+                "regime": "bull",
+                "quantity": 1,
+                "max_loss_per_combo": 1_900.0,
+            }
+        ],
+    )
+    ledger = PortfolioLedger(realized_equity=25_000.0, high_watermark=25_000.0)
+
+    open_trade, event = trader._evaluate_entry(
+        strategy=strategy,
+        session=session,
+        ledger=ledger,
+        option_chain=pd.DataFrame(),
+        spot_price=500.0,
+        current_minute=60,
+        current_equity=25_000.0,
+        broker_equity=30_000.0,
+        attempt_id="attempt-bucket-cap",
+    )
+
+    assert open_trade is None
+    assert event["decision_reason"] == "bucket_risk_cap:index_beta"
 
 
 def test_morning_notification_only_marks_sent_after_success() -> None:
@@ -791,6 +924,89 @@ def test_run_rechecks_clock_after_preopen_sleep_before_fetching_stock_bars(monke
 
     assert result["status"] == "startup_check_failed"
     assert broker.clock_calls >= 2
+
+
+def test_reconcile_and_trade_triggers_severe_loss_flatten(monkeypatch) -> None:
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={"underlying_symbols": ("QQQ",)}
+            ),
+            "strategies": tuple(),
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.underlyings = ("QQQ",)
+
+    class _LoggerStub:
+        def warning(self, *_args, **_kwargs) -> None:
+            return None
+
+    trader.logger = _LoggerStub()
+    trader._maybe_send_midday_notification = lambda **_kwargs: None
+    trader._close_unexpected_broker_positions = lambda **_kwargs: []
+    flattened: list[str] = []
+    monkeypatch.setattr(
+        "alpaca_lab.multi_ticker_portfolio.trader.infer_symbol_regime",
+        lambda _frame: "bull",
+    )
+
+    def _cleanup_known_open_trades(**kwargs) -> int:
+        flattened.append(kwargs["reason"])
+        kwargs["session"].open_trades = []
+        return 1
+
+    trader._cleanup_known_open_trades = _cleanup_known_open_trades
+    trader._build_symbol_snapshot = lambda **_kwargs: SymbolSnapshot(
+        underlying_symbol="QQQ",
+        trade_date=datetime(2026, 4, 15).date(),
+        stock_frame=pd.DataFrame(
+            [
+                {
+                    "timestamp_et": datetime(2026, 4, 15, 10, 0),
+                    "minute_index": 30,
+                    "close": 500.0,
+                }
+            ]
+        ),
+        option_chain=pd.DataFrame(),
+        mark_map={},
+        latest_close=500.0,
+        current_minute=30,
+        latest_timestamp_et=datetime(2026, 4, 15, 10, 0, tzinfo=ZoneInfo("America/New_York")),
+    )
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=24_000.0,
+        open_trades=[
+            {
+                "strategy_name": "qqq__fast__trend_long_call_next_expiry",
+                "underlying_symbol": "QQQ",
+                "regime": "bull",
+                "quantity": 1,
+                "max_loss_per_combo": 300.0,
+            }
+        ],
+    )
+    ledger = PortfolioLedger(realized_equity=25_000.0, high_watermark=25_000.0)
+    monkeypatch.setattr(
+        "alpaca_lab.multi_ticker_portfolio.trader._current_equity",
+        lambda *_args, **_kwargs: 23_700.0,
+    )
+
+    _snapshots, current_equity = trader._reconcile_and_trade(
+        session=session,
+        ledger=ledger,
+        stock_frames={"QQQ": pd.DataFrame([{"close": 500.0, "minute_index": 30}])},
+        broker_equity=30_000.0,
+    )
+
+    assert flattened == ["severe_loss_flatten_all"]
+    assert session.blocked_new_entries is True
+    assert session.block_reason == "severe_loss_flatten_all triggered at equity 23700.00"
+    assert current_equity == 23_700.0
 
 
 def test_startup_check_auto_flattens_unexpected_positions(
