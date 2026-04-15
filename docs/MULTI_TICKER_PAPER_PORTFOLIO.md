@@ -351,6 +351,8 @@ The runner starts with a morning self-check and refuses to trade if:
 - stock bars are stale after the startup grace period
 - same-day or next-expiry option inventory is missing for any symbol
 
+By default, the runner now tries to auto-clean unexpected paper positions before failing startup, and it performs an end-of-day broker reconciliation sweep. Known leftover trades are force-closed with `auto_flatten_known_end_of_day_position`, and truly orphaned broker positions are closed and journaled with an `auto_flatten_unexpected_*` reason in `reports/multi_ticker_portfolio/runs/<trade-date>/broker_position_cleanup.json`.
+
 It also sends outbound notifications for:
 
 - successful morning start

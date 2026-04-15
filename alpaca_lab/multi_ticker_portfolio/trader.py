@@ -32,6 +32,9 @@ TERMINAL_STATUSES = {"filled", "canceled", "expired", "done_for_day", "rejected"
 CONTRACT_MULTIPLIER = 100.0
 ENTRY_COMMISSION_PER_CONTRACT = 0.65
 EXIT_COMMISSION_PER_CONTRACT = 0.65
+AUTO_FLATTEN_UNEXPECTED_STARTUP_REASON = "auto_flatten_unexpected_startup_position"
+AUTO_FLATTEN_KNOWN_EOD_REASON = "auto_flatten_known_end_of_day_position"
+AUTO_FLATTEN_UNEXPECTED_EOD_REASON = "auto_flatten_unexpected_end_of_day_position"
 
 
 @dataclass(slots=True)
@@ -350,6 +353,94 @@ class MultiTickerPortfolioPaperTrader:
     def _append_trade_event(self, trade_date: date, event: dict[str, Any]) -> Path:
         payload = {"timestamp_et": _now_et().isoformat(), **event}
         return append_journal_entry(self._trade_reconciliation_events_path(trade_date), payload)
+
+    def _broker_position_cleanup_path(self, trade_date: date) -> Path:
+        return self._session_run_dir(trade_date) / "broker_position_cleanup.json"
+
+    def _append_broker_position_cleanup_entry(
+        self,
+        trade_date: date,
+        entry: dict[str, Any],
+    ) -> Path:
+        payload = {"timestamp_et": _now_et().isoformat(), **entry}
+        return append_journal_entry(self._broker_position_cleanup_path(trade_date), payload)
+
+    def _expected_broker_position_map(self, session: SessionState) -> dict[str, float]:
+        expected: dict[str, float] = {}
+        for trade_payload in session.open_trades:
+            quantity = float(trade_payload.get("quantity") or 0.0)
+            for leg in trade_payload.get("legs", []):
+                symbol = str(leg.get("symbol") or "").strip()
+                if not symbol:
+                    continue
+                sign = 1.0 if str(leg.get("side")) == "long" else -1.0
+                expected[symbol] = expected.get(symbol, 0.0) + sign * quantity
+        return expected
+
+    def _signed_broker_position_qty(self, position_payload: dict[str, Any]) -> float:
+        qty = float(position_payload.get("qty") or 0.0)
+        side = str(position_payload.get("side") or "long").lower()
+        return -qty if side == "short" else qty
+
+    def _normalized_broker_asset_class(self, position_payload: dict[str, Any]) -> str:
+        raw_asset_class = str(position_payload.get("asset_class") or "").lower()
+        if "option" in raw_asset_class:
+            return "option"
+        symbol = str(position_payload.get("symbol") or "")
+        return "option" if any(character.isdigit() for character in symbol) else "stock"
+
+    def _remove_open_trade_from_session(self, session: SessionState, trade: OpenTrade) -> None:
+        if trade.entry_attempt_id:
+            session.open_trades = [
+                item
+                for item in session.open_trades
+                if str(item.get("entry_attempt_id") or "") != str(trade.entry_attempt_id)
+            ]
+            return
+        session.open_trades = [
+            item
+            for item in session.open_trades
+            if not (
+                item.get("strategy_name") == trade.strategy_name
+                and item.get("entry_time_et") == trade.entry_time_et
+                and item.get("underlying_symbol") == trade.underlying_symbol
+            )
+        ]
+
+    def _broker_position_mismatch_messages(
+        self,
+        session: SessionState,
+        positions: list[dict[str, Any]],
+    ) -> list[str]:
+        expected = self._expected_broker_position_map(session)
+        actual: dict[str, float] = {}
+        for position in positions:
+            symbol = str(position.get("symbol") or "").strip()
+            if not symbol:
+                continue
+            actual[symbol] = actual.get(symbol, 0.0) + self._signed_broker_position_qty(position)
+
+        mismatches: list[str] = []
+        all_symbols = sorted(set(expected) | set(actual))
+        for symbol in all_symbols:
+            expected_qty = expected.get(symbol, 0.0)
+            actual_qty = actual.get(symbol, 0.0)
+            if math.isclose(expected_qty, actual_qty, abs_tol=1e-9):
+                continue
+            if math.isclose(expected_qty, 0.0, abs_tol=1e-9):
+                mismatches.append(
+                    f"broker reported unexpected open position for {symbol} ({actual_qty:+.0f})"
+                )
+                continue
+            if math.isclose(actual_qty, 0.0, abs_tol=1e-9):
+                mismatches.append(
+                    f"broker position missing for {symbol} (expected {expected_qty:+.0f})"
+                )
+                continue
+            mismatches.append(
+                f"broker position mismatch for {symbol} (expected {expected_qty:+.0f}, actual {actual_qty:+.0f})"
+            )
+        return mismatches
 
     def _serialize_order_request(self, request: OrderRequest) -> dict[str, Any]:
         payload = request.to_payload()
@@ -1009,6 +1100,22 @@ class MultiTickerPortfolioPaperTrader:
             last = self.broker.get_order(order_id)
         return last
 
+    def _wait_for_terminal_order_with_timeout(
+        self,
+        order_id: str,
+        *,
+        timeout_seconds: int,
+    ) -> dict[str, Any]:
+        deadline = time.time() + timeout_seconds
+        last = self.broker.get_order(order_id)
+        while time.time() < deadline:
+            status = str(last.get("status", ""))
+            if status in TERMINAL_STATUSES:
+                return last
+            time.sleep(self.portfolio_config.execution.order_status_poll_seconds)
+            last = self.broker.get_order(order_id)
+        return last
+
     def _is_filled(self, order_payload: dict[str, Any]) -> bool:
         status = str(order_payload.get("status", ""))
         if status == "filled":
@@ -1296,9 +1403,7 @@ class MultiTickerPortfolioPaperTrader:
             entry_attempt_id=trade.entry_attempt_id,
         )
         session.completed_trades.append(asdict(completed))
-        session.open_trades = [
-            item for item in session.open_trades if item["strategy_name"] != trade.strategy_name
-        ]
+        self._remove_open_trade_from_session(session, trade)
         self._append_trade_event(
             trade_date,
             {
@@ -1316,6 +1421,333 @@ class MultiTickerPortfolioPaperTrader:
         )
         self.logger.info("exited %s reason=%s pnl=%.2f", trade.strategy_name, exit_reason, net_pnl)
         return True
+
+    def _submit_cleanup_order(
+        self,
+        *,
+        trade_date: date,
+        request: OrderRequest,
+        reason: str,
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        response = self.broker.submit_order(
+            request,
+            dry_run=not getattr(self, "submit_paper_orders", True),
+            explicitly_requested=getattr(self, "submit_paper_orders", True),
+        )
+        journal_entry: dict[str, Any] = {
+            "reason": reason,
+            "request": self._serialize_order_request(request),
+            "response": response,
+            **metadata,
+        }
+        if response.get("status") == "dry_run":
+            journal_entry["terminal"] = {"status": "dry_run", "filled_avg_price": None}
+            self._append_broker_position_cleanup_entry(trade_date, journal_entry)
+            return {
+                "status": "dry_run",
+                "order_id": response.get("id"),
+                "filled_avg_price": None,
+            }
+
+        order_id = str(response.get("id") or "")
+        terminal = self._wait_for_terminal_order_with_timeout(
+            order_id,
+            timeout_seconds=self.portfolio_config.execution.unexpected_position_cleanup_timeout_seconds,
+        )
+        journal_entry["terminal"] = terminal
+        self._append_broker_position_cleanup_entry(trade_date, journal_entry)
+        if self._is_filled(terminal):
+            return {
+                "status": str(terminal.get("status") or "filled"),
+                "order_id": order_id,
+                "filled_avg_price": terminal.get("filled_avg_price"),
+            }
+        if str(terminal.get("status", "")) in OPEN_STATUSES:
+            self.broker.cancel_order(order_id, dry_run=False, explicitly_requested=True)
+        return {
+            "status": str(terminal.get("status") or "not_filled"),
+            "order_id": order_id,
+            "filled_avg_price": terminal.get("filled_avg_price"),
+        }
+
+    def _effective_exit_snapshot(
+        self,
+        trade: OpenTrade,
+        stock_frames: dict[str, pd.DataFrame] | None,
+    ) -> tuple[int, float]:
+        stock_frame = (stock_frames or {}).get(trade.underlying_symbol, pd.DataFrame())
+        if stock_frame.empty:
+            fallback_now = _now_et()
+            minute_index = max(
+                0,
+                int((fallback_now - _rth_open_for(date.fromisoformat(trade.entry_time_et[:10]))).total_seconds() // 60),
+            )
+            return minute_index, float(trade.underlying_entry)
+        latest = stock_frame.iloc[-1]
+        return int(latest["minute_index"]), float(latest["close"])
+
+    def _force_cleanup_known_trade(
+        self,
+        *,
+        trade_payload: dict[str, Any],
+        session: SessionState,
+        trade_date: date,
+        stock_frames: dict[str, pd.DataFrame] | None,
+        reason: str,
+    ) -> bool:
+        trade = OpenTrade(**trade_payload)
+        exit_minute, underlying_exit = self._effective_exit_snapshot(trade, stock_frames)
+        expected_exit_fill_price: float | None = None
+        self._append_trade_event(
+            trade_date,
+            {
+                **self._event_base_for_trade(trade, phase="exit"),
+                "event_type": "exit_trigger",
+                "exit_reason": reason,
+                "expected_exit_fill_price": expected_exit_fill_price,
+                "expected_net_pnl": None,
+                "via_cleanup": True,
+            },
+        )
+
+        gross_exit_cashflow = 0.0
+        order_ids: list[str] = []
+        fill_prices: list[float] = []
+        quantity = int(trade.quantity)
+        for leg in trade.legs:
+            symbol = str(leg["symbol"])
+            leg_side = str(leg["side"])
+            order_side = "sell" if leg_side == "long" else "buy"
+            position_intent = "sell_to_close" if leg_side == "long" else "buy_to_close"
+            request = self.broker.build_order_request(
+                symbol=symbol,
+                side=order_side,
+                strategy_name=f"{trade.strategy_name}_cleanup_exit",
+                asset_class="option",
+                qty=float(quantity),
+                order_type="market",
+                time_in_force="day",
+                extra={"position_intent": position_intent},
+            )
+            result = self._submit_cleanup_order(
+                trade_date=trade_date,
+                request=request,
+                reason=reason,
+                metadata={
+                    "scope": "known_trade",
+                    "underlying_symbol": trade.underlying_symbol,
+                    "strategy_name": trade.strategy_name,
+                    "trade_entry_attempt_id": trade.entry_attempt_id,
+                    "symbol": symbol,
+                    "leg_side": leg_side,
+                    "cleanup_qty": quantity,
+                },
+            )
+            if result["status"] == "not_filled":
+                self._alert(
+                    session,
+                    "error",
+                    f"{trade.strategy_name} cleanup exit did not fill for {symbol}",
+                )
+                self._append_trade_event(
+                    trade_date,
+                    {
+                        **self._event_base_for_trade(trade, phase="exit"),
+                        "event_type": "exit_result",
+                        "status": "not_filled",
+                        "exit_reason": reason,
+                        "order_id": result.get("order_id"),
+                        "expected_exit_fill_price": expected_exit_fill_price,
+                        "actual_exit_fill_price": None,
+                        "exit_slippage": None,
+                        "net_pnl": None,
+                        "virtual_cash_after": round(float(session.virtual_cash), 4),
+                        "via_cleanup": True,
+                    },
+                )
+                return False
+            raw_fill_price = result.get("filled_avg_price")
+            fill_price = (
+                float(raw_fill_price)
+                if raw_fill_price is not None
+                else float(leg.get("mark") or leg.get("entry_fill_price") or 0.0)
+            )
+            fill_prices.append(fill_price)
+            if result.get("order_id"):
+                order_ids.append(str(result["order_id"]))
+            cashflow_sign = 1.0 if leg_side == "long" else -1.0
+            gross_exit_cashflow += cashflow_sign * fill_price * CONTRACT_MULTIPLIER * quantity
+
+        exit_cashflow = gross_exit_cashflow - (
+            EXIT_COMMISSION_PER_CONTRACT * len(trade.legs) * quantity
+        )
+        effective_exit_fill_price = (
+            gross_exit_cashflow / (CONTRACT_MULTIPLIER * quantity)
+            if quantity > 0
+            else 0.0
+        )
+        session.virtual_cash += exit_cashflow
+        delta_shares, vega_dollars = self._expected_entry_greeks(trade)
+        net_pnl = (
+            _entry_cashflow_from_debit(float(trade.entry_debit), quantity, len(trade.legs))
+            + exit_cashflow
+        )
+        completed = CompletedTrade(
+            strategy_name=trade.strategy_name,
+            underlying_symbol=trade.underlying_symbol,
+            regime=trade.regime,
+            quantity=quantity,
+            entry_time_et=trade.entry_time_et,
+            exit_time_et=_now_et().isoformat(),
+            entry_minute=int(trade.entry_minute),
+            exit_minute=exit_minute,
+            entry_fill_price=float(trade.entry_fill_price),
+            exit_fill_price=float(effective_exit_fill_price),
+            underlying_entry=float(trade.underlying_entry),
+            underlying_exit=underlying_exit,
+            exit_reason=reason,
+            entry_order_id=trade.entry_order_id,
+            exit_order_id=",".join(order_ids) if order_ids else None,
+            net_pnl=round(net_pnl, 4),
+            max_loss_per_combo=float(trade.max_loss_per_combo),
+            max_profit_per_combo=float(trade.max_profit_per_combo),
+            delta_shares_at_entry=round(delta_shares, 4),
+            vega_dollars_1pct_at_entry=round(vega_dollars, 4),
+            legs=list(trade.legs),
+            entry_attempt_id=trade.entry_attempt_id,
+        )
+        session.completed_trades.append(asdict(completed))
+        self._remove_open_trade_from_session(session, trade)
+        self._append_trade_event(
+            trade_date,
+            {
+                **self._event_base_for_trade(trade, phase="exit"),
+                "event_type": "exit_result",
+                "status": "filled",
+                "exit_reason": reason,
+                "order_id": completed.exit_order_id,
+                "expected_exit_fill_price": expected_exit_fill_price,
+                "actual_exit_fill_price": round(float(effective_exit_fill_price), 4),
+                "exit_slippage": None,
+                "net_pnl": round(float(net_pnl), 4),
+                "virtual_cash_after": round(float(session.virtual_cash), 4),
+                "via_cleanup": True,
+            },
+        )
+        self._alert(
+            session,
+            "warning",
+            f"{trade.strategy_name} required safeguard cleanup at end of day ({reason})",
+        )
+        return True
+
+    def _cleanup_known_open_trades_at_end_of_day(
+        self,
+        *,
+        session: SessionState,
+        trade_date: date,
+        stock_frames: dict[str, pd.DataFrame] | None,
+    ) -> int:
+        cleaned = 0
+        for trade_payload in list(session.open_trades):
+            if self._force_cleanup_known_trade(
+                trade_payload=trade_payload,
+                session=session,
+                trade_date=trade_date,
+                stock_frames=stock_frames,
+                reason=AUTO_FLATTEN_KNOWN_EOD_REASON,
+            ):
+                cleaned += 1
+        return cleaned
+
+    def _close_unexpected_broker_positions(
+        self,
+        *,
+        session: SessionState,
+        trade_date: date,
+        reason: str,
+        flatten_all_remaining: bool = False,
+        expected_position_map: dict[str, float] | None = None,
+    ) -> list[dict[str, Any]]:
+        expected = expected_position_map or self._expected_broker_position_map(session)
+        cleanup_entries: list[dict[str, Any]] = []
+        for position in self.broker.get_positions():
+            symbol = str(position.get("symbol") or "").strip()
+            if not symbol:
+                continue
+            actual_qty = self._signed_broker_position_qty(position)
+            if math.isclose(actual_qty, 0.0, abs_tol=1e-9):
+                continue
+            expected_qty = expected.get(symbol, 0.0)
+            cleanup_qty = 0.0
+            if flatten_all_remaining:
+                cleanup_qty = actual_qty
+            elif math.isclose(expected_qty, 0.0, abs_tol=1e-9):
+                cleanup_qty = actual_qty
+            elif actual_qty * expected_qty < 0:
+                cleanup_qty = actual_qty
+            elif abs(actual_qty) > abs(expected_qty):
+                cleanup_qty = actual_qty - expected_qty
+
+            if math.isclose(cleanup_qty, 0.0, abs_tol=1e-9):
+                continue
+
+            effective_reason = (
+                AUTO_FLATTEN_KNOWN_EOD_REASON
+                if flatten_all_remaining and not math.isclose(expected_qty, 0.0, abs_tol=1e-9)
+                else reason
+            )
+            order_side = "sell" if cleanup_qty > 0 else "buy"
+            position_intent = "sell_to_close" if cleanup_qty > 0 else "buy_to_close"
+            asset_class = self._normalized_broker_asset_class(position)
+            request = self.broker.build_order_request(
+                symbol=symbol,
+                side=order_side,
+                strategy_name="system_position_cleanup",
+                asset_class=asset_class,
+                qty=abs(float(cleanup_qty)),
+                order_type="market",
+                time_in_force="day",
+                extra={"position_intent": position_intent},
+            )
+            result = self._submit_cleanup_order(
+                trade_date=trade_date,
+                request=request,
+                reason=effective_reason,
+                metadata={
+                    "scope": "unexpected_position",
+                    "symbol": symbol,
+                    "broker_position_qty": round(float(actual_qty), 4),
+                    "expected_session_qty": round(float(expected_qty), 4),
+                    "cleanup_qty": round(float(cleanup_qty), 4),
+                    "asset_class": asset_class,
+                },
+            )
+            cleanup_entry = {
+                "symbol": symbol,
+                "broker_position_qty": round(float(actual_qty), 4),
+                "expected_session_qty": round(float(expected_qty), 4),
+                "cleanup_qty": round(float(cleanup_qty), 4),
+                "reason": effective_reason,
+                "status": result.get("status"),
+                "order_id": result.get("order_id"),
+                "filled_avg_price": result.get("filled_avg_price"),
+            }
+            cleanup_entries.append(cleanup_entry)
+            if result.get("status") == "not_filled":
+                self._alert(
+                    session,
+                    "error",
+                    f"Unexpected broker position cleanup failed for {symbol} ({effective_reason})",
+                )
+            else:
+                self._alert(
+                    session,
+                    "warning",
+                    f"Unexpected broker position auto-closed for {symbol} ({effective_reason})",
+                )
+        return cleanup_entries
 
     def _build_symbol_snapshot(
         self,
@@ -1398,8 +1830,20 @@ class MultiTickerPortfolioPaperTrader:
             failures.append(
                 f"buying power {buying_power:.2f} below required {self.portfolio_config.risk.min_required_buying_power:.2f}"
             )
-        if not session.open_trades and positions:
-            failures.append("broker reported unexpected open positions at session start")
+        if positions and self.portfolio_config.execution.auto_flatten_unexpected_positions:
+            cleanup_entries = self._close_unexpected_broker_positions(
+                session=session,
+                trade_date=trade_date,
+                reason=AUTO_FLATTEN_UNEXPECTED_STARTUP_REASON,
+            )
+            if cleanup_entries:
+                details["broker_position_cleanup"] = cleanup_entries
+                positions = self.broker.get_positions()
+                details["broker_position_count"] = len(positions)
+
+        position_mismatches = self._broker_position_mismatch_messages(session, positions)
+        if position_mismatches:
+            failures.extend(position_mismatches)
 
         for symbol in self.underlyings:
             snapshot = snapshots.get(symbol)
@@ -1952,8 +2396,30 @@ class MultiTickerPortfolioPaperTrader:
         *,
         stock_frames: dict[str, pd.DataFrame] | None = None,
     ) -> dict[str, Any]:
+        trade_date = date.fromisoformat(session.trade_date)
+        expected_positions_before_flatten = self._expected_broker_position_map(session)
         if stock_frames is not None:
             self._flatten_all(session, stock_frames)
+        cleanup_summary: dict[str, Any] = {}
+        if self.portfolio_config.execution.auto_flatten_unexpected_positions:
+            known_cleanup_count = self._cleanup_known_open_trades_at_end_of_day(
+                session=session,
+                trade_date=trade_date,
+                stock_frames=stock_frames,
+            )
+            unexpected_cleanup_entries = self._close_unexpected_broker_positions(
+                session=session,
+                trade_date=trade_date,
+                reason=AUTO_FLATTEN_UNEXPECTED_EOD_REASON,
+                flatten_all_remaining=True,
+                expected_position_map=expected_positions_before_flatten,
+            )
+            if known_cleanup_count or unexpected_cleanup_entries:
+                cleanup_summary = {
+                    "known_trade_cleanup_count": known_cleanup_count,
+                    "unexpected_position_cleanup_count": len(unexpected_cleanup_entries),
+                    "unexpected_position_cleanup": unexpected_cleanup_entries,
+                }
         ending_equity = session.virtual_cash
         ledger.realized_equity = ending_equity
         ledger.high_watermark = max(ledger.high_watermark, ending_equity)
@@ -1994,6 +2460,8 @@ class MultiTickerPortfolioPaperTrader:
             "last_symbol_regimes": session.last_symbol_regimes,
             "startup_check_status": session.startup_check_status,
         }
+        if cleanup_summary:
+            summary["end_of_day_cleanup"] = cleanup_summary
         summary.update(reconciliation_summary)
         write_summary_bundle(
             run_dir,

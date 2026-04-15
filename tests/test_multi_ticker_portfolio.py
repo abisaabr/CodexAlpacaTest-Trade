@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from alpaca_lab.brokers.alpaca import OrderRequest
 from alpaca_lab.config import LabSettings
 from alpaca_lab.multi_ticker_portfolio.config import default_portfolio_config, load_portfolio_config
 from alpaca_lab.multi_ticker_portfolio.signals import signal_is_true
@@ -698,3 +699,239 @@ def test_run_rechecks_clock_after_preopen_sleep_before_fetching_stock_bars(monke
 
     assert result["status"] == "startup_check_failed"
     assert broker.clock_calls >= 2
+
+
+def test_startup_check_auto_flattens_unexpected_positions(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    class _LoggerStub:
+        def warning(self, *_args, **_kwargs) -> None:
+            return None
+
+        def info(self, *_args, **_kwargs) -> None:
+            return None
+
+    class _BrokerStub:
+        def __init__(self) -> None:
+            self.position_open = True
+            self.submitted: list[OrderRequest] = []
+
+        def get_account(self) -> dict[str, object]:
+            return {"buying_power": 25_000.0}
+
+        def get_positions(self) -> list[dict[str, object]]:
+            if self.position_open:
+                return [
+                    {
+                        "symbol": "QQQ260417C00600000",
+                        "qty": "1",
+                        "side": "long",
+                        "asset_class": "us_option",
+                    }
+                ]
+            return []
+
+        def build_order_request(self, **kwargs) -> OrderRequest:
+            return OrderRequest(**kwargs)
+
+        def submit_order(self, request: OrderRequest, **_kwargs) -> dict[str, object]:
+            self.submitted.append(request)
+            self.position_open = False
+            return {"id": "cleanup-startup-1", "status": "accepted"}
+
+        def get_order(self, _order_id: str) -> dict[str, object]:
+            return {
+                "id": "cleanup-startup-1",
+                "status": "filled",
+                "qty": "1",
+                "filled_qty": "1",
+                "filled_avg_price": "1.23",
+            }
+
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={
+                    "underlying_symbols": ("QQQ",),
+                    "run_root": tmp_path / "runs",
+                    "state_root": tmp_path / "state",
+                }
+            ),
+            "strategies": tuple(
+                strategy
+                for strategy in default_portfolio_config().strategies
+                if strategy.underlying_symbol == "QQQ"
+            ),
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.underlyings = ("QQQ",)
+    trader.broker = _BrokerStub()
+    trader.run_root = tmp_path / "runs"
+    trader.submit_paper_orders = True
+    trader.logger = _LoggerStub()
+
+    now_et = datetime(2026, 4, 15, 9, 36, tzinfo=ZoneInfo("America/New_York"))
+    monkeypatch.setattr(
+        "alpaca_lab.multi_ticker_portfolio.trader._now_et",
+        lambda: now_et,
+    )
+    snapshot = SymbolSnapshot(
+        underlying_symbol="QQQ",
+        trade_date=now_et.date(),
+        stock_frame=pd.DataFrame([{"close": 500.0}]),
+        option_chain=pd.DataFrame(
+            [
+                {"dte": 0, "option_type": "call"},
+                {"dte": 0, "option_type": "put"},
+                {"dte": 1, "option_type": "call"},
+                {"dte": 1, "option_type": "put"},
+            ]
+        ),
+        mark_map={},
+        latest_close=500.0,
+        current_minute=6,
+        latest_timestamp_et=now_et,
+    )
+    session = SessionState(
+        trade_date=now_et.date().isoformat(),
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+
+    status, details = trader._perform_startup_check(
+        session=session,
+        trade_date=now_et.date(),
+        snapshots={"QQQ": snapshot},
+    )
+
+    assert status == "passed"
+    assert trader.broker.submitted[0].side == "sell"
+    assert details["broker_position_count"] == 0
+    cleanup_entries = json.loads(
+        (tmp_path / "runs" / "2026-04-15" / "broker_position_cleanup.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert cleanup_entries[0]["reason"] == "auto_flatten_unexpected_startup_position"
+
+
+def test_force_cleanup_known_trade_books_completion(tmp_path: Path) -> None:
+    class _LoggerStub:
+        def warning(self, *_args, **_kwargs) -> None:
+            return None
+
+        def info(self, *_args, **_kwargs) -> None:
+            return None
+
+    class _BrokerStub:
+        def __init__(self) -> None:
+            self.submitted: list[OrderRequest] = []
+
+        def build_order_request(self, **kwargs) -> OrderRequest:
+            return OrderRequest(**kwargs)
+
+        def submit_order(self, request: OrderRequest, **_kwargs) -> dict[str, object]:
+            self.submitted.append(request)
+            return {"id": "cleanup-eod-1", "status": "accepted"}
+
+        def get_order(self, _order_id: str) -> dict[str, object]:
+            return {
+                "id": "cleanup-eod-1",
+                "status": "filled",
+                "qty": "1",
+                "filled_qty": "1",
+                "filled_avg_price": "1.50",
+            }
+
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={
+                    "run_root": tmp_path / "runs",
+                    "state_root": tmp_path / "state",
+                }
+            )
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.run_root = tmp_path / "runs"
+    trader.submit_paper_orders = True
+    trader.broker = _BrokerStub()
+    trader.logger = _LoggerStub()
+
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=24_720.0,
+        open_trades=[
+            {
+                "strategy_name": "qqq__fast__trend_long_call_next_expiry",
+                "underlying_symbol": "QQQ",
+                "regime": "bull",
+                "quantity": 1,
+                "entry_time_et": "2026-04-15T10:15:00-04:00",
+                "entry_minute": 45,
+                "hard_exit_minute": 360,
+                "underlying_entry": 500.0,
+                "entry_debit": 2.8,
+                "max_loss_per_combo": 280.0,
+                "max_profit_per_combo": 120.0,
+                "profit_target_dollars": 126.0,
+                "stop_loss_dollars": 84.0,
+                "entry_order_id": "entry-1",
+                "entry_fill_price": 2.8,
+                "legs": [
+                    {
+                        "symbol": "QQQ260417C00600000",
+                        "expiration_date": "2026-04-17",
+                        "option_type": "call",
+                        "side": "long",
+                        "strike_price": 600.0,
+                        "target_delta": 0.6,
+                        "entry_fill_price": 2.8,
+                        "bid": 1.45,
+                        "ask": 1.55,
+                        "mark": 1.5,
+                        "delta": 0.5,
+                        "gamma": 0.04,
+                        "theta": -0.08,
+                        "vega": 0.11,
+                    }
+                ],
+                "entry_attempt_id": "attempt-cleanup-1",
+            }
+        ],
+    )
+    stock_frames = {
+        "QQQ": pd.DataFrame(
+            [
+                {
+                    "timestamp_et": datetime(2026, 4, 15, 15, 59),
+                    "minute_index": 389,
+                    "close": 507.0,
+                }
+            ]
+        )
+    }
+
+    cleaned = trader._cleanup_known_open_trades_at_end_of_day(
+        session=session,
+        trade_date=datetime(2026, 4, 15).date(),
+        stock_frames=stock_frames,
+    )
+
+    assert cleaned == 1
+    assert not session.open_trades
+    assert len(session.completed_trades) == 1
+    assert session.completed_trades[0]["exit_reason"] == "auto_flatten_known_end_of_day_position"
+    assert session.completed_trades[0]["exit_fill_price"] == 1.5
+    cleanup_entries = json.loads(
+        (tmp_path / "runs" / "2026-04-15" / "broker_position_cleanup.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert cleanup_entries[0]["reason"] == "auto_flatten_known_end_of_day_position"

@@ -108,6 +108,8 @@ class ExecutionConfig(BaseModel):
     market_exit_fallback_minute: int = 385
     startup_lead_minutes: int = 10
     midday_report_minute: int = 180
+    auto_flatten_unexpected_positions: bool = True
+    unexpected_position_cleanup_timeout_seconds: int = 45
 
     @field_validator("underlying_symbols", mode="before")
     @classmethod
