@@ -86,6 +86,21 @@ def test_submit_order_refuses_live_path() -> None:
         broker.submit_order(order, dry_run=False, explicitly_requested=True)
 
 
+def test_submit_order_rejects_naked_option_sell_to_open() -> None:
+    broker = AlpacaBrokerAdapter(LabSettings(default_underlyings=("SPY",)))
+    order = broker.build_order_request(
+        symbol="SPY260417C00500000",
+        side="sell",
+        strategy_name="demo",
+        asset_class="option",
+        qty=1,
+        extra={"position_intent": "sell_to_open"},
+    )
+
+    with pytest.raises(ValueError, match="sell_to_open orders are blocked"):
+        broker.submit_order(order, dry_run=True)
+
+
 def test_non_dry_run_requires_explicit_request() -> None:
     broker = AlpacaBrokerAdapter(LabSettings(default_underlyings=("SPY",)))
     order = broker.build_order_request(symbol="SPY", side="buy", strategy_name="demo", qty=1)

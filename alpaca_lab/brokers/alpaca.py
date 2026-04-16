@@ -299,6 +299,15 @@ class AlpacaBrokerAdapter:
             raise LiveTradingRefusedError("Live order routing is refused in this repository.")
         self.settings.assert_paper_only_runtime()
 
+    @staticmethod
+    def _validate_order_request(order: OrderRequest) -> None:
+        position_intent = str(order.extra.get("position_intent") or "").strip()
+        if order.asset_class == "option" and not order.legs and position_intent == "sell_to_open":
+            raise ValueError(
+                "Naked option sell_to_open orders are blocked for this runner. "
+                "Use an approved multi-leg order flow if short option exposure is intentional."
+            )
+
     def build_order_request(
         self,
         *,
@@ -704,6 +713,7 @@ class AlpacaBrokerAdapter:
         dry_run: bool | None = None,
     ) -> dict[str, Any]:
         self.ensure_paper_only(requested_live=order.requested_live)
+        self._validate_order_request(order)
         use_dry_run = self.dry_run if dry_run is None else dry_run
         payload = order.to_payload()
         if use_dry_run:
