@@ -6,7 +6,7 @@ import math
 import platform
 import time
 from collections import Counter
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from datetime import time as dt_time
 from pathlib import Path
@@ -1398,20 +1398,25 @@ class MultiTickerPortfolioPaperTrader:
         mark = float(leg["mark"])
         ask = float(leg["ask"])
         limits = [min(ask, mark + 0.02), ask]
-        return [
-            self.broker.build_order_request(
-                symbol=str(leg["symbol"]),
-                side="buy",
-                strategy_name=trade.strategy_name,
-                asset_class="option",
-                qty=float(trade.quantity),
-                order_type="limit",
-                time_in_force="day",
-                limit_price=round(max(0.01, price), 2),
-                extra={"position_intent": "buy_to_open"},
+        request_seed = self._order_request_seed(trade=trade, phase="entry")
+        requests: list[OrderRequest] = []
+        for request_index, price in enumerate(limits, start=1):
+            limit_price = round(max(0.01, price), 2)
+            requests.append(
+                self.broker.build_order_request(
+                    symbol=str(leg["symbol"]),
+                    side="buy",
+                    strategy_name=trade.strategy_name,
+                    asset_class="option",
+                    qty=float(trade.quantity),
+                    order_type="limit",
+                    time_in_force="day",
+                    limit_price=limit_price,
+                    client_order_key=f"{request_seed}|limit|{request_index}|{limit_price:.2f}",
+                    extra={"position_intent": "buy_to_open"},
+                )
             )
-            for price in limits
-        ]
+        return requests
 
     def _simple_exit_order_requests(
         self,
@@ -1423,6 +1428,9 @@ class MultiTickerPortfolioPaperTrader:
         leg = trade.legs[0]
         mark = float(mark_map[str(leg["symbol"])])
         bid = float(leg["bid"])
+        request_seed = self._order_request_seed(trade=trade, phase="exit")
+        first_limit = round(max(0.01, max(bid, mark - 0.02)), 2)
+        second_limit = round(max(0.01, bid), 2)
         requests = [
             self.broker.build_order_request(
                 symbol=str(leg["symbol"]),
@@ -1432,7 +1440,8 @@ class MultiTickerPortfolioPaperTrader:
                 qty=float(trade.quantity),
                 order_type="limit",
                 time_in_force="day",
-                limit_price=round(max(0.01, max(bid, mark - 0.02)), 2),
+                limit_price=first_limit,
+                client_order_key=f"{request_seed}|limit|1|{first_limit:.2f}",
                 extra={"position_intent": "sell_to_close"},
             ),
             self.broker.build_order_request(
@@ -1443,7 +1452,8 @@ class MultiTickerPortfolioPaperTrader:
                 qty=float(trade.quantity),
                 order_type="limit",
                 time_in_force="day",
-                limit_price=round(max(0.01, bid), 2),
+                limit_price=second_limit,
+                client_order_key=f"{request_seed}|limit|2|{second_limit:.2f}",
                 extra={"position_intent": "sell_to_close"},
             ),
         ]
@@ -1457,10 +1467,24 @@ class MultiTickerPortfolioPaperTrader:
                     qty=float(trade.quantity),
                     order_type="market",
                     time_in_force="day",
+                    client_order_key=f"{request_seed}|market|3",
                     extra={"position_intent": "sell_to_close"},
                 )
             )
         return requests
+
+    def _order_request_seed(self, *, trade: OpenTrade, phase: str) -> str:
+        base = trade.entry_attempt_id or trade.entry_time_et
+        return f"{base}|{phase}|{_now_et().isoformat(timespec='microseconds')}"
+
+    @staticmethod
+    def _with_attempt_client_order_id(request: OrderRequest, *, attempt_index: int) -> OrderRequest:
+        if attempt_index <= 1 or not request.client_order_id:
+            return request
+        suffix = f"-r{attempt_index}"
+        max_length = 48
+        trimmed = request.client_order_id[: max(1, max_length - len(suffix))]
+        return replace(request, client_order_id=f"{trimmed}{suffix}")
 
     def _wait_for_terminal_order(self, order_id: str) -> dict[str, Any]:
         deadline = time.time() + self.portfolio_config.execution.order_fill_timeout_seconds
@@ -1825,14 +1849,18 @@ class MultiTickerPortfolioPaperTrader:
             "filled_avg_price": None,
         }
         for attempt_index in range(1, max_attempts + 1):
-            response = self.broker.submit_order(
+            request_for_attempt = self._with_attempt_client_order_id(
                 request,
+                attempt_index=attempt_index,
+            )
+            response = self.broker.submit_order(
+                request_for_attempt,
                 dry_run=not getattr(self, "submit_paper_orders", True),
                 explicitly_requested=getattr(self, "submit_paper_orders", True),
             )
             journal_entry: dict[str, Any] = {
                 "reason": reason,
-                "request": self._serialize_order_request(request),
+                "request": self._serialize_order_request(request_for_attempt),
                 "response": response,
                 "attempt_index": attempt_index,
                 "max_attempts": max_attempts,
@@ -1972,7 +2000,10 @@ class MultiTickerPortfolioPaperTrader:
                 asset_class="option",
                 qty=float(quantity),
                 position_intent=position_intent,
-                client_order_key=f"{trade.entry_attempt_id or trade.entry_time_et}|{reason}|{symbol}|cleanup",
+                client_order_key=(
+                    f"{trade.entry_attempt_id or trade.entry_time_et}|{reason}|{symbol}|cleanup|"
+                    f"{_now_et().isoformat(timespec='microseconds')}"
+                ),
             )
             result = self._submit_cleanup_order(
                 trade_date=trade_date,
@@ -2176,7 +2207,10 @@ class MultiTickerPortfolioPaperTrader:
                 asset_class=cast(Literal["stock", "option"], asset_class),
                 qty=abs(float(cleanup_qty)),
                 position_intent=position_intent,
-                client_order_key=f"{symbol}|{effective_reason}|{cleanup_qty}",
+                client_order_key=(
+                    f"{symbol}|{effective_reason}|{cleanup_qty}|"
+                    f"{_now_et().isoformat(timespec='microseconds')}"
+                ),
             )
             result = self._submit_cleanup_order(
                 trade_date=trade_date,

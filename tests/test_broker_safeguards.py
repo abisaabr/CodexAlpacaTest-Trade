@@ -14,12 +14,12 @@ from alpaca_lab.config import (
 
 
 class DummyResponse:
-    def __init__(self, payload: dict) -> None:
-        self.status_code = 200
-        self.text = json.dumps(payload)
+    def __init__(self, payload, *, status_code: int = 200, text: str | None = None) -> None:  # noqa: ANN001
+        self.status_code = status_code
+        self.text = text or json.dumps(payload)
         self.payload = payload
 
-    def json(self) -> dict:
+    def json(self):  # noqa: ANN201
         return self.payload
 
 
@@ -104,6 +104,57 @@ def test_non_dry_run_paper_submit_is_allowed_only_on_paper_endpoint() -> None:
     assert response["status"] == "accepted"
     assert len(session.calls) == 1
     assert str(session.calls[0]["url"]).startswith("https://paper-api.alpaca.markets/")
+
+
+def test_submit_order_recovers_existing_order_when_client_order_id_already_exists() -> None:
+    class DuplicateClientOrderSession:
+        def __init__(self) -> None:
+            self.calls: list[dict[str, object]] = []
+            self.client_order_id: str | None = None
+
+        def prepare_request(self, request):  # noqa: ANN001
+            return request.prepare()
+
+        def request(self, *, method, url, headers, params, json, timeout):  # noqa: ANN001
+            self.calls.append(
+                {
+                    "method": method,
+                    "url": url,
+                    "params": params,
+                    "json": json,
+                    "timeout": timeout,
+                }
+            )
+            if method == "POST" and str(url).endswith("/v2/orders"):
+                self.client_order_id = str(json["client_order_id"])
+                return DummyResponse(
+                    {"code": 40010001, "message": "client_order_id must be unique"},
+                    status_code=422,
+                    text='{"code":40010001,"message":"client_order_id must be unique"}',
+                )
+            if method == "GET" and str(url).endswith("/v2/orders"):
+                return DummyResponse(
+                    [
+                        {
+                            "id": "existing-order-1",
+                            "status": "accepted",
+                            "client_order_id": self.client_order_id,
+                        }
+                    ]
+                )
+            raise AssertionError(f"unexpected request {method} {url}")
+
+        def close(self) -> None:
+            return None
+
+    session = DuplicateClientOrderSession()
+    broker = AlpacaBrokerAdapter(_paper_settings(), session=session)
+    order = broker.build_order_request(symbol="SPY", side="buy", strategy_name="demo", qty=1)
+
+    response = broker.submit_order(order, dry_run=False, explicitly_requested=True)
+
+    assert response["id"] == "existing-order-1"
+    assert [str(call["method"]) for call in session.calls] == ["POST", "GET"]
 
 
 def test_submit_order_refuses_mutated_live_base_url_without_request_fallback() -> None:

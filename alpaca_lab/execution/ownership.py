@@ -16,6 +16,18 @@ def _now_utc() -> datetime:
     return datetime.now(UTC)
 
 
+def _pid_is_running(pid: str | None) -> bool:
+    if pid in (None, ""):
+        return False
+    try:
+        os.kill(int(pid), 0)
+    except (OSError, ProcessLookupError, ValueError):
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 def _iso_or_none(value: object) -> str | None:
     if value in (None, ""):
         return None
@@ -47,7 +59,7 @@ class OwnershipLeaseStatus:
 
     @property
     def blocked(self) -> bool:
-        return self.enabled and not self.acquired and not self.held_by_self and (
+        return self.enabled and not self.acquired and (
             self.blocked_by_owner_id is not None or self.blocked_by_owner_label is not None
         )
 
@@ -139,8 +151,26 @@ class FileOwnershipLease:
         payload = self._read_payload()
         roles = self._filtered_roles(payload, now_utc)
         owner_id = str(payload.get("owner_id") or "") or None
+        owner_label = str(payload.get("owner_label") or "") or None
+        existing_role = roles.get(str(role))
+        current_pid = str(os.getpid())
+        if owner_id == self.owner_id and isinstance(existing_role, dict):
+            existing_pid = str(existing_role.get("pid") or "") or None
+            if existing_pid != current_pid and _pid_is_running(existing_pid):
+                return OwnershipLeaseStatus(
+                    enabled=True,
+                    acquired=False,
+                    held_by_self=False,
+                    owner_id=owner_id,
+                    owner_label=owner_label or self.owner_label,
+                    blocked_by_owner_id=owner_id,
+                    blocked_by_owner_label=owner_label or self.owner_label,
+                    lease_path=str(self.path),
+                    heartbeat_at=_iso_or_none(payload.get("heartbeat_at")),
+                    expires_at=_iso_or_none(payload.get("expires_at")),
+                    roles=roles,
+                )
         if owner_id and owner_id != self.owner_id and roles:
-            owner_label = str(payload.get("owner_label") or "") or None
             return OwnershipLeaseStatus(
                 enabled=True,
                 acquired=False,

@@ -51,6 +51,65 @@ def test_file_ownership_lease_allows_same_owner_multiple_roles(tmp_path: Path) -
     assert set((close_role.roles or {}).keys()) == {"portfolio_trader", "eod_close_guard"}
 
 
+def test_file_ownership_lease_blocks_same_owner_same_role_from_other_process(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    lease_path = tmp_path / "shared_lease.json"
+    monkeypatch.setattr("alpaca_lab.execution.ownership._pid_is_running", lambda _pid: True)
+    monkeypatch.setattr("alpaca_lab.execution.ownership.os.getpid", lambda: 101)
+    owner_a = FileOwnershipLease(
+        path=lease_path,
+        owner_id="owner-a",
+        owner_label="machine-a",
+        ttl_seconds=180,
+    )
+    acquired = owner_a.acquire(role="portfolio_trader")
+
+    monkeypatch.setattr("alpaca_lab.execution.ownership.os.getpid", lambda: 202)
+    owner_b = FileOwnershipLease(
+        path=lease_path,
+        owner_id="owner-a",
+        owner_label="machine-a",
+        ttl_seconds=180,
+    )
+    blocked = owner_b.acquire(role="portfolio_trader")
+
+    assert acquired.acquired is True
+    assert blocked.blocked is True
+    assert blocked.blocked_by_owner_id == "owner-a"
+    assert blocked.blocked_by_owner_label == "machine-a"
+
+
+def test_file_ownership_lease_allows_same_owner_same_role_when_old_pid_is_dead(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    lease_path = tmp_path / "shared_lease.json"
+    monkeypatch.setattr("alpaca_lab.execution.ownership.os.getpid", lambda: 101)
+    owner_a = FileOwnershipLease(
+        path=lease_path,
+        owner_id="owner-a",
+        owner_label="machine-a",
+        ttl_seconds=180,
+    )
+    acquired = owner_a.acquire(role="portfolio_trader")
+
+    monkeypatch.setattr("alpaca_lab.execution.ownership.os.getpid", lambda: 202)
+    monkeypatch.setattr("alpaca_lab.execution.ownership._pid_is_running", lambda _pid: False)
+    owner_b = FileOwnershipLease(
+        path=lease_path,
+        owner_id="owner-a",
+        owner_label="machine-a",
+        ttl_seconds=180,
+    )
+    reclaimed = owner_b.acquire(role="portfolio_trader")
+
+    assert acquired.acquired is True
+    assert reclaimed.acquired is True
+    assert reclaimed.blocked is False
+
+
 def test_trader_run_returns_ownership_blocked_when_other_owner_holds_lease(tmp_path: Path) -> None:
     lease_path = tmp_path / "shared_lease.json"
     other_owner = FileOwnershipLease(

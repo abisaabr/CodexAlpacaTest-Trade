@@ -96,6 +96,40 @@ def _sample_open_trade(
     )
 
 
+def test_simple_order_requests_generate_unique_client_order_ids(monkeypatch) -> None:
+    class _BrokerStub:
+        def build_order_request(self, **kwargs) -> OrderRequest:
+            kwargs["client_order_id"] = str(kwargs.pop("client_order_key", "")) or None
+            return OrderRequest(**kwargs)
+
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.broker = _BrokerStub()
+    monkeypatch.setattr(
+        "alpaca_lab.multi_ticker_portfolio.trader._now_et",
+        lambda: datetime(2026, 4, 16, 10, 15, 30, 123456, tzinfo=ZoneInfo("America/New_York")),
+    )
+
+    trade = OpenTrade(
+        **_sample_open_trade(
+            strategy_name="qqq__fast__trend_long_call_next_expiry",
+            underlying_symbol="QQQ",
+        )
+    )
+    trade.legs[0]["mark"] = 1.18
+    trade.legs[0]["ask"] = 1.20
+    trade.legs[0]["bid"] = 1.00
+
+    entry_requests = trader._simple_entry_order_requests(trade)
+    exit_requests = trader._simple_exit_order_requests(
+        trade,
+        {str(trade.legs[0]["symbol"]): 1.02},
+        market_fallback=True,
+    )
+
+    assert len({request.client_order_id for request in entry_requests}) == len(entry_requests)
+    assert len({request.client_order_id for request in exit_requests}) == len(exit_requests)
+
+
 def test_default_multi_ticker_portfolio_contains_all_symbols() -> None:
     config = default_portfolio_config()
 
@@ -1323,7 +1357,8 @@ def test_run_rechecks_clock_after_preopen_sleep_before_fetching_stock_bars(monke
                     "run_root": tmp_path / "runs",
                     "poll_interval_seconds": 1,
                 }
-            )
+            ),
+            "ownership": config.ownership.model_copy(update={"enabled": False}),
         }
     )
     broker = _BrokerStub()
@@ -1868,9 +1903,11 @@ def test_submit_cleanup_order_retries_after_cancelled_attempt(tmp_path: Path) ->
     class _BrokerStub:
         def __init__(self) -> None:
             self.submit_count = 0
+            self.submitted_ids: list[str | None] = []
 
-        def submit_order(self, _request: OrderRequest, **_kwargs) -> dict[str, object]:
+        def submit_order(self, request: OrderRequest, **_kwargs) -> dict[str, object]:
             self.submit_count += 1
+            self.submitted_ids.append(request.client_order_id)
             return {"id": f"cleanup-{self.submit_count}", "status": "accepted"}
 
         def get_order(self, order_id: str) -> dict[str, object]:
@@ -1916,6 +1953,7 @@ def test_submit_cleanup_order_retries_after_cancelled_attempt(tmp_path: Path) ->
         qty=1.0,
         order_type="market",
         time_in_force="day",
+        client_order_id="cleanup-base-id",
         asset_class="option",
         strategy_name="cleanup_retry_test",
         extra={"position_intent": "sell_to_close"},
@@ -1939,6 +1977,7 @@ def test_submit_cleanup_order_retries_after_cancelled_attempt(tmp_path: Path) ->
     assert cleanup_entries[0]["terminal"]["status"] == "canceled"
     assert cleanup_entries[1]["attempt_index"] == 2
     assert cleanup_entries[1]["terminal"]["status"] == "filled"
+    assert trader.broker.submitted_ids == ["cleanup-base-id", "cleanup-base-id-r2"]
 
 
 def test_build_cleanup_order_request_uses_limit_after_option_close(monkeypatch) -> None:

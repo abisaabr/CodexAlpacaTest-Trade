@@ -402,6 +402,12 @@ class AlpacaBrokerAdapter:
         )
         return payload if isinstance(payload, list) else []
 
+    def get_order_by_client_order_id(self, client_order_id: str) -> dict[str, Any] | None:
+        for order in self.get_orders(status="all", limit=500):
+            if str(order.get("client_order_id") or "") == client_order_id:
+                return order
+        return None
+
     def get_order(self, order_id: str) -> dict[str, Any]:
         payload = self._request_json("GET", f"/v2/orders/{order_id}", api="trading")
         return payload if isinstance(payload, dict) else {}
@@ -711,14 +717,41 @@ class AlpacaBrokerAdapter:
             explicitly_requested=explicitly_requested,
             requested_live=order.requested_live,
         )
-        response = self._request_json(
-            "POST",
-            "/v2/orders",
-            api="trading",
-            json_body=payload,
-            retryable=False,
-        )
+        try:
+            response = self._request_json(
+                "POST",
+                "/v2/orders",
+                api="trading",
+                json_body=payload,
+                retryable=False,
+            )
+        except requests.HTTPError as exc:
+            recovered = self._recover_duplicate_client_order_submission(order, exc)
+            if recovered is None:
+                raise
+            response = recovered
         return response if isinstance(response, dict) else {"status": "unknown"}
+
+    def _recover_duplicate_client_order_submission(
+        self,
+        order: OrderRequest,
+        exc: requests.HTTPError,
+    ) -> dict[str, Any] | None:
+        response = getattr(exc, "response", None)
+        if response is None or response.status_code != 422 or not order.client_order_id:
+            return None
+        if "client_order_id must be unique" not in str(getattr(response, "text", "")).lower():
+            return None
+        existing = self.get_order_by_client_order_id(order.client_order_id)
+        if existing is None:
+            return None
+        self.logger.warning(
+            "recovered duplicate client_order_id=%s existing_order_id=%s status=%s",
+            order.client_order_id,
+            existing.get("id"),
+            existing.get("status"),
+        )
+        return existing
 
     def cancel_order(
         self,
