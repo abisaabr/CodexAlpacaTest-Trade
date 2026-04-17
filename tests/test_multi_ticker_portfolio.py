@@ -18,6 +18,7 @@ from alpaca_lab.multi_ticker_portfolio.config import (
 )
 from alpaca_lab.multi_ticker_portfolio.signals import signal_is_true
 from alpaca_lab.multi_ticker_portfolio.trader import (
+    AUTO_FLATTEN_UNEXPECTED_INTRADAY_REASON,
     MultiTickerPortfolioPaperTrader,
     OpenTrade,
     PortfolioLedger,
@@ -1481,6 +1482,80 @@ def test_reconcile_and_trade_triggers_severe_loss_flatten(monkeypatch) -> None:
     assert session.blocked_new_entries is True
     assert session.block_reason == "severe_loss_flatten_all triggered at equity 23700.00"
     assert current_equity == 23_700.0
+
+
+def test_reconcile_and_trade_sweeps_unexpected_intraday_positions(monkeypatch) -> None:
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={"underlying_symbols": ("QQQ",)}
+            ),
+            "strategies": tuple(),
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.underlyings = ("QQQ",)
+
+    class _LoggerStub:
+        def warning(self, *_args, **_kwargs) -> None:
+            return None
+
+    trader.logger = _LoggerStub()
+    trader._maybe_send_midday_notification = lambda **_kwargs: None
+    trader._apply_entry_execution_circuit_breaker = lambda *_args, **_kwargs: None
+    trader._evaluate_entry = lambda **_kwargs: (_ for _ in ()).throw(AssertionError("no entry expected"))
+    trader._run_exit = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("no exit expected"))
+    monkeypatch.setattr(
+        "alpaca_lab.multi_ticker_portfolio.trader.infer_symbol_regime",
+        lambda _frame: "neutral",
+    )
+
+    cleanup_reasons: list[str] = []
+
+    def _cleanup_unexpected(**kwargs):
+        cleanup_reasons.append(kwargs["reason"])
+        return [{"symbol": "QQQ260424P00645000", "status": "filled", "reason": kwargs["reason"]}]
+
+    trader._close_unexpected_broker_positions = _cleanup_unexpected
+    trader._build_symbol_snapshot = lambda **_kwargs: SymbolSnapshot(
+        underlying_symbol="QQQ",
+        trade_date=datetime(2026, 4, 17).date(),
+        stock_frame=pd.DataFrame(
+            [
+                {
+                    "timestamp_et": datetime(2026, 4, 17, 10, 0),
+                    "minute_index": 30,
+                    "close": 500.0,
+                }
+            ]
+        ),
+        option_chain=pd.DataFrame(),
+        mark_map={},
+        latest_close=500.0,
+        current_minute=30,
+        latest_timestamp_et=datetime(2026, 4, 17, 10, 0, tzinfo=ZoneInfo("America/New_York")),
+    )
+    session = SessionState(
+        trade_date="2026-04-17",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+    ledger = PortfolioLedger(realized_equity=25_000.0, high_watermark=25_000.0)
+    monkeypatch.setattr(
+        "alpaca_lab.multi_ticker_portfolio.trader._current_equity",
+        lambda *_args, **_kwargs: 25_000.0,
+    )
+
+    _snapshots, current_equity = trader._reconcile_and_trade(
+        session=session,
+        ledger=ledger,
+        stock_frames={"QQQ": pd.DataFrame([{"close": 500.0, "minute_index": 30}])},
+        broker_equity=30_000.0,
+    )
+
+    assert cleanup_reasons == [AUTO_FLATTEN_UNEXPECTED_INTRADAY_REASON]
+    assert current_equity == 25_000.0
 
 
 def test_startup_check_auto_flattens_unexpected_positions(

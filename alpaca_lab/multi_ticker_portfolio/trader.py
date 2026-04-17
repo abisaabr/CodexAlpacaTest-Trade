@@ -46,6 +46,7 @@ EXIT_COMMISSION_PER_CONTRACT = 0.65
 AUTO_FLATTEN_UNEXPECTED_STARTUP_REASON = "auto_flatten_unexpected_startup_position"
 AUTO_FLATTEN_KNOWN_EOD_REASON = "auto_flatten_known_end_of_day_position"
 AUTO_FLATTEN_UNEXPECTED_EOD_REASON = "auto_flatten_unexpected_end_of_day_position"
+AUTO_FLATTEN_UNEXPECTED_INTRADAY_REASON = "auto_flatten_unexpected_intraday_position"
 BROKER_EQUITY_EMERGENCY_STOP_REASON = "broker_equity_emergency_stop"
 SEVERE_LOSS_HALT_REASON = "severe_loss_halt_new_entries"
 SEVERE_LOSS_FLATTEN_REASON = "severe_loss_flatten_all"
@@ -2688,6 +2689,12 @@ class MultiTickerPortfolioPaperTrader:
                 exiting.append((trade_payload, snapshot, exit_reason))
         for trade_payload, snapshot, exit_reason in exiting:
             self._run_exit(trade_payload, session, snapshot, exit_reason)
+
+        self._close_unexpected_broker_positions(
+            session=session,
+            trade_date=trade_date,
+            reason=AUTO_FLATTEN_UNEXPECTED_INTRADAY_REASON,
+        )
 
         combined_mark_map = {
             symbol: mark
