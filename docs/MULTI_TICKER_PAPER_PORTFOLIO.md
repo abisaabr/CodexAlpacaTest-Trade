@@ -67,7 +67,7 @@ For true standby-safe failover, set the same shared ownership lease path on both
 - `MULTI_TICKER_OWNERSHIP_TTL_SECONDS`
 - `MULTI_TICKER_MACHINE_LABEL`
 
-The cleanest practical path is a OneDrive-synced lease file. With that in place, one machine owns the live paper portfolio at a time, and the other machine stands down automatically until the lease expires.
+The cleanest practical path is a Google Drive-synced lease file. With that in place, one machine owns the live paper portfolio at a time, and the other machine stands down automatically until the lease expires.
 
 Before you start a standby machine, run:
 
