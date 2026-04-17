@@ -194,6 +194,39 @@ python scripts\run_multi_ticker_standby_failover_check.py
 
 This is the fastest safe handoff path when you need to move the runner midstream.
 
+## Cleanroom Research Migration
+
+The runtime migration bundle does not include the separate `qqq_options_30d_cleanroom` research workspace we use to test new tickers.
+
+To move that research workspace too, create a dedicated cleanroom bundle:
+
+```powershell
+python scripts\create_cleanroom_research_bundle.py
+```
+
+That writes a fresh handoff bundle under the archive folder, including:
+
+- a zipped snapshot of `qqq_options_30d_cleanroom`
+- a `RESTORE_RESEARCH_WORKSPACE.ps1` script inside the bundle
+- a manifest listing the source workspace and any related archive zips detected nearby
+
+On the destination Windows machine:
+
+1. Keep `codexalpaca_repo` and `qqq_options_30d_cleanroom` as sibling folders.
+2. Unzip the handoff bundle.
+3. Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\RESTORE_RESEARCH_WORKSPACE.ps1 -TargetParent "C:\Users\<you>\Downloads"
+```
+
+After that, use the `codexalpaca_repo` virtualenv to run the cleanroom scripts, for example:
+
+```powershell
+cd C:\Users\<you>\Downloads\codexalpaca_repo
+.\.venv\Scripts\python.exe ..\qqq_options_30d_cleanroom\research_candidate_ticker_batch.py --tickers aapl,amzn
+```
+
 ## Native Windows Path
 
 The native Windows scheduler remains supported and is still a good choice on one Windows box:
