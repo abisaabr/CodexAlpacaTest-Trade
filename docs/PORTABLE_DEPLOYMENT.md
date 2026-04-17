@@ -149,6 +149,51 @@ Do not commit these:
 
 Those are the only machine-specific pieces you need to carry forward.
 
+## Immediate Machine Migration
+
+If you need to move the live paper trader right away, use the runtime migration bundle workflow instead of reconstructing local state by hand.
+
+### On the source machine
+
+```powershell
+python scripts\create_multi_ticker_migration_bundle.py
+```
+
+That creates an ignored bundle under:
+
+```text
+reports/multi_ticker_portfolio/migration_bundles/
+```
+
+The bundle includes:
+
+- the local `.env`
+- the current session state files
+- the current trade-date run folder
+- the latest health snapshot
+- a manifest with the source branch, commit, lease path, and restore notes
+
+Move either the bundle folder or the generated `.zip` file to the destination machine.
+
+### On the destination machine
+
+1. Clone the repo and check out the same branch/commit listed in the bundle manifest.
+2. Restore the bundle:
+
+```powershell
+python scripts\restore_multi_ticker_migration_bundle.py "<bundle-path>" --target-repo "<cloned-repo-path>" --machine-label "<new-machine-label>"
+```
+
+3. Run the standby failover preflight:
+
+```powershell
+python scripts\run_multi_ticker_standby_failover_check.py
+```
+
+4. Start the services only after the failover check passes.
+
+This is the fastest safe handoff path when you need to move the runner midstream.
+
 ## Native Windows Path
 
 The native Windows scheduler remains supported and is still a good choice on one Windows box:
