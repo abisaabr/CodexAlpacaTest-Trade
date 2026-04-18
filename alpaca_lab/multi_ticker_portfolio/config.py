@@ -253,7 +253,15 @@ class MultiTickerPortfolioConfig(BaseModel):
     risk: RiskConfig = Field(default_factory=RiskConfig)
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     ownership: OwnershipConfig = Field(default_factory=OwnershipConfig)
+    strategy_manifest_path: Path | None = None
     strategies: tuple[StrategyConfig, ...]
+
+    @field_validator("strategy_manifest_path", mode="before")
+    @classmethod
+    def normalize_strategy_manifest_path(cls, value: object) -> Path | None:
+        if value in (None, ""):
+            return None
+        return Path(str(value))
 
     @property
     def strategies_by_name(self) -> dict[str, StrategyConfig]:
@@ -478,7 +486,12 @@ def _default_strategies() -> tuple[StrategyConfig, ...]:
 
 
 def default_portfolio_config() -> MultiTickerPortfolioConfig:
-    return MultiTickerPortfolioConfig(strategies=_default_strategies())
+    payload: dict[str, object] = {}
+    default_manifest_path = _default_strategy_manifest_path()
+    if default_manifest_path.exists():
+        payload["strategy_manifest_path"] = default_manifest_path
+    payload["strategies"] = _resolve_strategy_payloads(payload, config_path=None)
+    return MultiTickerPortfolioConfig.model_validate(payload)
 
 
 def _deep_merge(base: dict[str, object], overlay: dict[str, object]) -> dict[str, object]:
@@ -493,6 +506,55 @@ def _deep_merge(base: dict[str, object], overlay: dict[str, object]) -> dict[str
         else:
             merged[key] = value
     return merged
+
+
+def _default_strategy_manifest_path() -> Path:
+    return Path(__file__).resolve().parents[2] / "config" / "strategy_manifests" / "multi_ticker_portfolio_live.yaml"
+
+
+def _load_strategy_manifest_payload(manifest_path: Path) -> list[dict[str, object]]:
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Strategy manifest not found: {manifest_path}")
+    payload = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+    if isinstance(payload, dict):
+        strategies = payload.get("strategies")
+    elif isinstance(payload, list):
+        strategies = payload
+    else:
+        raise ValueError("Strategy manifest must contain a top-level mapping or list.")
+    if not isinstance(strategies, list):
+        raise ValueError("Strategy manifest must contain a top-level 'strategies' list.")
+    return strategies
+
+
+def _resolve_strategy_payloads(
+    payload: dict[str, object],
+    *,
+    config_path: Path | None,
+) -> list[dict[str, object]]:
+    strategies_value = payload.get("strategies")
+    if strategies_value is not None:
+        if not isinstance(strategies_value, list):
+            raise ValueError("Strategies config must contain a list.")
+        return strategies_value
+
+    manifest_path_value = payload.get("strategy_manifest_path")
+    manifest_path: Path | None = None
+    if manifest_path_value not in (None, ""):
+        manifest_path = Path(str(manifest_path_value))
+        if not manifest_path.is_absolute():
+            base_dir = config_path.parent if config_path is not None else Path(__file__).resolve().parents[2]
+            manifest_path = (base_dir / manifest_path).resolve()
+    elif config_path is None:
+        default_manifest_path = _default_strategy_manifest_path()
+        if default_manifest_path.exists():
+            manifest_path = default_manifest_path
+
+    if manifest_path is not None:
+        payload["strategy_manifest_path"] = manifest_path
+        return _load_strategy_manifest_payload(manifest_path)
+
+    return [strategy.model_dump() for strategy in _default_strategies()]
 
 
 def load_portfolio_config(path: str | Path | None = None) -> MultiTickerPortfolioConfig:
@@ -515,8 +577,7 @@ def load_portfolio_config(path: str | Path | None = None) -> MultiTickerPortfoli
         if not isinstance(risk_payload, dict):
             raise ValueError("Risk controls config must contain a top-level mapping.")
         payload = _deep_merge(payload, risk_payload)
-    if "strategies" not in payload:
-        payload["strategies"] = [strategy.model_dump() for strategy in _default_strategies()]
+    payload["strategies"] = _resolve_strategy_payloads(payload, config_path=config_path)
     repo_root = Path(__file__).resolve().parents[2]
     env_file_payload = dotenv_values(repo_root / ".env") if (repo_root / ".env").exists() else {}
 

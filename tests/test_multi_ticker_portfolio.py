@@ -159,6 +159,9 @@ def test_default_multi_ticker_portfolio_contains_all_symbols() -> None:
         "SCHW",
         "NKE",
     )
+    assert config.strategy_manifest_path is not None
+    assert config.strategy_manifest_path.name == "multi_ticker_portfolio_live.yaml"
+    assert len(config.strategies) == 82
     assert all(counts[symbol] >= 1 for symbol in config.execution.underlying_symbols)
     assert counts["QQQ"] >= 3
     assert counts["XLE"] >= 4
@@ -263,6 +266,46 @@ def test_portfolio_config_loads_risk_controls_overlay(tmp_path: Path) -> None:
     assert config.risk.broker_equity_emergency_stop == 30_500
     assert config.execution.max_relative_spread == 0.22
     assert config.execution.stock_feed == "iex"
+
+
+def test_portfolio_config_loads_strategies_from_manifest_path(tmp_path: Path) -> None:
+    strategy = default_portfolio_config().strategies[0].model_dump(mode="python")
+    manifest_path = tmp_path / "strategy_manifest.yaml"
+    manifest_path.write_text(
+        "version: 1\n"
+        "strategies:\n"
+        f"  - name: {strategy['name']}\n"
+        f"    underlying_symbol: {strategy['underlying_symbol']}\n"
+        f"    regime: {strategy['regime']}\n"
+        f"    family: {strategy['family']}\n"
+        f"    description: {strategy['description']}\n"
+        f"    dte_mode: {strategy['dte_mode']}\n"
+        f"    signal_name: {strategy['signal_name']}\n"
+        f"    timing_profile: {strategy['timing_profile']}\n"
+        f"    hard_exit_minute: {strategy['hard_exit_minute']}\n"
+        f"    risk_fraction: {strategy['risk_fraction']}\n"
+        f"    max_contracts: {strategy['max_contracts']}\n"
+        f"    profit_target_multiple: {strategy['profit_target_multiple']}\n"
+        f"    stop_loss_multiple: {strategy['stop_loss_multiple']}\n"
+        "    legs:\n"
+        f"      - option_type: {strategy['legs'][0]['option_type']}\n"
+        f"        side: {strategy['legs'][0]['side']}\n"
+        f"        target_delta: {strategy['legs'][0]['target_delta']}\n"
+        f"        min_abs_delta: {strategy['legs'][0]['min_abs_delta']}\n"
+        f"        max_abs_delta: {strategy['legs'][0]['max_abs_delta']}\n",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "portfolio.yaml"
+    config_path.write_text(
+        f"strategy_manifest_path: {manifest_path.name}\n",
+        encoding="utf-8",
+    )
+
+    config = load_portfolio_config(config_path)
+
+    assert config.strategy_manifest_path == manifest_path.resolve()
+    assert len(config.strategies) == 1
+    assert config.strategies[0].name == strategy["name"]
 
 
 def test_disabled_daily_loss_gate_never_blocks_entries() -> None:

@@ -6,6 +6,8 @@ Use these prompts on the destination Windows machine after cloning `codexalpaca_
 
 ```text
 Open C:\Users\<you>\Downloads\codexalpaca_repo. Set this machine up for the multi-ticker paper trader on Windows using the native path, not Docker. Run the setup script, verify the Python environment, verify tests and doctor checks, and install the scheduled tasks. Use Google Drive for the shared ownership lease path. Do not start trading yet. Summarize anything I still need to provide locally.
+
+Make sure the checked-in live strategy manifest at `config/strategy_manifests/multi_ticker_portfolio_live.yaml` is the strategy source of truth this machine will use.
 ```
 
 ## 2. Restore The Live Runtime Handoff

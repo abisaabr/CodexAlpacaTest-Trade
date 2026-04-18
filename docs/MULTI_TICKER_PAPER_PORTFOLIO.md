@@ -28,6 +28,22 @@ This runner now trades the validated shared-account book across:
 
 The live book uses a shared virtual `$25,000` sleeve and `82` strategy entries, including three explicit choppy aliases that intentionally reuse validated same-day single-leg setups under separate regime labels.
 
+The checked-in live source of truth now lives at:
+
+- `config/strategy_manifests/multi_ticker_portfolio_live.yaml`
+
+The runner loads that manifest through `config/multi_ticker_paper_portfolio.yaml`, so a standby or replacement machine gets the same live strategy book by pulling the repo. To refresh the manifest after an approved promotion, run:
+
+```bash
+python scripts/sync_live_strategy_manifest.py
+```
+
+If you are promoting from a separate staged strategy file instead of the current hardcoded fallback live book, pass it explicitly:
+
+```bash
+python scripts/sync_live_strategy_manifest.py --source path/to/promoted_strategies.yaml
+```
+
 ## Notifications
 
 The paper trader can publish its morning startup check, midday status, and end-of-day summary through any combination of:

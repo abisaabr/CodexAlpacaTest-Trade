@@ -13,6 +13,8 @@ The easiest way to run this repo on any machine is:
 
 That keeps GitHub as the source of truth for code while local state, secrets, and shared ownership stay outside the repo.
 
+The live paper-runner strategy book is now also checked in as data at `config/strategy_manifests/multi_ticker_portfolio_live.yaml`. That means a replacement machine gets the exact same promoted sleeves by pulling the repo, without relying on a private local Python tuple.
+
 ## One-Command Setup
 
 ### Windows
