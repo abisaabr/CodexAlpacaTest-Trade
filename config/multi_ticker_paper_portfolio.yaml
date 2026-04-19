@@ -14,6 +14,22 @@ execution:
   - IWM
   - NVDA
   - TSLA
+  - MSFT
+  - BAC
+  - PLTR
+  - GLD
+  - ARKK
+  - XLE
+  - GDX
+  - SLV
+  - AMZN
+  - JPM
+  - XOM
+  - ORCL
+  - SHOP
+  - CRM
+  - SCHW
+  - NKE
   option_feed: indicative
   stock_feed: iex
   submit_paper_orders: true

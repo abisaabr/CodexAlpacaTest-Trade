@@ -22,11 +22,13 @@ The runner loads that manifest through `config/multi_ticker_paper_portfolio.yaml
 python scripts/sync_live_strategy_manifest.py
 ```
 
-If you are promoting from a separate staged strategy file instead of the current hardcoded fallback live book, pass it explicitly:
+If you are promoting from a separate staged strategy file instead of the current hardcoded fallback live book, pass it explicitly. The safest rebuild path is to merge those winners into the broader built-in live defaults by symbol, so the promotion does not accidentally shrink the universe:
 
 ```bash
-python scripts/sync_live_strategy_manifest.py --source path/to/promoted_strategies.yaml
+python scripts/sync_live_strategy_manifest.py --source path/to/promoted_strategies.yaml --merge-base defaults
 ```
+
+For later incremental promotions, `--source` now merges by symbol into the current checked-in manifest by default. Use `--merge-base none` only if you intentionally want a full replacement.
 
 ## Notifications
 
