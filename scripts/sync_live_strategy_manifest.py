@@ -70,6 +70,29 @@ def _write_manifest(target: Path, strategies: list[dict[str, Any]]) -> None:
     target.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
 
 
+def _ordered_underlying_symbols(strategies: list[dict[str, Any]]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for strategy in strategies:
+        symbol = str(strategy["underlying_symbol"]).upper()
+        if symbol not in seen:
+            seen.add(symbol)
+            ordered.append(symbol)
+    return ordered
+
+
+def _sync_portfolio_config_metadata(config_path: Path, strategies: list[dict[str, Any]]) -> None:
+    payload = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    if not isinstance(payload, dict):
+        raise ValueError("Portfolio config must contain a top-level mapping.")
+    execution = payload.setdefault("execution", {})
+    if not isinstance(execution, dict):
+        raise ValueError("Portfolio config execution section must be a mapping.")
+    execution["underlying_symbols"] = _ordered_underlying_symbols(strategies)
+    payload["description"] = "Shared-account intraday options paper portfolio using the checked-in live strategy manifest."
+    config_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+
 def _print_summary(strategies: list[dict[str, Any]]) -> None:
     by_symbol = Counter(str(strategy["underlying_symbol"]).upper() for strategy in strategies)
     by_name = Counter(str(strategy["name"]) for strategy in strategies)
@@ -115,11 +138,18 @@ def main() -> None:
             raise SystemExit(
                 f"Manifest/config mismatch: manifest has {len(manifest_strategies)} strategies but config loads {len(config.strategies)}."
             )
+        manifest_symbols = _ordered_underlying_symbols(manifest_strategies)
+        config_symbols = list(config.execution.underlying_symbols)
+        if manifest_symbols != config_symbols:
+            raise SystemExit(
+                "Manifest/config mismatch: execution.underlying_symbols does not match manifest symbols."
+            )
         _print_summary(manifest_strategies)
         return
 
     source_strategies = _load_source_strategy_payloads(args.source)
     _write_manifest(args.target, source_strategies)
+    _sync_portfolio_config_metadata(args.config_path, source_strategies)
     config = load_portfolio_config(args.config_path)
     _print_summary([strategy.model_dump(mode="python") for strategy in config.strategies])
     print(f"manifest_path={args.target}")

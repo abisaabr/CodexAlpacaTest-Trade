@@ -9,24 +9,8 @@ This runner now trades the validated shared-account book across:
 - `IWM`
 - `NVDA`
 - `TSLA`
-- `MSFT`
-- `BAC`
-- `PLTR`
-- `GLD`
-- `ARKK`
-- `XLE`
-- `GDX`
-- `SLV`
-- `AMZN`
-- `JPM`
-- `XOM`
-- `ORCL`
-- `SHOP`
-- `CRM`
-- `SCHW`
-- `NKE`
 
-The live book uses a shared virtual `$25,000` sleeve and `82` strategy entries, including three explicit choppy aliases that intentionally reuse validated same-day single-leg setups under separate regime labels.
+The current checked-in live book uses a shared virtual `$25,000` sleeve and `22` strategy entries across those five core symbols. Future promotions should refresh the checked-in manifest rather than hand-editing Python defaults.
 
 The checked-in live source of truth now lives at:
 

@@ -1,5 +1,6 @@
 name: multi_ticker_portfolio_paper_trader
-description: Shared-account intraday options paper portfolio across QQQ, SPY, IWM, NVDA, TSLA, MSFT, BAC, PLTR, GLD, ARKK, XLE, GDX, SLV, AMZN, JPM, XOM, ORCL, SHOP, CRM, SCHW, and NKE using the validated shared-account winners.
+description: Shared-account intraday options paper portfolio using the checked-in
+  live strategy manifest.
 risk_controls_path: risk_controls/multi_ticker_portfolio.yaml
 strategy_manifest_path: strategy_manifests/multi_ticker_portfolio_live.yaml
 ownership:
@@ -8,27 +9,11 @@ ownership:
   lease_ttl_seconds: 180
 execution:
   underlying_symbols:
-    - QQQ
-    - SPY
-    - IWM
-    - NVDA
-    - TSLA
-    - MSFT
-    - BAC
-    - PLTR
-    - GLD
-    - ARKK
-    - XLE
-    - GDX
-    - SLV
-    - AMZN
-    - JPM
-    - XOM
-    - ORCL
-    - SHOP
-    - CRM
-    - SCHW
-    - NKE
+  - QQQ
+  - SPY
+  - IWM
+  - NVDA
+  - TSLA
   option_feed: indicative
   stock_feed: iex
   submit_paper_orders: true

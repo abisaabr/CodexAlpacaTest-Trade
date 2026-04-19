@@ -486,6 +486,9 @@ def _default_strategies() -> tuple[StrategyConfig, ...]:
 
 
 def default_portfolio_config() -> MultiTickerPortfolioConfig:
+    default_config_path = _default_portfolio_config_path()
+    if default_config_path.exists():
+        return load_portfolio_config(default_config_path)
     payload: dict[str, object] = {}
     default_manifest_path = _default_strategy_manifest_path()
     if default_manifest_path.exists():
@@ -510,6 +513,10 @@ def _deep_merge(base: dict[str, object], overlay: dict[str, object]) -> dict[str
 
 def _default_strategy_manifest_path() -> Path:
     return Path(__file__).resolve().parents[2] / "config" / "strategy_manifests" / "multi_ticker_portfolio_live.yaml"
+
+
+def _default_portfolio_config_path() -> Path:
+    return Path(__file__).resolve().parents[2] / "config" / "multi_ticker_paper_portfolio.yaml"
 
 
 def _load_strategy_manifest_payload(manifest_path: Path) -> list[dict[str, object]]:

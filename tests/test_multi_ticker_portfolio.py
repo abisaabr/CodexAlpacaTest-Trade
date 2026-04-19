@@ -135,59 +135,34 @@ def test_default_multi_ticker_portfolio_contains_all_symbols() -> None:
     config = default_portfolio_config()
 
     counts = Counter(strategy.underlying_symbol for strategy in config.strategies)
+    ordered_symbols: list[str] = []
+    for strategy in config.strategies:
+        if strategy.underlying_symbol not in ordered_symbols:
+            ordered_symbols.append(strategy.underlying_symbol)
 
-    assert tuple(config.execution.underlying_symbols) == (
-        "QQQ",
-        "SPY",
-        "IWM",
-        "NVDA",
-        "TSLA",
-        "MSFT",
-        "BAC",
-        "PLTR",
-        "GLD",
-        "ARKK",
-        "XLE",
-        "GDX",
-        "SLV",
-        "AMZN",
-        "JPM",
-        "XOM",
-        "ORCL",
-        "SHOP",
-        "CRM",
-        "SCHW",
-        "NKE",
-    )
+    assert tuple(config.execution.underlying_symbols) == tuple(ordered_symbols)
     assert config.strategy_manifest_path is not None
     assert config.strategy_manifest_path.name == "multi_ticker_portfolio_live.yaml"
-    assert len(config.strategies) == 82
+    assert len(config.strategies) == len({strategy.name for strategy in config.strategies})
     assert all(counts[symbol] >= 1 for symbol in config.execution.underlying_symbols)
-    assert counts["QQQ"] >= 3
-    assert counts["XLE"] >= 4
-    assert counts["GDX"] >= 5
-    assert counts["SLV"] >= 5
-    assert counts["AMZN"] >= 7
-    assert counts["JPM"] >= 6
-    assert counts["XOM"] >= 3
-    assert counts["ORCL"] >= 4
-    assert counts["SHOP"] >= 5
-    assert counts["CRM"] >= 5
-    assert counts["SCHW"] >= 2
-    assert counts["NKE"] >= 2
+    assert counts["QQQ"] >= 1
+    assert counts["SPY"] >= 1
+    assert counts["IWM"] >= 1
+    assert counts["NVDA"] >= 1
+    assert counts["TSLA"] >= 1
 
 
-def test_default_multi_ticker_portfolio_includes_xle_choppy_alias() -> None:
+def test_default_multi_ticker_portfolio_includes_current_choppy_strategy() -> None:
     config = default_portfolio_config()
     alias = next(
         strategy
         for strategy in config.strategies
-        if strategy.name == "xle__base__orb_long_call_same_day__choppy"
+        if strategy.name == "qqq__fast__iron_butterfly_same_day"
     )
 
-    assert alias.underlying_symbol == "XLE"
+    assert alias.underlying_symbol == "QQQ"
     assert alias.regime == "choppy"
-    assert alias.signal_name == "orb_call"
+    assert alias.signal_name == "iron_condor"
 
 
 def test_fast_trend_call_triggers_before_base_profile() -> None:
@@ -615,7 +590,7 @@ def test_evaluate_entry_respects_same_day_entry_cutoff() -> None:
             ),
             "execution": base.execution.model_copy(update={"underlying_symbols": ("QQQ",)}),
             "strategies": tuple(
-                strategy for strategy in base.strategies if strategy.name == "qqq__slow__orb_long_put_same_day"
+                strategy for strategy in base.strategies if strategy.name == "qqq__fast__iron_butterfly_same_day"
             ),
         }
     )
@@ -863,13 +838,13 @@ def test_midday_notification_lines_include_open_positions_and_strategy_pnl() -> 
 
 def test_startup_check_only_requires_inventory_for_promoted_dte_modes() -> None:
     full_config = default_portfolio_config()
-    jpm_strategies = tuple(
-        strategy for strategy in full_config.strategies if strategy.underlying_symbol == "JPM"
+    nvda_strategies = tuple(
+        strategy for strategy in full_config.strategies if strategy.underlying_symbol == "NVDA"
     )
     config = full_config.model_copy(
         update={
-            "execution": full_config.execution.model_copy(update={"underlying_symbols": ("JPM",)}),
-            "strategies": jpm_strategies,
+            "execution": full_config.execution.model_copy(update={"underlying_symbols": ("NVDA",)}),
+            "strategies": nvda_strategies,
         }
     )
 
@@ -882,7 +857,7 @@ def test_startup_check_only_requires_inventory_for_promoted_dte_modes() -> None:
 
     trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
     trader.portfolio_config = config
-    trader.underlyings = ("JPM",)
+    trader.underlyings = ("NVDA",)
     trader.broker = _BrokerStub()
 
     option_chain = pd.DataFrame(
@@ -893,7 +868,7 @@ def test_startup_check_only_requires_inventory_for_promoted_dte_modes() -> None:
     )
     now_et = pd.Timestamp.now(tz=ZoneInfo("America/New_York")).to_pydatetime()
     snapshot = SymbolSnapshot(
-        underlying_symbol="JPM",
+        underlying_symbol="NVDA",
         trade_date=now_et.date(),
         stock_frame=pd.DataFrame([{"close": 100.0}]),
         option_chain=option_chain,
@@ -911,11 +886,11 @@ def test_startup_check_only_requires_inventory_for_promoted_dte_modes() -> None:
     status, details = trader._perform_startup_check(
         session=session,
         trade_date=now_et.date(),
-        snapshots={"JPM": snapshot},
+        snapshots={"NVDA": snapshot},
     )
 
     assert status == "passed"
-    assert details["underlyings"]["JPM"]["required_inventory"] == {
+    assert details["underlyings"]["NVDA"]["required_inventory"] == {
         "same_day_calls": False,
         "same_day_puts": False,
         "next_expiry_calls": True,
@@ -988,13 +963,13 @@ def test_startup_check_fails_when_broker_equity_below_trade_threshold() -> None:
 
 def test_startup_check_allows_symbol_when_at_least_one_strategy_is_feasible() -> None:
     full_config = default_portfolio_config()
-    arkk_strategies = tuple(
-        strategy for strategy in full_config.strategies if strategy.underlying_symbol == "ARKK"
+    qqq_strategies = tuple(
+        strategy for strategy in full_config.strategies if strategy.underlying_symbol == "QQQ"
     )
     config = full_config.model_copy(
         update={
-            "execution": full_config.execution.model_copy(update={"underlying_symbols": ("ARKK",)}),
-            "strategies": arkk_strategies,
+            "execution": full_config.execution.model_copy(update={"underlying_symbols": ("QQQ",)}),
+            "strategies": qqq_strategies,
         }
     )
 
@@ -1007,7 +982,7 @@ def test_startup_check_allows_symbol_when_at_least_one_strategy_is_feasible() ->
 
     trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
     trader.portfolio_config = config
-    trader.underlyings = ("ARKK",)
+    trader.underlyings = ("QQQ",)
     trader.broker = _BrokerStub()
 
     option_chain = pd.DataFrame(
@@ -1018,7 +993,7 @@ def test_startup_check_allows_symbol_when_at_least_one_strategy_is_feasible() ->
     )
     now_et = pd.Timestamp.now(tz=ZoneInfo("America/New_York")).to_pydatetime()
     snapshot = SymbolSnapshot(
-        underlying_symbol="ARKK",
+        underlying_symbol="QQQ",
         trade_date=now_et.date(),
         stock_frame=pd.DataFrame([{"close": 100.0}]),
         option_chain=option_chain,
@@ -1036,19 +1011,25 @@ def test_startup_check_allows_symbol_when_at_least_one_strategy_is_feasible() ->
     status, details = trader._perform_startup_check(
         session=session,
         trade_date=now_et.date(),
-        snapshots={"ARKK": snapshot},
+        snapshots={"QQQ": snapshot},
     )
 
     assert status == "passed"
-    assert details["underlyings"]["ARKK"]["available_strategies"] == [
-        "arkk__fast__trend_long_call_next_expiry",
-        "arkk__slow__trend_long_call_next_expiry",
-        "arkk__fast__trend_long_put_next_expiry",
+    assert details["underlyings"]["QQQ"]["available_strategies"] == [
+        "qqq__fast__trend_long_call_next_expiry_d70",
+        "qqq__fast__trend_long_call_next_expiry",
+        "qqq__base__orb_long_put_next_expiry",
+        "qqq__slow__orb_long_put_next_expiry",
     ]
-    assert details["underlyings"]["ARKK"]["unavailable_strategies"] == [
+    assert details["underlyings"]["QQQ"]["unavailable_strategies"] == [
         {
-            "name": "arkk__fast__orb_long_call_same_day",
-            "missing_inventory": ["same_day_calls"],
+            "name": "qqq__fast__iron_butterfly_same_day",
+            "missing_inventory": [
+                "same_day_calls",
+                "same_day_calls",
+                "same_day_puts",
+                "same_day_puts",
+            ],
         }
     ]
 
