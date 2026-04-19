@@ -87,11 +87,15 @@ docker compose run --rm portfolio-trader python scripts/run_multi_ticker_standby
 
 An hourly local health-check runner is available at `scripts/run_multi_ticker_health_check.py`. It verifies the main scheduled task, checks whether the paper trader is running and updating its session during market hours, and sends ntfy alerts when something is wrong. Safe operational fixes such as reinstalling the main scheduled task or restarting a missing trader process can be enabled with `--restart-if-needed`.
 
+An hourly GitHub sync runner is also available at `scripts/run_multi_ticker_github_sync.py`. It fetches the tracked branch, validates the checked-in live strategy manifest, and only fast-forwards the repo when the machine is flat and outside market hours. During the trading session it will still detect that the remote branch is ahead, but it will wait for a safe window instead of mutating the live code underneath an active runner.
+
 A separate end-of-day close safeguard is also available:
 
 - `scripts/run_multi_ticker_eod_close_guard.py`
 - `scripts/run_multi_ticker_eod_close_guard.ps1`
 - `scripts/install_multi_ticker_eod_close_guard_task.ps1`
+- `scripts/run_multi_ticker_github_sync.ps1`
+- `scripts/install_multi_ticker_github_sync_task.ps1`
 
 That runner starts near `3:58 PM ET`, runs an independent flatten and broker-reconciliation sweep, and keeps retrying until the book is flat or it times out with a clear report.
 

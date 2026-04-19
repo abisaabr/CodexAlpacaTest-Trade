@@ -45,6 +45,7 @@ if ($InstallTasks) {
     & (Join-Path $repoRoot "scripts\install_multi_ticker_paper_task.ps1") -StartTime $TaskStartTime
     & (Join-Path $repoRoot "scripts\install_multi_ticker_health_check_task.ps1")
     & (Join-Path $repoRoot "scripts\install_multi_ticker_eod_close_guard_task.ps1")
+    & (Join-Path $repoRoot "scripts\install_multi_ticker_github_sync_task.ps1")
 }
 
 Write-Host ""
@@ -55,6 +56,7 @@ Write-Host "  2. Fill .env with Alpaca paper credentials and your ntfy topic."
 Write-Host "  3. If this is a standby machine, run python scripts\run_multi_ticker_standby_failover_check.py"
 Write-Host "  4. Run python scripts\doctor.py --skip-connectivity"
 Write-Host "  5. Run python -m pytest"
+Write-Host "  6. Run python scripts\run_multi_ticker_github_sync.py --json to verify GitHub sync is healthy."
 if (-not $InstallTasks) {
-    Write-Host "  6. Optional: rerun this script with -Mode native -InstallTasks to install the weekday scheduler."
+    Write-Host "  7. Optional: rerun this script with -Mode native -InstallTasks to install the weekday scheduler."
 }

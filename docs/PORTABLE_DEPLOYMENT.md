@@ -15,6 +15,8 @@ That keeps GitHub as the source of truth for code while local state, secrets, an
 
 The live paper-runner strategy book is now also checked in as data at `config/strategy_manifests/multi_ticker_portfolio_live.yaml`. That means a replacement machine gets the exact same promoted sleeves by pulling the repo, without relying on a private local Python tuple.
 
+For native Windows installs, the repo also includes an hourly GitHub sync task that fetches `codex/qqq-paper-portfolio`, validates the checked-in live strategy manifest, and only fast-forwards when the machine is flat and outside market hours. That keeps a standby or replacement machine current without hot-swapping strategy code during the session.
+
 ## One-Command Setup
 
 ### Windows
