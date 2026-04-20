@@ -30,9 +30,6 @@ execution:
   - CRM
   - SCHW
   - NKE
-  - CRWV
-  - GOOG
-  - SMCI
   option_feed: indicative
   stock_feed: iex
   submit_paper_orders: true
