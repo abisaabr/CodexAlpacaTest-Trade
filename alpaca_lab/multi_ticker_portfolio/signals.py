@@ -22,6 +22,14 @@ class TimingProfile:
 
 
 TIMING_PROFILES: dict[str, TimingProfile] = {
+    "reactive": TimingProfile(
+        name="reactive",
+        orb_window=5,
+        trend_start=20,
+        credit_minute=45,
+        straddle_minute=5,
+        condor_minute=15,
+    ),
     "fast": TimingProfile(
         name="fast",
         orb_window=10,
@@ -45,6 +53,14 @@ TIMING_PROFILES: dict[str, TimingProfile] = {
         credit_minute=120,
         straddle_minute=20,
         condor_minute=45,
+    ),
+    "patient": TimingProfile(
+        name="patient",
+        orb_window=25,
+        trend_start=75,
+        credit_minute=150,
+        straddle_minute=25,
+        condor_minute=60,
     ),
 }
 

@@ -178,6 +178,19 @@ def test_fast_trend_call_triggers_before_base_profile() -> None:
     assert signal_is_true("trend_call", frame, timing_profile="base") is False
 
 
+def test_reactive_trend_call_triggers_before_fast_profile() -> None:
+    frame = _build_frame(
+        26,
+        close_fn=lambda idx: 100.0 + 0.010 * idx,
+        vwap_offset=-0.12,
+        ema_fast_offset=0.05,
+        ema_slow_offset=-0.03,
+    )
+
+    assert signal_is_true("trend_call", frame, timing_profile="reactive") is True
+    assert signal_is_true("trend_call", frame, timing_profile="fast") is False
+
+
 def test_fast_orb_put_triggers_before_base_profile() -> None:
     def close_fn(idx: int) -> float:
         if idx < 10:
@@ -198,6 +211,19 @@ def test_fast_orb_put_triggers_before_base_profile() -> None:
 
     assert signal_is_true("orb_put", frame, timing_profile="fast") is True
     assert signal_is_true("orb_put", frame, timing_profile="base") is False
+
+
+def test_slow_trend_call_triggers_before_patient_profile() -> None:
+    frame = _build_frame(
+        70,
+        close_fn=lambda idx: 100.0 + 0.008 * idx,
+        vwap_offset=-0.10,
+        ema_fast_offset=0.04,
+        ema_slow_offset=-0.02,
+    )
+
+    assert signal_is_true("trend_call", frame, timing_profile="slow") is True
+    assert signal_is_true("trend_call", frame, timing_profile="patient") is False
 
 
 def test_portfolio_config_allows_disabling_daily_loss_gate(tmp_path: Path) -> None:
@@ -245,6 +271,7 @@ def test_portfolio_config_loads_risk_controls_overlay(tmp_path: Path) -> None:
 
 def test_portfolio_config_loads_strategies_from_manifest_path(tmp_path: Path) -> None:
     strategy = default_portfolio_config().strategies[0].model_dump(mode="python")
+    strategy["timing_profile"] = "reactive"
     manifest_path = tmp_path / "strategy_manifest.yaml"
     manifest_path.write_text(
         "version: 1\n"

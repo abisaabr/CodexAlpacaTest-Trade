@@ -39,7 +39,7 @@ class StrategyConfig(BaseModel):
         "long_straddle",
         "iron_condor",
     ]
-    timing_profile: Literal["fast", "base", "slow"] = "base"
+    timing_profile: Literal["reactive", "fast", "base", "slow", "patient"] = "base"
     hard_exit_minute: int
     risk_fraction: float
     max_contracts: int
@@ -82,7 +82,7 @@ class EventBlackoutConfig(BaseModel):
     end_minute: int = 390
     symbols: tuple[str, ...] = ()
     regimes: tuple[Literal["bull", "bear", "choppy"], ...] = ()
-    timing_profiles: tuple[Literal["fast", "base", "slow"], ...] = ()
+    timing_profiles: tuple[Literal["reactive", "fast", "base", "slow", "patient"], ...] = ()
     dte_modes: tuple[Literal["same_day", "next_expiry"], ...] = ()
     enabled: bool = True
 
