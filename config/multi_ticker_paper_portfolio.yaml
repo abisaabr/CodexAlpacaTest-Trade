@@ -33,6 +33,8 @@ execution:
   - CRWV
   - GOOG
   - SMCI
+  - ARM
+  - DIS
   option_feed: indicative
   stock_feed: iex
   submit_paper_orders: true
