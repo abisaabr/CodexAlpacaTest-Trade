@@ -7,6 +7,9 @@ risk:
   max_open_positions: 10
   max_positions_per_regime: 10
   max_positions_per_symbol: 3
+  entry_cluster_window_minutes: 15
+  max_positions_per_regime_window: 3
+  max_positions_per_bucket_regime_window: 2
   max_open_risk_fraction_per_symbol: 0.05
   bucket_caps:
     - name: index_beta

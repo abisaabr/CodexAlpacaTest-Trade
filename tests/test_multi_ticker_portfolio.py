@@ -467,6 +467,139 @@ def test_evaluate_entry_respects_bucket_risk_cap() -> None:
     assert event["decision_reason"] == "bucket_risk_cap:index_beta"
 
 
+def test_evaluate_entry_blocks_regime_entry_cluster_window() -> None:
+    base = default_portfolio_config()
+    config = base.model_copy(
+        update={
+            "risk": base.risk.model_copy(
+                update={
+                    "entry_cluster_window_minutes": 15,
+                    "max_positions_per_regime_window": 3,
+                    "max_positions_per_bucket_regime_window": None,
+                }
+            ),
+            "execution": base.execution.model_copy(update={"underlying_symbols": ("QQQ", "SPY", "TSLA", "PLTR")}),
+            "strategies": tuple(
+                strategy for strategy in base.strategies if strategy.name == "tsla__fast__trend_long_put_next_expiry"
+            ),
+        }
+    )
+    strategy = config.strategies[0]
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader._select_legs = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should not select legs"))
+    recent_bear_trades = [
+        _sample_open_trade(
+            strategy_name="qqq__slow__orb_long_put_same_day",
+            underlying_symbol="QQQ",
+            regime="bear",
+            delta=-0.52,
+        ),
+        _sample_open_trade(
+            strategy_name="spy__fast__trend_long_put_next_expiry",
+            underlying_symbol="SPY",
+            regime="bear",
+            delta=-0.44,
+        ),
+        _sample_open_trade(
+            strategy_name="pltr__fast__trend_long_put_next_expiry",
+            underlying_symbol="PLTR",
+            regime="bear",
+            delta=-0.38,
+        ),
+    ]
+    for minute, trade in zip((18, 24, 29), recent_bear_trades, strict=True):
+        trade["entry_minute"] = minute
+    session = SessionState(
+        trade_date="2026-04-16",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+        open_trades=recent_bear_trades,
+    )
+    ledger = PortfolioLedger(realized_equity=25_000.0, high_watermark=25_000.0)
+
+    open_trade, event = trader._evaluate_entry(
+        strategy=strategy,
+        session=session,
+        ledger=ledger,
+        option_chain=pd.DataFrame(),
+        spot_price=500.0,
+        current_minute=30,
+        current_equity=25_000.0,
+        broker_equity=30_000.0,
+        attempt_id="attempt-regime-cluster",
+    )
+
+    assert open_trade is None
+    assert event["decision_reason"] == "regime_entry_cluster:bear"
+    assert event["recent_regime_position_count"] == 3
+    assert event["max_positions_per_regime_window"] == 3
+
+
+def test_evaluate_entry_blocks_bucket_regime_entry_cluster_window() -> None:
+    base = default_portfolio_config()
+    config = base.model_copy(
+        update={
+            "risk": base.risk.model_copy(
+                update={
+                    "entry_cluster_window_minutes": 15,
+                    "max_positions_per_regime_window": None,
+                    "max_positions_per_bucket_regime_window": 2,
+                }
+            ),
+            "execution": base.execution.model_copy(update={"underlying_symbols": ("TSLA", "PLTR", "ARKK")}),
+            "strategies": tuple(
+                strategy for strategy in base.strategies if strategy.name == "arkk__fast__trend_long_put_next_expiry"
+            ),
+        }
+    )
+    strategy = config.strategies[0]
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader._select_legs = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should not select legs"))
+    recent_growth_tech_bears = [
+        _sample_open_trade(
+            strategy_name="tsla__fast__trend_long_put_next_expiry",
+            underlying_symbol="TSLA",
+            regime="bear",
+            delta=-0.41,
+        ),
+        _sample_open_trade(
+            strategy_name="pltr__fast__trend_long_put_next_expiry",
+            underlying_symbol="PLTR",
+            regime="bear",
+            delta=-0.36,
+        ),
+    ]
+    for minute, trade in zip((23, 28), recent_growth_tech_bears, strict=True):
+        trade["entry_minute"] = minute
+    session = SessionState(
+        trade_date="2026-04-16",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+        open_trades=recent_growth_tech_bears,
+    )
+    ledger = PortfolioLedger(realized_equity=25_000.0, high_watermark=25_000.0)
+
+    open_trade, event = trader._evaluate_entry(
+        strategy=strategy,
+        session=session,
+        ledger=ledger,
+        option_chain=pd.DataFrame(),
+        spot_price=500.0,
+        current_minute=30,
+        current_equity=25_000.0,
+        broker_equity=30_000.0,
+        attempt_id="attempt-bucket-regime-cluster",
+    )
+
+    assert open_trade is None
+    assert event["decision_reason"] == "bucket_regime_entry_cluster:growth_tech:bear"
+    assert event["recent_bucket_regime_position_count"] == 2
+    assert event["max_positions_per_bucket_regime_window"] == 2
+    assert event["bucket_name"] == "growth_tech"
+
+
 def test_evaluate_entry_blocks_on_projected_delta_hard_cap() -> None:
     base = default_portfolio_config()
     config = base.model_copy(

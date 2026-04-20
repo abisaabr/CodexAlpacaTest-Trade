@@ -122,6 +122,9 @@ class RiskConfig(BaseModel):
     max_open_positions: int = 10
     max_positions_per_regime: int = 10
     max_positions_per_symbol: int = 3
+    entry_cluster_window_minutes: int | None = 15
+    max_positions_per_regime_window: int | None = 3
+    max_positions_per_bucket_regime_window: int | None = 2
     max_open_risk_fraction_per_symbol: float | None = 0.05
     bucket_caps: tuple[RiskBucketConfig, ...] = Field(
         default_factory=lambda: (

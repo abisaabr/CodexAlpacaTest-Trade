@@ -55,6 +55,8 @@ PROJECTED_VEGA_HARD_CAP_REASON = "projected_vega_hard_cap"
 ENTRY_EXECUTION_CIRCUIT_BREAKER_REASON = "entry_execution_circuit_breaker"
 LATE_DAY_ENTRY_CUTOFF_REASON = "late_day_entry_cutoff"
 EVENT_BLACKOUT_REASON = "event_blackout"
+REGIME_ENTRY_CLUSTER_REASON = "regime_entry_cluster"
+BUCKET_REGIME_ENTRY_CLUSTER_REASON = "bucket_regime_entry_cluster"
 
 
 @dataclass(slots=True)
@@ -902,6 +904,71 @@ class MultiTickerPortfolioPaperTrader:
     def _symbol_position_count(self, session: SessionState, underlying_symbol: str) -> int:
         return sum(1 for trade in session.open_trades if trade["underlying_symbol"] == underlying_symbol)
 
+    @staticmethod
+    def _trade_entry_minute(trade_payload: dict[str, Any]) -> int | None:
+        raw_value = trade_payload.get("entry_minute")
+        if raw_value in (None, ""):
+            return None
+        try:
+            return int(raw_value)
+        except (TypeError, ValueError):
+            return None
+
+    def _recent_open_trades(
+        self,
+        session: SessionState,
+        *,
+        current_minute: int,
+        window_minutes: int | None,
+    ) -> list[dict[str, Any]]:
+        if window_minutes is None or window_minutes <= 0:
+            return list(session.open_trades)
+        window_start = max(0, int(current_minute) - int(window_minutes))
+        recent_trades: list[dict[str, Any]] = []
+        for trade in session.open_trades:
+            entry_minute = self._trade_entry_minute(trade)
+            if entry_minute is None or entry_minute >= window_start:
+                recent_trades.append(trade)
+        return recent_trades
+
+    def _recent_regime_position_count(
+        self,
+        session: SessionState,
+        *,
+        regime: str,
+        current_minute: int,
+        window_minutes: int | None,
+    ) -> int:
+        return sum(
+            1
+            for trade in self._recent_open_trades(
+                session,
+                current_minute=current_minute,
+                window_minutes=window_minutes,
+            )
+            if trade["regime"] == regime
+        )
+
+    def _recent_bucket_regime_position_count(
+        self,
+        session: SessionState,
+        *,
+        bucket: RiskBucketConfig,
+        regime: str,
+        current_minute: int,
+        window_minutes: int | None,
+    ) -> int:
+        bucket_symbols = set(bucket.symbols)
+        return sum(
+            1
+            for trade in self._recent_open_trades(
+                session,
+                current_minute=current_minute,
+                window_minutes=window_minutes,
+            )
+            if trade["regime"] == regime and str(trade["underlying_symbol"]).upper() in bucket_symbols
+        )
+
     def _trade_open_risk(self, trade_payload: dict[str, Any]) -> float:
         return float(trade_payload["max_loss_per_combo"]) * int(trade_payload["quantity"])
 
@@ -1183,6 +1250,46 @@ class MultiTickerPortfolioPaperTrader:
         if self._symbol_position_count(session, strategy.underlying_symbol) >= self.portfolio_config.risk.max_positions_per_symbol:
             event["decision_reason"] = "max_positions_per_symbol"
             return None, event
+        cluster_window_minutes = self.portfolio_config.risk.entry_cluster_window_minutes
+        max_regime_positions_window = self.portfolio_config.risk.max_positions_per_regime_window
+        if max_regime_positions_window is not None and max_regime_positions_window > 0:
+            recent_regime_positions = self._recent_regime_position_count(
+                session,
+                regime=strategy.regime,
+                current_minute=current_minute,
+                window_minutes=cluster_window_minutes,
+            )
+            if recent_regime_positions >= max_regime_positions_window:
+                event.update(
+                    {
+                        "decision_reason": f"{REGIME_ENTRY_CLUSTER_REASON}:{strategy.regime}",
+                        "entry_cluster_window_minutes": int(cluster_window_minutes or 0),
+                        "recent_regime_position_count": int(recent_regime_positions),
+                        "max_positions_per_regime_window": int(max_regime_positions_window),
+                    }
+                )
+                return None, event
+        max_bucket_regime_positions_window = self.portfolio_config.risk.max_positions_per_bucket_regime_window
+        if max_bucket_regime_positions_window is not None and max_bucket_regime_positions_window > 0:
+            for bucket in self._bucket_configs_for_symbol(strategy.underlying_symbol):
+                recent_bucket_regime_positions = self._recent_bucket_regime_position_count(
+                    session,
+                    bucket=bucket,
+                    regime=strategy.regime,
+                    current_minute=current_minute,
+                    window_minutes=cluster_window_minutes,
+                )
+                if recent_bucket_regime_positions >= max_bucket_regime_positions_window:
+                    event.update(
+                        {
+                            "decision_reason": f"{BUCKET_REGIME_ENTRY_CLUSTER_REASON}:{bucket.name}:{strategy.regime}",
+                            "entry_cluster_window_minutes": int(cluster_window_minutes or 0),
+                            "recent_bucket_regime_position_count": int(recent_bucket_regime_positions),
+                            "max_positions_per_bucket_regime_window": int(max_bucket_regime_positions_window),
+                            "bucket_name": bucket.name,
+                        }
+                    )
+                    return None, event
         if any(trade["strategy_name"] == strategy.name for trade in session.open_trades):
             event["decision_reason"] = "strategy_already_open"
             return None, event
@@ -3097,7 +3204,12 @@ class MultiTickerPortfolioPaperTrader:
         lower = text.lower()
         if lower in {"max_open_positions", "max_positions_per_regime", "max_positions_per_symbol"}:
             return "capacity"
-        if lower == "per_symbol_risk_cap" or lower.startswith("bucket_risk_cap:"):
+        if (
+            lower == "per_symbol_risk_cap"
+            or lower.startswith("bucket_risk_cap:")
+            or lower.startswith(f"{REGIME_ENTRY_CLUSTER_REASON}:")
+            or lower.startswith(f"{BUCKET_REGIME_ENTRY_CLUSTER_REASON}:")
+        ):
             return "concentration"
         if lower in {
             PROJECTED_DELTA_HARD_CAP_REASON,
