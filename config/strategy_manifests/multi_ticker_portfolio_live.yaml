@@ -1,6 +1,6 @@
 version: 1
 description: Checked-in live paper-runner strategy manifest.
-strategy_count: 108
+strategy_count: 112
 summary:
   underlying_count: 26
   by_underlying_symbol:
@@ -21,7 +21,7 @@ summary:
     NVDA: 2
     ORCL: 4
     PLTR: 4
-    QQQ: 5
+    QQQ: 9
     SCHW: 2
     SHOP: 5
     SLV: 5
@@ -31,9 +31,10 @@ summary:
     XLE: 5
     XOM: 3
   by_family:
+    Credit call spread: 1
     Iron butterfly: 1
-    Single-leg long call: 59
-    Single-leg long put: 48
+    Single-leg long call: 60
+    Single-leg long put: 50
 strategies:
 - name: qqq__fast__trend_long_call_next_expiry_d70
   underlying_symbol: QQQ
@@ -148,6 +149,91 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.2
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__base__bear_call_credit_spread_next_expiry
+  underlying_symbol: QQQ
+  regime: bear
+  family: Credit call spread
+  description: QQQ [base] Sell a next-expiry bear call credit spread after a VWAP
+    rejection confirms downside pressure.
+  dte_mode: next_expiry
+  signal_name: vwap_reject_put
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.04
+  max_contracts: 8
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.85
+  legs:
+  - option_type: call
+    side: short
+    target_delta: 0.35
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: call
+    side: long
+    target_delta: 0.15
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__fast__trend_long_put_next_expiry
+  underlying_symbol: QQQ
+  regime: bear
+  family: Single-leg long put
+  description: QQQ [fast] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__slow__trend_long_put_next_expiry
+  underlying_symbol: QQQ
+  regime: bear
+  family: Single-leg long put
+  description: QQQ [slow] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__slow__trend_long_call_next_expiry
+  underlying_symbol: QQQ
+  regime: bull
+  family: Single-leg long call
+  description: QQQ [slow] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
     min_abs_delta: 0.05
     max_abs_delta: 0.95
 - name: spy__slow__trend_long_call_next_expiry_d70
