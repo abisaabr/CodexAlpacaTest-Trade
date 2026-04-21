@@ -1,6 +1,6 @@
 version: 1
 description: Checked-in live paper-runner strategy manifest.
-strategy_count: 89
+strategy_count: 94
 summary:
   underlying_count: 21
   by_underlying_symbol:
@@ -17,7 +17,7 @@ summary:
     NVDA: 2
     ORCL: 4
     PLTR: 4
-    QQQ: 5
+    QQQ: 10
     SCHW: 2
     SHOP: 5
     SLV: 5
@@ -26,19 +26,50 @@ summary:
     XLE: 5
     XOM: 3
   by_family:
-    Iron butterfly: 1
+    Call backspread: 2
+    Iron butterfly: 2
     Single-leg long call: 48
-    Single-leg long put: 40
+    Single-leg long put: 42
 strategies:
-- name: qqq__fast__trend_long_call_next_expiry_d70
+- name: qqq__reactive__call_backspread_next_expiry
+  underlying_symbol: QQQ
+  regime: bull
+  family: Call backspread
+  description: QQQ [reactive] Buy a next-expiry call backspread with one short +0.35
+    call against two long +0.55 calls.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: reactive
+  hard_exit_minute: 360
+  risk_fraction: 0.04
+  max_contracts: 4
+  profit_target_multiple: 0.6
+  stop_loss_multiple: 0.28
+  legs:
+  - option_type: call
+    side: short
+    target_delta: 0.35
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__reactive__trend_long_call_next_expiry_d70
   underlying_symbol: QQQ
   regime: bull
   family: Single-leg long call
-  description: QQQ [fast] Buy the next-expiry call closest to +0.70 delta on upside
+  description: QQQ [reactive] Buy the next-expiry call closest to +0.70 delta on upside
     trend continuation.
   dte_mode: next_expiry
   signal_name: trend_call
-  timing_profile: fast
+  timing_profile: reactive
   hard_exit_minute: 360
   risk_fraction: 0.05
   max_contracts: 6
@@ -50,15 +81,45 @@ strategies:
     target_delta: 0.7
     min_abs_delta: 0.05
     max_abs_delta: 0.95
-- name: qqq__fast__trend_long_call_next_expiry
+- name: qqq__reactive__call_backspread_next_expiry_aggressive
+  underlying_symbol: QQQ
+  regime: bull
+  family: Call backspread
+  description: QQQ [reactive] Buy an aggressive next-expiry call backspread with one
+    short +0.25 call against two long +0.50 calls.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: reactive
+  hard_exit_minute: 360
+  risk_fraction: 0.04
+  max_contracts: 4
+  profit_target_multiple: 0.65
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: short
+    target_delta: 0.25
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: call
+    side: long
+    target_delta: 0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: call
+    side: long
+    target_delta: 0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__reactive__trend_long_call_next_expiry
   underlying_symbol: QQQ
   regime: bull
   family: Single-leg long call
-  description: QQQ [fast] Buy the next-expiry call closest to +0.60 delta on upside
+  description: QQQ [reactive] Buy the next-expiry call closest to +0.60 delta on upside
     trend continuation.
   dte_mode: next_expiry
   signal_name: trend_call
-  timing_profile: fast
+  timing_profile: reactive
   hard_exit_minute: 360
   risk_fraction: 0.05
   max_contracts: 6
@@ -108,6 +169,81 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__patient__orb_long_put_next_expiry
+  underlying_symbol: QQQ
+  regime: bear
+  family: Single-leg long put
+  description: QQQ [patient] Buy the next-expiry put closest to -0.50 delta on an
+    opening range breakdown.
+  dte_mode: next_expiry
+  signal_name: orb_put
+  timing_profile: patient
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__patient__orb_long_put_same_day_d60
+  underlying_symbol: QQQ
+  regime: bear
+  family: Single-leg long put
+  description: QQQ [patient] Buy the same-day put closest to -0.60 delta on an opening
+    range breakdown.
+  dte_mode: same_day
+  signal_name: orb_put
+  timing_profile: patient
+  hard_exit_minute: 375
+  risk_fraction: 0.05
+  max_contracts: 8
+  profit_target_multiple: 0.5
+  stop_loss_multiple: 0.35
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__reactive__iron_butterfly_same_day
+  underlying_symbol: QQQ
+  regime: choppy
+  family: Iron butterfly
+  description: QQQ [reactive] Sell a same-day iron butterfly targeting +/-0.50 shorts
+    and +/-0.20 wings.
+  dte_mode: same_day
+  signal_name: iron_condor
+  timing_profile: reactive
+  hard_exit_minute: 360
+  risk_fraction: 0.04
+  max_contracts: 5
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 1.1
+  legs:
+  - option_type: call
+    side: short
+    target_delta: 0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: call
+    side: long
+    target_delta: 0.2
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: put
+    side: short
+    target_delta: -0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: put
+    side: long
+    target_delta: -0.2
     min_abs_delta: 0.05
     max_abs_delta: 0.95
 - name: qqq__fast__iron_butterfly_same_day
