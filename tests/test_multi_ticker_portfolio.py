@@ -114,11 +114,80 @@ def _select_strategy(
         and strategy.dte_mode == dte_mode
     )
 
+def _sample_multileg_open_trade(
+    *,
+    strategy_name: str,
+    underlying_symbol: str,
+    regime: str = "bull",
+    quantity: int = 1,
+) -> dict[str, object]:
+    return asdict(
+        OpenTrade(
+            strategy_name=strategy_name,
+            underlying_symbol=underlying_symbol,
+            regime=regime,
+            quantity=quantity,
+            entry_time_et="2026-04-15T10:30:00-04:00",
+            entry_minute=60,
+            hard_exit_minute=360,
+            underlying_entry=500.0,
+            entry_debit=1.75,
+            max_loss_per_combo=175.0,
+            max_profit_per_combo=825.0,
+            profit_target_dollars=120.0,
+            stop_loss_dollars=80.0,
+            entry_order_id=None,
+            entry_fill_price=1.75,
+            legs=[
+                {
+                    "symbol": f"{underlying_symbol}260417C00500000",
+                    "expiration_date": "2026-04-17",
+                    "option_type": "call",
+                    "side": "long",
+                    "strike_price": 500.0,
+                    "target_delta": 0.45,
+                    "entry_fill_price": 3.0,
+                    "bid": 2.95,
+                    "ask": 3.05,
+                    "mark": 3.0,
+                    "delta": 0.45,
+                    "gamma": 0.08,
+                    "theta": -0.10,
+                    "vega": 0.10,
+                },
+                {
+                    "symbol": f"{underlying_symbol}260417C00510000",
+                    "expiration_date": "2026-04-17",
+                    "option_type": "call",
+                    "side": "short",
+                    "strike_price": 510.0,
+                    "target_delta": 0.25,
+                    "entry_fill_price": 1.25,
+                    "bid": 1.20,
+                    "ask": 1.30,
+                    "mark": 1.25,
+                    "delta": 0.25,
+                    "gamma": 0.04,
+                    "theta": -0.05,
+                    "vega": 0.07,
+                },
+            ],
+            entry_attempt_id=f"{strategy_name}-attempt",
+        )
+    )
+
 
 def test_simple_order_requests_generate_unique_client_order_ids(monkeypatch) -> None:
     class _BrokerStub:
         def build_order_request(self, **kwargs) -> OrderRequest:
             kwargs["client_order_id"] = str(kwargs.pop("client_order_key", "")) or None
+            return OrderRequest(**kwargs)
+
+        def build_multileg_order_request(self, **kwargs) -> OrderRequest:
+            kwargs["client_order_id"] = str(kwargs.pop("client_order_key", "")) or None
+            extra = dict(kwargs.pop("extra", {}) or {})
+            extra.setdefault("order_class", "mleg")
+            kwargs["extra"] = extra
             return OrderRequest(**kwargs)
 
     trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
@@ -147,6 +216,154 @@ def test_simple_order_requests_generate_unique_client_order_ids(monkeypatch) -> 
 
     assert len({request.client_order_id for request in entry_requests}) == len(entry_requests)
     assert len({request.client_order_id for request in exit_requests}) == len(exit_requests)
+
+
+def test_multileg_order_requests_use_combo_order_path(monkeypatch) -> None:
+    class _BrokerStub:
+        def build_order_request(self, **kwargs) -> OrderRequest:
+            kwargs["client_order_id"] = str(kwargs.pop("client_order_key", "")) or None
+            return OrderRequest(**kwargs)
+
+        def build_multileg_order_request(self, **kwargs) -> OrderRequest:
+            kwargs["client_order_id"] = str(kwargs.pop("client_order_key", "")) or None
+            extra = dict(kwargs.pop("extra", {}) or {})
+            extra.setdefault("order_class", "mleg")
+            kwargs["extra"] = extra
+            return OrderRequest(**kwargs)
+
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.broker = _BrokerStub()
+    monkeypatch.setattr(
+        "alpaca_lab.multi_ticker_portfolio.trader._now_et",
+        lambda: datetime(2026, 4, 16, 10, 16, 30, 123456, tzinfo=ZoneInfo("America/New_York")),
+    )
+
+    trade = OpenTrade(
+        **_sample_multileg_open_trade(
+            strategy_name="qqq__fast__debit_call_spread_same_day",
+            underlying_symbol="QQQ",
+        )
+    )
+
+    entry_requests = trader._entry_order_requests(trade)
+    exit_requests = trader._exit_order_requests(
+        trade,
+        {
+            str(trade.legs[0]["symbol"]): 3.20,
+            str(trade.legs[1]["symbol"]): 1.60,
+        },
+        market_fallback=True,
+    )
+
+    assert len(entry_requests) == 2
+    assert all(len(request.legs) == 2 for request in entry_requests)
+    assert all(request.extra.get("order_class") == "mleg" for request in entry_requests)
+    assert [leg.position_intent for leg in entry_requests[0].legs] == ["buy_to_open", "sell_to_open"]
+    assert entry_requests[0].limit_price is not None
+    assert entry_requests[0].limit_price > 0
+
+    assert len(exit_requests) == 2
+    assert all(len(request.legs) == 2 for request in exit_requests)
+    assert all(request.order_type == "limit" for request in exit_requests)
+    assert [leg.position_intent for leg in exit_requests[0].legs] == ["sell_to_close", "buy_to_close"]
+    assert exit_requests[0].limit_price is not None
+    assert exit_requests[0].limit_price < 0
+
+
+def test_run_entry_accepts_negative_multileg_fill_price() -> None:
+    class _LoggerStub:
+        def info(self, *_args, **_kwargs) -> None:
+            return None
+
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = default_portfolio_config()
+    trader.logger = _LoggerStub()
+    trader.submit_paper_orders = True
+    trader._expected_entry_greeks = lambda _trade: (0.0, 0.0)
+    trader._alert = lambda *_args, **_kwargs: None
+    trader._record_entry_execution_outcome = lambda *_args, **_kwargs: None
+    trader._append_trade_event = lambda *_args, **_kwargs: None
+    trader._event_base_for_trade = lambda trade, phase="entry": {
+        "strategy_name": trade.strategy_name,
+        "phase": phase,
+    }
+    trader._entry_order_requests = lambda _trade: [OrderRequest(order_type="limit")]
+    trader._execute_attempts = lambda _requests, **_kwargs: (
+        {"id": "mleg-entry-1", "status": "filled"},
+        -0.85,
+    )
+
+    trade = OpenTrade(
+        **_sample_multileg_open_trade(
+            strategy_name="qqq__fast__credit_call_spread_same_day",
+            underlying_symbol="QQQ",
+        )
+    )
+    trade.entry_fill_price = -0.80
+    trade.entry_debit = -0.80
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+
+    assert trader._run_entry(trade, session, 25_000.0) is True
+    assert trade.entry_fill_price == -0.85
+    assert trade.entry_debit == -0.85
+    assert session.virtual_cash > 25_000.0
+    assert session.open_trades[0]["entry_fill_price"] == -0.85
+    assert session.open_trades[0]["legs"][0]["entry_fill_price"] == 3.0
+
+
+def test_run_exit_uses_negative_combo_fill_price_for_multileg_credit_close() -> None:
+    class _LoggerStub:
+        def info(self, *_args, **_kwargs) -> None:
+            return None
+
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = default_portfolio_config()
+    trader.logger = _LoggerStub()
+    trader.submit_paper_orders = True
+    trader._mark_to_close = lambda _trade, _chain: {
+        "QQQ260417C00500000": 3.20,
+        "QQQ260417C00510000": 1.60,
+    }
+    trader._exit_order_requests = lambda _trade, _mark_map, **_kwargs: [OrderRequest(order_type="limit")]
+    trader._execute_attempts = lambda _requests, **_kwargs: (
+        {"id": "mleg-exit-1", "status": "filled"},
+        -1.55,
+    )
+    trader._expected_entry_greeks = lambda _trade: (0.0, 0.0)
+    trader._append_trade_event = lambda *_args, **_kwargs: None
+    trader._event_base_for_trade = lambda trade, phase="exit": {
+        "strategy_name": trade.strategy_name,
+        "phase": phase,
+    }
+
+    trade_payload = _sample_multileg_open_trade(
+        strategy_name="qqq__fast__debit_call_spread_same_day",
+        underlying_symbol="QQQ",
+    )
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+        open_trades=[trade_payload],
+    )
+    snapshot = SymbolSnapshot(
+        underlying_symbol="QQQ",
+        trade_date=datetime(2026, 4, 15, 15, 15, tzinfo=ZoneInfo("America/New_York")).date(),
+        stock_frame=pd.DataFrame([{"close": 500.0}]),
+        option_chain=pd.DataFrame(),
+        mark_map={},
+        latest_close=501.0,
+        current_minute=345,
+        latest_timestamp_et=datetime(2026, 4, 15, 15, 15, tzinfo=ZoneInfo("America/New_York")),
+    )
+
+    assert trader._run_exit(trade_payload, session, snapshot, "profit_target") is True
+    assert session.completed_trades[0]["exit_fill_price"] == -1.55
+    assert session.virtual_cash > 25_150.0
 
 
 def test_default_multi_ticker_portfolio_contains_all_symbols() -> None:

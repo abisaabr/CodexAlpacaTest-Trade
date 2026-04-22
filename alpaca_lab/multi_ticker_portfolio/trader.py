@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from alpaca_lab.brokers.alpaca import AlpacaBrokerAdapter, OrderRequest
+from alpaca_lab.brokers.alpaca import AlpacaBrokerAdapter, OrderLeg, OrderRequest
 from alpaca_lab.config import LabSettings
 from alpaca_lab.execution.ownership import (
     FileOwnershipLease,
@@ -1431,7 +1431,7 @@ class MultiTickerPortfolioPaperTrader:
             profit_target_dollars=abs(entry_debit) * CONTRACT_MULTIPLIER * strategy.profit_target_multiple,
             stop_loss_dollars=abs(entry_debit) * CONTRACT_MULTIPLIER * strategy.stop_loss_multiple,
             entry_order_id=None,
-            entry_fill_price=legs[0].mark,
+            entry_fill_price=entry_debit,
             legs=leg_payloads,
             entry_attempt_id=attempt_id,
         )
@@ -1526,6 +1526,79 @@ class MultiTickerPortfolioPaperTrader:
             )
         return requests
 
+    @staticmethod
+    def _normalize_combo_limit_price(raw_price: float) -> float:
+        if raw_price > 0.0:
+            return round(max(0.01, raw_price), 2)
+        if raw_price < 0.0:
+            return round(min(-0.01, raw_price), 2)
+        return 0.01
+
+    @staticmethod
+    def _entry_order_leg(leg: dict[str, Any]) -> OrderLeg:
+        leg_side = str(leg["side"])
+        if leg_side == "long":
+            return OrderLeg(
+                symbol=str(leg["symbol"]),
+                side="buy",
+                ratio_qty=1,
+                position_intent="buy_to_open",
+            )
+        return OrderLeg(
+            symbol=str(leg["symbol"]),
+            side="sell",
+            ratio_qty=1,
+            position_intent="sell_to_open",
+        )
+
+    @staticmethod
+    def _exit_order_leg(leg: dict[str, Any]) -> OrderLeg:
+        leg_side = str(leg["side"])
+        if leg_side == "long":
+            return OrderLeg(
+                symbol=str(leg["symbol"]),
+                side="sell",
+                ratio_qty=1,
+                position_intent="sell_to_close",
+            )
+        return OrderLeg(
+            symbol=str(leg["symbol"]),
+            side="buy",
+            ratio_qty=1,
+            position_intent="buy_to_close",
+        )
+
+    def _multileg_entry_order_requests(self, trade: OpenTrade) -> list[OrderRequest]:
+        request_seed = self._order_request_seed(trade=trade, phase="entry")
+        first_pass_prices = [
+            min(float(leg["ask"]), float(leg["mark"]) + 0.02)
+            if str(leg["side"]) == "long"
+            else max(float(leg["bid"]), float(leg["mark"]) - 0.02)
+            for leg in trade.legs
+        ]
+        second_pass_prices = [
+            float(leg["ask"]) if str(leg["side"]) == "long" else float(leg["bid"]) for leg in trade.legs
+        ]
+        requests: list[OrderRequest] = []
+        for request_index, leg_prices in enumerate((first_pass_prices, second_pass_prices), start=1):
+            net_debit = sum(
+                price if str(leg["side"]) == "long" else -price
+                for leg, price in zip(trade.legs, leg_prices, strict=True)
+            )
+            limit_price = self._normalize_combo_limit_price(net_debit)
+            requests.append(
+                self.broker.build_multileg_order_request(
+                    strategy_name=trade.strategy_name,
+                    qty=int(trade.quantity),
+                    legs=[self._entry_order_leg(leg) for leg in trade.legs],
+                    order_type="limit",
+                    time_in_force="day",
+                    limit_price=limit_price,
+                    client_order_key=f"{request_seed}|mleg|limit|{request_index}|{limit_price:.2f}",
+                )
+            )
+        return requests
+
     def _simple_exit_order_requests(
         self,
         trade: OpenTrade,
@@ -1580,6 +1653,61 @@ class MultiTickerPortfolioPaperTrader:
                 )
             )
         return requests
+
+    def _multileg_exit_order_requests(
+        self,
+        trade: OpenTrade,
+        mark_map: dict[str, float],
+    ) -> list[OrderRequest]:
+        request_seed = self._order_request_seed(trade=trade, phase="exit")
+        first_pass_cashflow = 0.0
+        second_pass_cashflow = 0.0
+        for leg in trade.legs:
+            leg_side = str(leg["side"])
+            mark = float(mark_map[str(leg["symbol"])])
+            bid = float(leg["bid"])
+            ask = float(leg["ask"])
+            if leg_side == "long":
+                first_fill_price = max(bid, mark - 0.02)
+                second_fill_price = bid
+                first_pass_cashflow += first_fill_price * CONTRACT_MULTIPLIER
+                second_pass_cashflow += second_fill_price * CONTRACT_MULTIPLIER
+            else:
+                first_fill_price = min(ask, mark + 0.02)
+                second_fill_price = ask
+                first_pass_cashflow -= first_fill_price * CONTRACT_MULTIPLIER
+                second_pass_cashflow -= second_fill_price * CONTRACT_MULTIPLIER
+        requests: list[OrderRequest] = []
+        for request_index, cashflow in enumerate((first_pass_cashflow, second_pass_cashflow), start=1):
+            limit_price = self._normalize_combo_limit_price(-(cashflow / CONTRACT_MULTIPLIER))
+            requests.append(
+                self.broker.build_multileg_order_request(
+                    strategy_name=f"{trade.strategy_name}_exit",
+                    qty=int(trade.quantity),
+                    legs=[self._exit_order_leg(leg) for leg in trade.legs],
+                    order_type="limit",
+                    time_in_force="day",
+                    limit_price=limit_price,
+                    client_order_key=f"{request_seed}|mleg|limit|{request_index}|{limit_price:.2f}",
+                )
+            )
+        return requests
+
+    def _entry_order_requests(self, trade: OpenTrade) -> list[OrderRequest]:
+        if len(trade.legs) > 1:
+            return self._multileg_entry_order_requests(trade)
+        return self._simple_entry_order_requests(trade)
+
+    def _exit_order_requests(
+        self,
+        trade: OpenTrade,
+        mark_map: dict[str, float],
+        *,
+        market_fallback: bool,
+    ) -> list[OrderRequest]:
+        if len(trade.legs) > 1:
+            return self._multileg_exit_order_requests(trade, mark_map)
+        return self._simple_exit_order_requests(trade, mark_map, market_fallback=market_fallback)
 
     def _order_request_seed(self, *, trade: OpenTrade, phase: str) -> str:
         base = trade.entry_attempt_id or trade.entry_time_et
@@ -1739,7 +1867,7 @@ class MultiTickerPortfolioPaperTrader:
                 f"{trade.strategy_name} entry vega alert: {vega_dollars:.2f} dollars per 1 vol point",
             )
         response, fill_price = self._execute_attempts(
-            self._simple_entry_order_requests(trade),
+            self._entry_order_requests(trade),
             journal_name=f"{trade.strategy_name}_entry",
             trade=trade,
             phase="entry",
@@ -1765,9 +1893,10 @@ class MultiTickerPortfolioPaperTrader:
             )
             return False
         trade.entry_order_id = str(response.get("id") or "") if response.get("id") else None
-        trade.entry_fill_price = fill_price if fill_price > 0.0 else trade.entry_fill_price
+        trade.entry_fill_price = fill_price if fill_price != 0.0 else trade.entry_fill_price
         trade.entry_debit = trade.entry_fill_price
-        trade.legs[0]["entry_fill_price"] = trade.entry_fill_price
+        if len(trade.legs) == 1:
+            trade.legs[0]["entry_fill_price"] = trade.entry_fill_price
         adverse_slippage_fraction = max(
             0.0,
             (float(trade.entry_fill_price) - expected_entry_fill_price) / max(abs(expected_entry_fill_price), 0.01),
@@ -1841,7 +1970,7 @@ class MultiTickerPortfolioPaperTrader:
         expected_exit_fill_price = (
             float(next(iter(mark_map.values())))
             if len(mark_map) == 1
-            else _position_mark_cashflow(trade.legs, mark_map) / CONTRACT_MULTIPLIER
+            else -(_position_mark_cashflow(trade.legs, mark_map) / CONTRACT_MULTIPLIER)
         )
         current_close_cashflow = _position_mark_cashflow(trade.legs, mark_map)
         expected_pnl = (
@@ -1864,7 +1993,7 @@ class MultiTickerPortfolioPaperTrader:
             and snapshot.current_minute >= self.portfolio_config.execution.market_exit_fallback_minute
         )
         response, fill_price = self._execute_attempts(
-            self._simple_exit_order_requests(trade, mark_map, market_fallback=market_fallback),
+            self._exit_order_requests(trade, mark_map, market_fallback=market_fallback),
             journal_name=f"{trade.strategy_name}_exit",
             trade=trade,
             phase="exit",
@@ -1887,8 +2016,9 @@ class MultiTickerPortfolioPaperTrader:
                 },
             )
             return False
+        normalized_fill_price = -fill_price if len(trade.legs) > 1 else fill_price
         exit_cashflow = _exit_cashflow_from_fill(
-            fill_price=fill_price,
+            fill_price=normalized_fill_price,
             quantity=int(trade.quantity),
             leg_count=len(trade.legs),
         )
