@@ -1,5 +1,7 @@
 param(
-    [switch]$RunOnce
+    [switch]$RunOnce,
+    [string]$ResearchGatePath = "",
+    [int]$ResearchGatePollSeconds = 60
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,6 +17,11 @@ $portfolioConfig = Join-Path $repoRoot "config\\multi_ticker_paper_portfolio.yam
 $pythonArgs = @($scriptPath, "--portfolio-config", $portfolioConfig, "--submit-paper-orders")
 if ($RunOnce) {
     $pythonArgs += "--run-once"
+}
+
+if ([string]::IsNullOrWhiteSpace($ResearchGatePath)) {
+    $downloadsRoot = Split-Path -Parent $repoRoot
+    $ResearchGatePath = Join-Path $downloadsRoot "qqq_options_30d_cleanroom\\output\\paper_runner_gate.json"
 }
 
 function Get-EasternNow {
@@ -34,6 +41,61 @@ function Write-SupervisorLog([string]$message) {
     Add-Content -Path $logPath -Value ("[{0}] {1}" -f $nowEt.ToString("o"), $message)
 }
 
+function Get-ResearchGateDecision([datetimeoffset]$nowEt) {
+    if ([string]::IsNullOrWhiteSpace($ResearchGatePath) -or -not (Test-Path $ResearchGatePath)) {
+        return [pscustomobject]@{
+            block = $false
+            message = "No overnight research gate file present."
+        }
+    }
+
+    $payload = $null
+    try {
+        $payload = Get-Content -Path $ResearchGatePath -Raw | ConvertFrom-Json
+    }
+    catch {
+        return [pscustomobject]@{
+            block = $true
+            message = ("Overnight research gate file is unreadable: {0}" -f $_.Exception.Message)
+        }
+    }
+
+    $targetTradeDate = [string]$payload.target_trade_date
+    if (-not [string]::IsNullOrWhiteSpace($targetTradeDate)) {
+        $todayEt = $nowEt.ToString("yyyy-MM-dd")
+        if ($targetTradeDate -lt $todayEt) {
+            return [pscustomobject]@{
+                block = $false
+                message = ("Ignoring stale overnight research gate for {0}." -f $targetTradeDate)
+            }
+        }
+        if ($targetTradeDate -gt $todayEt) {
+            return [pscustomobject]@{
+                block = $false
+                message = ("Ignoring overnight research gate for future trade date {0}." -f $targetTradeDate)
+            }
+        }
+    }
+
+    $status = [string]$payload.status
+    $phase = [string]$payload.phase
+    $message = [string]$payload.message
+    if ($status -eq "completed") {
+        return [pscustomobject]@{
+            block = $false
+            message = ("Overnight research gate cleared ({0})." -f $phase)
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($message)) {
+        $message = "Overnight research gate is not complete yet."
+    }
+    return [pscustomobject]@{
+        block = $true
+        message = ("Holding runner for overnight research gate status '{0}' ({1}). {2}" -f $status, $phase, $message)
+    }
+}
+
 function Invoke-Trader {
     Push-Location $repoRoot
     try {
@@ -47,6 +109,11 @@ function Invoke-Trader {
 }
 
 if ($RunOnce) {
+    $gateDecision = Get-ResearchGateDecision (Get-EasternNow)
+    if ($gateDecision.block) {
+        Write-SupervisorLog $gateDecision.message
+        exit 75
+    }
     exit (Invoke-Trader)
 }
 
@@ -57,6 +124,13 @@ while ($true) {
     if ($nowEt -ge (Get-SessionCutoff $nowEt)) {
         Write-SupervisorLog "Stopping supervisor because the session cutoff has passed."
         break
+    }
+
+    $gateDecision = Get-ResearchGateDecision $nowEt
+    if ($gateDecision.block) {
+        Write-SupervisorLog $gateDecision.message
+        Start-Sleep -Seconds $ResearchGatePollSeconds
+        continue
     }
 
     $exitCode = 0
