@@ -130,6 +130,7 @@ class CompletedTrade:
     exit_total_fees: float = 0.0
     entry_regulatory_fees: float = 0.0
     exit_regulatory_fees: float = 0.0
+    via_cleanup: bool = False
 
 
 @dataclass(slots=True)
@@ -2075,6 +2076,41 @@ class MultiTickerPortfolioPaperTrader:
             phase="exit",
         )
         if response.get("status") == "not_filled":
+            if len(trade.legs) > 1:
+                self._alert(
+                    session,
+                    "warning",
+                    f"{trade.strategy_name} combo exit did not fill; attempting cleanup fallback",
+                )
+                self._append_trade_event(
+                    trade_date,
+                    {
+                        **self._event_base_for_trade(trade, phase="exit"),
+                        "event_type": "exit_cleanup_fallback",
+                        "status": "starting",
+                        "exit_reason": exit_reason,
+                        "expected_exit_fill_price": round(float(expected_exit_fill_price), 4),
+                        "expected_net_pnl": round(float(expected_pnl), 4),
+                        "cleanup_trigger_reason": "combo_exit_not_filled",
+                        "via_cleanup": True,
+                        "virtual_cash_after": round(float(session.virtual_cash), 4),
+                    },
+                )
+                return self._force_cleanup_known_trade(
+                    trade_payload=trade_payload,
+                    session=session,
+                    trade_date=trade_date,
+                    stock_frames={snapshot.underlying_symbol: snapshot.stock_frame},
+                    reason=exit_reason,
+                    emit_exit_trigger=False,
+                    expected_exit_fill_price=float(expected_exit_fill_price),
+                    expected_net_pnl=float(expected_pnl),
+                    cleanup_trigger_reason="combo_exit_not_filled",
+                    alert_message=(
+                        f"{trade.strategy_name} required combo exit cleanup fallback "
+                        f"after not-filled combo exit ({exit_reason})"
+                    ),
+                )
             self._alert(session, "warning", f"{trade.strategy_name} exit did not fill")
             self._append_trade_event(
                 trade_date,
@@ -2088,6 +2124,7 @@ class MultiTickerPortfolioPaperTrader:
                     "actual_exit_fill_price": None,
                     "exit_slippage": None,
                     "net_pnl": None,
+                    "via_cleanup": False,
                     "virtual_cash_after": round(float(session.virtual_cash), 4),
                 },
             )
@@ -2132,6 +2169,7 @@ class MultiTickerPortfolioPaperTrader:
             exit_total_fees=round(exit_fee_breakdown.total_fees, 4),
             entry_regulatory_fees=round(entry_fee_breakdown.regulatory_fees, 4),
             exit_regulatory_fees=round(exit_fee_breakdown.regulatory_fees, 4),
+            via_cleanup=False,
         )
         session.completed_trades.append(asdict(completed))
         self._remove_open_trade_from_session(session, trade)
@@ -2154,6 +2192,7 @@ class MultiTickerPortfolioPaperTrader:
                 "exit_cat_fees": round(exit_fee_breakdown.cat, 6),
                 "exit_taf_fees": round(exit_fee_breakdown.taf, 6),
                 "net_pnl": round(float(net_pnl), 4),
+                "via_cleanup": False,
                 "virtual_cash_after": round(float(session.virtual_cash), 4),
             },
         )
@@ -2294,21 +2333,27 @@ class MultiTickerPortfolioPaperTrader:
         trade_date: date,
         stock_frames: dict[str, pd.DataFrame] | None,
         reason: str,
+        emit_exit_trigger: bool = True,
+        expected_exit_fill_price: float | None = None,
+        expected_net_pnl: float | None = None,
+        cleanup_trigger_reason: str | None = None,
+        alert_message: str | None = None,
     ) -> bool:
         trade = OpenTrade(**trade_payload)
         exit_minute, underlying_exit = self._effective_exit_snapshot(trade, stock_frames)
-        expected_exit_fill_price: float | None = None
-        self._append_trade_event(
-            trade_date,
-            {
-                **self._event_base_for_trade(trade, phase="exit"),
-                "event_type": "exit_trigger",
-                "exit_reason": reason,
-                "expected_exit_fill_price": expected_exit_fill_price,
-                "expected_net_pnl": None,
-                "via_cleanup": True,
-            },
-        )
+        if emit_exit_trigger:
+            self._append_trade_event(
+                trade_date,
+                {
+                    **self._event_base_for_trade(trade, phase="exit"),
+                    "event_type": "exit_trigger",
+                    "exit_reason": reason,
+                    "expected_exit_fill_price": expected_exit_fill_price,
+                    "expected_net_pnl": expected_net_pnl,
+                    "cleanup_trigger_reason": cleanup_trigger_reason,
+                    "via_cleanup": True,
+                },
+            )
 
         gross_exit_cashflow = 0.0
         order_ids: list[str] = []
@@ -2363,6 +2408,7 @@ class MultiTickerPortfolioPaperTrader:
                         "actual_exit_fill_price": None,
                         "exit_slippage": None,
                         "net_pnl": None,
+                        "cleanup_trigger_reason": cleanup_trigger_reason,
                         "virtual_cash_after": round(float(session.virtual_cash), 4),
                         "via_cleanup": True,
                     },
@@ -2386,6 +2432,11 @@ class MultiTickerPortfolioPaperTrader:
             gross_exit_cashflow / (CONTRACT_MULTIPLIER * quantity)
             if quantity > 0
             else 0.0
+        )
+        exit_slippage = (
+            round(float(effective_exit_fill_price) - float(expected_exit_fill_price), 4)
+            if expected_exit_fill_price is not None
+            else None
         )
         session.virtual_cash += exit_cashflow
         delta_shares, vega_dollars = self._expected_entry_greeks(trade)
@@ -2421,6 +2472,7 @@ class MultiTickerPortfolioPaperTrader:
             exit_total_fees=round(exit_fee_breakdown.total_fees, 4),
             entry_regulatory_fees=round(entry_fee_breakdown.regulatory_fees, 4),
             exit_regulatory_fees=round(exit_fee_breakdown.regulatory_fees, 4),
+            via_cleanup=True,
         )
         session.completed_trades.append(asdict(completed))
         self._remove_open_trade_from_session(session, trade)
@@ -2434,9 +2486,10 @@ class MultiTickerPortfolioPaperTrader:
                 "order_id": completed.exit_order_id,
                 "expected_exit_fill_price": expected_exit_fill_price,
                 "actual_exit_fill_price": round(float(effective_exit_fill_price), 4),
-                "exit_slippage": None,
+                "exit_slippage": exit_slippage,
                 "exit_total_fees": round(exit_fee_breakdown.total_fees, 4),
                 "exit_regulatory_fees": round(exit_fee_breakdown.regulatory_fees, 4),
+                "cleanup_trigger_reason": cleanup_trigger_reason,
                 "net_pnl": round(float(net_pnl), 4),
                 "virtual_cash_after": round(float(session.virtual_cash), 4),
                 "via_cleanup": True,
@@ -2445,7 +2498,7 @@ class MultiTickerPortfolioPaperTrader:
         self._alert(
             session,
             "warning",
-            f"{trade.strategy_name} required safeguard cleanup at end of day ({reason})",
+            alert_message or f"{trade.strategy_name} required safeguard cleanup at end of day ({reason})",
         )
         return True
 
