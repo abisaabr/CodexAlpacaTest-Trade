@@ -2372,6 +2372,122 @@ def test_startup_check_respects_existing_close_orders_without_duplicate_cleanup(
     assert details["pending_broker_close_orders"] == ["QQQ260417C00600000"]
 
 
+def test_startup_check_respects_existing_multileg_close_orders_without_duplicate_cleanup(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    class _LoggerStub:
+        def warning(self, *_args, **_kwargs) -> None:
+            return None
+
+        def info(self, *_args, **_kwargs) -> None:
+            return None
+
+    class _BrokerStub:
+        def __init__(self) -> None:
+            self.submit_count = 0
+
+        def get_account(self) -> dict[str, object]:
+            return {"buying_power": 25_000.0}
+
+        def get_positions(self) -> list[dict[str, object]]:
+            return [
+                {
+                    "symbol": "QQQ260417C00600000",
+                    "qty": "1",
+                    "side": "long",
+                    "asset_class": "us_option",
+                }
+            ]
+
+        def get_orders(self, *, status: str = "all", limit: int = 100) -> list[dict[str, object]]:
+            assert status == "open"
+            return [
+                {
+                    "status": "accepted",
+                    "legs": [
+                        {
+                            "symbol": "QQQ260417C00600000",
+                            "position_intent": "sell_to_close",
+                        },
+                        {
+                            "symbol": "QQQ260417C00610000",
+                            "position_intent": "buy_to_close",
+                        },
+                    ],
+                }
+            ]
+
+        def build_order_request(self, **kwargs) -> OrderRequest:
+            return OrderRequest(**kwargs)
+
+        def submit_order(self, request: OrderRequest, **_kwargs) -> dict[str, object]:
+            self.submit_count += 1
+            return {"id": "unexpected-cleanup", "status": "accepted"}
+
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={
+                    "underlying_symbols": ("QQQ",),
+                    "run_root": tmp_path / "runs",
+                    "state_root": tmp_path / "state",
+                }
+            ),
+            "strategies": tuple(
+                strategy
+                for strategy in default_portfolio_config().strategies
+                if strategy.underlying_symbol == "QQQ"
+            ),
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.underlyings = ("QQQ",)
+    trader.broker = _BrokerStub()
+    trader.run_root = tmp_path / "runs"
+    trader.submit_paper_orders = True
+    trader.logger = _LoggerStub()
+
+    now_et = datetime(2026, 4, 15, 9, 33, tzinfo=ZoneInfo("America/New_York"))
+    monkeypatch.setattr(
+        "alpaca_lab.multi_ticker_portfolio.trader._now_et",
+        lambda: now_et,
+    )
+    snapshot = SymbolSnapshot(
+        underlying_symbol="QQQ",
+        trade_date=now_et.date(),
+        stock_frame=pd.DataFrame([{"close": 500.0}]),
+        option_chain=pd.DataFrame(
+            [
+                {"dte": 0, "option_type": "call"},
+                {"dte": 0, "option_type": "put"},
+                {"dte": 1, "option_type": "call"},
+                {"dte": 1, "option_type": "put"},
+            ]
+        ),
+        mark_map={},
+        latest_close=500.0,
+        current_minute=3,
+        latest_timestamp_et=now_et,
+    )
+    session = SessionState(
+        trade_date=now_et.date().isoformat(),
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+
+    status, details = trader._perform_startup_check(
+        session=session,
+        trade_date=now_et.date(),
+        snapshots={"QQQ": snapshot},
+    )
+
+    assert status == "pending"
+    assert trader.broker.submit_count == 0
+    assert details["pending_broker_close_orders"] == ["QQQ260417C00600000"]
+
+
 def test_close_unexpected_broker_positions_skips_symbols_with_open_close_orders() -> None:
     class _LoggerStub:
         def warning(self, *_args, **_kwargs) -> None:
@@ -2432,6 +2548,61 @@ def test_close_unexpected_broker_positions_skips_symbols_with_open_close_orders(
 
     assert trader.broker.submit_count == 0
     assert cleanup_entries[0]["status"] == "pending_existing_close_order"
+
+
+def test_symbols_with_open_close_orders_includes_multileg_leg_symbols() -> None:
+    class _BrokerStub:
+        def get_orders(self, *, status: str = "all", limit: int = 100) -> list[dict[str, object]]:
+            assert status == "open"
+            return [
+                {
+                    "symbol": "QQQ260417C00500000",
+                    "status": "accepted",
+                    "legs": [
+                        {
+                            "symbol": "QQQ260417C00500000",
+                            "position_intent": "sell_to_close",
+                        },
+                        {
+                            "symbol": "QQQ260417C00510000",
+                            "position_intent": "buy_to_close",
+                        },
+                    ],
+                }
+            ]
+
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.broker = _BrokerStub()
+
+    assert trader._symbols_with_open_close_orders() == {
+        "QQQ260417C00500000",
+        "QQQ260417C00510000",
+    }
+
+
+def test_symbols_with_open_close_orders_ignores_multileg_open_legs() -> None:
+    class _BrokerStub:
+        def get_orders(self, *, status: str = "all", limit: int = 100) -> list[dict[str, object]]:
+            assert status == "open"
+            return [
+                {
+                    "legs": [
+                        {
+                            "symbol": "QQQ260417C00500000",
+                            "position_intent": "buy_to_open",
+                        },
+                        {
+                            "symbol": "QQQ260417C00510000",
+                            "position_intent": "sell_to_open",
+                        },
+                    ],
+                }
+            ]
+
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.broker = _BrokerStub()
+
+    assert trader._symbols_with_open_close_orders() == set()
 
 
 def test_force_cleanup_known_trade_books_completion(tmp_path: Path) -> None:
@@ -2552,6 +2723,112 @@ def test_force_cleanup_known_trade_books_completion(tmp_path: Path) -> None:
         )
     )
     assert cleanup_entries[0]["reason"] == "auto_flatten_known_end_of_day_position"
+
+
+def test_force_cleanup_known_trade_uses_broker_position_sizes_for_partial_multileg_cleanup(tmp_path: Path) -> None:
+    class _LoggerStub:
+        def warning(self, *_args, **_kwargs) -> None:
+            return None
+
+        def info(self, *_args, **_kwargs) -> None:
+            return None
+
+    class _BrokerStub:
+        def __init__(self) -> None:
+            self.submitted: list[OrderRequest] = []
+
+        def get_positions(self) -> list[dict[str, object]]:
+            return [
+                {
+                    "symbol": "QQQ260417C00500000",
+                    "qty": "1",
+                    "side": "long",
+                    "asset_class": "us_option",
+                },
+                {
+                    "symbol": "QQQ260417C00510000",
+                    "qty": "1",
+                    "side": "short",
+                    "asset_class": "us_option",
+                },
+            ]
+
+        def build_order_request(self, **kwargs) -> OrderRequest:
+            return OrderRequest(**kwargs)
+
+        def submit_order(self, request: OrderRequest, **_kwargs) -> dict[str, object]:
+            self.submitted.append(request)
+            return {"id": f"cleanup-{len(self.submitted)}", "status": "accepted"}
+
+        def get_order(self, order_id: str) -> dict[str, object]:
+            return {
+                "id": order_id,
+                "status": "filled",
+                "qty": "1",
+                "filled_qty": "1",
+                "filled_avg_price": "1.50",
+            }
+
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={
+                    "run_root": tmp_path / "runs",
+                    "state_root": tmp_path / "state",
+                }
+            )
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.run_root = tmp_path / "runs"
+    trader.submit_paper_orders = True
+    trader.broker = _BrokerStub()
+    trader.logger = _LoggerStub()
+
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+        open_trades=[
+            _sample_multileg_open_trade(
+                strategy_name="qqq__fast__debit_call_spread_same_day",
+                underlying_symbol="QQQ",
+                quantity=2,
+            )
+        ],
+    )
+    stock_frames = {
+        "QQQ": pd.DataFrame(
+            [
+                {
+                    "timestamp_et": datetime(2026, 4, 15, 15, 59),
+                    "minute_index": 389,
+                    "close": 507.0,
+                }
+            ]
+        )
+    }
+
+    cleaned = trader._cleanup_known_open_trades(
+        session=session,
+        trade_date=datetime(2026, 4, 15).date(),
+        stock_frames=stock_frames,
+        reason="auto_flatten_known_end_of_day_position",
+    )
+
+    assert cleaned == 1
+    assert len(trader.broker.submitted) == 2
+    assert all(request.qty == 1.0 for request in trader.broker.submitted)
+    assert [request.side for request in trader.broker.submitted] == ["sell", "buy"]
+    cleanup_entries = json.loads(
+        (tmp_path / "runs" / "2026-04-15" / "broker_position_cleanup.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert all(entry["used_broker_positions"] is True for entry in cleanup_entries)
+    assert cleanup_entries[0]["broker_signed_qty"] == 1.0
+    assert cleanup_entries[1]["broker_signed_qty"] == -1.0
 
 
 def test_submit_cleanup_order_retries_after_cancelled_attempt(tmp_path: Path) -> None:

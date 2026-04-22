@@ -487,6 +487,19 @@ class MultiTickerPortfolioPaperTrader:
                 expected[symbol] = expected.get(symbol, 0.0) + sign * quantity
         return expected
 
+    def _broker_position_qty_map(self) -> dict[str, float]:
+        actual: dict[str, float] = {}
+        broker = getattr(self, "broker", None)
+        get_positions = getattr(broker, "get_positions", None)
+        if get_positions is None:
+            return actual
+        for position in get_positions():
+            symbol = str(position.get("symbol") or "").strip()
+            if not symbol:
+                continue
+            actual[symbol] = actual.get(symbol, 0.0) + self._signed_broker_position_qty(position)
+        return actual
+
     def _signed_broker_position_qty(self, position_payload: dict[str, Any]) -> float:
         qty = float(position_payload.get("qty") or 0.0)
         side = str(position_payload.get("side") or "long").lower()
@@ -516,6 +529,39 @@ class MultiTickerPortfolioPaperTrader:
                 and item.get("underlying_symbol") == trade.underlying_symbol
             )
         ]
+
+    def _cleanup_leg_plans_for_trade(
+        self,
+        trade: OpenTrade,
+        *,
+        broker_position_map: dict[str, float] | None = None,
+    ) -> list[dict[str, Any]]:
+        actual_map = broker_position_map or {}
+        authoritative_actuals = any(str(leg.get("symbol") or "").strip() in actual_map for leg in trade.legs)
+        plans: list[dict[str, Any]] = []
+        for leg in trade.legs:
+            symbol = str(leg.get("symbol") or "").strip()
+            if not symbol:
+                continue
+            expected_signed_qty = float(trade.quantity) if str(leg.get("side")) == "long" else -float(trade.quantity)
+            broker_signed_qty = float(actual_map.get(symbol, 0.0))
+            cleanup_signed_qty = broker_signed_qty if authoritative_actuals else expected_signed_qty
+            if math.isclose(cleanup_signed_qty, 0.0, abs_tol=1e-9):
+                continue
+            plans.append(
+                {
+                    "symbol": symbol,
+                    "leg_side": str(leg.get("side") or ""),
+                    "expected_signed_qty": expected_signed_qty,
+                    "broker_signed_qty": broker_signed_qty,
+                    "cleanup_signed_qty": cleanup_signed_qty,
+                    "cleanup_qty": abs(cleanup_signed_qty),
+                    "order_side": "sell" if cleanup_signed_qty > 0 else "buy",
+                    "position_intent": "sell_to_close" if cleanup_signed_qty > 0 else "buy_to_close",
+                    "used_broker_positions": authoritative_actuals,
+                }
+            )
+        return plans
 
     def _broker_position_mismatch_messages(
         self,
@@ -2359,17 +2405,20 @@ class MultiTickerPortfolioPaperTrader:
         order_ids: list[str] = []
         fill_prices: list[float] = []
         quantity = int(trade.quantity)
-        for leg in trade.legs:
-            symbol = str(leg["symbol"])
-            leg_side = str(leg["side"])
-            order_side = "sell" if leg_side == "long" else "buy"
-            position_intent = "sell_to_close" if leg_side == "long" else "buy_to_close"
+        broker_position_map = self._broker_position_qty_map()
+        cleanup_plans = self._cleanup_leg_plans_for_trade(trade, broker_position_map=broker_position_map)
+        for cleanup_plan in cleanup_plans:
+            symbol = str(cleanup_plan["symbol"])
+            leg_side = str(cleanup_plan["leg_side"])
+            cleanup_qty = float(cleanup_plan["cleanup_qty"])
+            order_side = cast(Literal["buy", "sell"], str(cleanup_plan["order_side"]))
+            position_intent = str(cleanup_plan["position_intent"])
             request = self._build_cleanup_order_request(
                 symbol=symbol,
                 side=order_side,
                 strategy_name=f"{trade.strategy_name}_cleanup_exit",
                 asset_class="option",
-                qty=float(quantity),
+                qty=cleanup_qty,
                 position_intent=position_intent,
                 client_order_key=(
                     f"{trade.entry_attempt_id or trade.entry_time_et}|{reason}|{symbol}|cleanup|"
@@ -2387,7 +2436,10 @@ class MultiTickerPortfolioPaperTrader:
                     "trade_entry_attempt_id": trade.entry_attempt_id,
                     "symbol": symbol,
                     "leg_side": leg_side,
-                    "cleanup_qty": quantity,
+                    "cleanup_qty": round(cleanup_qty, 4),
+                    "expected_signed_qty": round(float(cleanup_plan["expected_signed_qty"]), 4),
+                    "broker_signed_qty": round(float(cleanup_plan["broker_signed_qty"]), 4),
+                    "used_broker_positions": bool(cleanup_plan["used_broker_positions"]),
                 },
             )
             if result["status"] == "not_filled":
@@ -2423,8 +2475,8 @@ class MultiTickerPortfolioPaperTrader:
             fill_prices.append(fill_price)
             if result.get("order_id"):
                 order_ids.append(str(result["order_id"]))
-            cashflow_sign = 1.0 if leg_side == "long" else -1.0
-            gross_exit_cashflow += cashflow_sign * fill_price * CONTRACT_MULTIPLIER * quantity
+            cashflow_sign = 1.0 if order_side == "sell" else -1.0
+            gross_exit_cashflow += cashflow_sign * fill_price * CONTRACT_MULTIPLIER * cleanup_qty
 
         exit_fee_breakdown = _exit_fee_breakdown(trade.legs, quantity)
         exit_cashflow = gross_exit_cashflow - exit_fee_breakdown.total_fees
@@ -2654,18 +2706,29 @@ class MultiTickerPortfolioPaperTrader:
             )
         return active_positions
 
+    @staticmethod
+    def _close_order_symbols(order_payload: dict[str, Any]) -> set[str]:
+        symbols: set[str] = set()
+        symbol = str(order_payload.get("symbol") or "").strip()
+        position_intent = str(order_payload.get("position_intent") or "").strip()
+        if symbol and position_intent in {"sell_to_close", "buy_to_close"}:
+            symbols.add(symbol)
+        for leg in order_payload.get("legs") or []:
+            if not isinstance(leg, dict):
+                continue
+            leg_symbol = str(leg.get("symbol") or "").strip()
+            leg_position_intent = str(leg.get("position_intent") or "").strip()
+            if leg_symbol and leg_position_intent in {"sell_to_close", "buy_to_close"}:
+                symbols.add(leg_symbol)
+        return symbols
+
     def _symbols_with_open_close_orders(self) -> set[str]:
         symbols: set[str] = set()
         get_orders = getattr(self.broker, "get_orders", None)
         if get_orders is None:
             return symbols
         for order in get_orders(status="open", limit=200):
-            symbol = str(order.get("symbol") or "").strip()
-            position_intent = str(order.get("position_intent") or "").strip()
-            if not symbol:
-                continue
-            if position_intent in {"sell_to_close", "buy_to_close"}:
-                symbols.add(symbol)
+            symbols.update(self._close_order_symbols(order))
         return symbols
 
     def _build_symbol_snapshot(
