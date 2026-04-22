@@ -1878,6 +1878,137 @@ def test_broker_order_audit_outputs_reconcile_local_events_to_broker_orders(tmp_
     assert bool(exit_row["status_match"]) is False
 
 
+def test_broker_activity_outputs_reconcile_local_events_to_account_activities() -> None:
+    class _BrokerStub:
+        def get_account_activities(
+            self,
+            *,
+            category: str | None = None,
+            after=None,
+            until=None,
+            direction: str = "desc",
+            page_size: int = 100,
+            **_kwargs,
+        ) -> list[dict[str, object]]:
+            assert category == "trade_activity"
+            assert direction == "asc"
+            assert page_size == 100
+            assert after is not None
+            assert until is not None
+            return [
+                {
+                    "id": "activity-1",
+                    "activity_type": "FILL",
+                    "type": "fill",
+                    "order_id": "entry-1",
+                    "symbol": "JPM260417C00245000",
+                    "side": "buy",
+                    "qty": "2",
+                    "cum_qty": "2",
+                    "leaves_qty": "0",
+                    "price": "1.27",
+                    "transaction_time": "2026-04-13T14:00:05Z",
+                },
+                {
+                    "id": "activity-2",
+                    "activity_type": "FILL",
+                    "type": "partial_fill",
+                    "order_id": "exit-1",
+                    "symbol": "JPM260417C00245000",
+                    "side": "sell",
+                    "qty": "1",
+                    "cum_qty": "0.5",
+                    "leaves_qty": "0.5",
+                    "price": "1.51",
+                    "transaction_time": "2026-04-13T15:15:08Z",
+                },
+                {
+                    "id": "activity-3",
+                    "activity_type": "FILL",
+                    "type": "fill",
+                    "order_id": "broker-only-1",
+                    "symbol": "XLF260417C00045000",
+                    "side": "buy",
+                    "qty": "1",
+                    "cum_qty": "1",
+                    "leaves_qty": "0",
+                    "price": "0.55",
+                    "transaction_time": "2026-04-13T16:00:00Z",
+                },
+                {
+                    "id": "activity-4",
+                    "activity_type": "FILL",
+                    "type": "fill",
+                    "order_id": "outside-window-1",
+                    "symbol": "SPY260417C00550000",
+                    "side": "buy",
+                    "qty": "1",
+                    "cum_qty": "1",
+                    "leaves_qty": "0",
+                    "price": "1.05",
+                    "transaction_time": "2026-04-14T14:00:00Z",
+                },
+                {
+                    "id": "activity-5",
+                    "activity_type": "DIV",
+                    "type": "dividend",
+                    "order_id": "ignored-non-fill",
+                    "symbol": "JPM",
+                    "transaction_time": "2026-04-13T15:00:00Z",
+                },
+            ]
+
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.broker = _BrokerStub()
+    events_df = pd.DataFrame(
+        [
+            {
+                "timestamp_et": "2026-04-13T10:00:05-04:00",
+                "event_type": "order_terminal",
+                "phase": "entry",
+                "order_id": "entry-1",
+                "status": "filled",
+            },
+            {
+                "timestamp_et": "2026-04-13T11:15:08-04:00",
+                "event_type": "order_terminal",
+                "phase": "exit",
+                "order_id": "exit-1",
+                "status": "filled",
+            },
+            {
+                "timestamp_et": "2026-04-13T12:30:08-04:00",
+                "event_type": "order_terminal",
+                "phase": "entry",
+                "order_id": "local-only-1",
+                "status": "filled",
+            },
+        ]
+    )
+
+    activity_df, summary = trader._build_broker_activity_outputs(
+        trade_date=datetime.fromisoformat("2026-04-13T00:00:00").date(),
+        events_df=events_df,
+    )
+
+    assert len(activity_df) == 3
+    assert summary["broker_activity_audit_available"] is True
+    assert summary["broker_activity_count"] == 3
+    assert summary["broker_fill_activity_count"] == 3
+    assert summary["broker_partial_fill_activity_count"] == 1
+    assert summary["broker_activity_matched_count"] == 2
+    assert summary["broker_activity_unmatched_count"] == 1
+    assert summary["local_filled_order_without_activity_match_count"] == 1
+
+    partial_row = activity_df.loc[activity_df["activity_id"] == "activity-2"].iloc[0]
+    assert partial_row["fill_type"] == "partial_fill"
+    assert bool(partial_row["matched_to_local"]) is True
+
+    broker_only_row = activity_df.loc[activity_df["activity_id"] == "activity-3"].iloc[0]
+    assert bool(broker_only_row["matched_to_local"]) is False
+    assert bool(broker_only_row["relevant_by_date"]) is True
+
+
 def test_guardrail_scorecard_rolls_up_firings_and_recommendations() -> None:
     trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
     trade_date = datetime.fromisoformat("2026-04-13T00:00:00").date()
@@ -3176,3 +3307,100 @@ def test_finalize_session_retries_reconciliation_until_broker_is_flat(tmp_path: 
     assert summary["end_of_day_cleanup"]["reconciliation_passes"][0]["residual_broker_position_count"] == 1
     assert summary["end_of_day_cleanup"]["reconciliation_passes"][1]["residual_broker_position_count"] == 0
     assert session.notified_end_of_day is True
+
+
+def test_finalize_session_writes_broker_activity_audit_outputs(tmp_path: Path) -> None:
+    class _LoggerStub:
+        def warning(self, *_args, **_kwargs) -> None:
+            return None
+
+        def info(self, *_args, **_kwargs) -> None:
+            return None
+
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={
+                    "run_root": tmp_path / "runs",
+                    "state_root": tmp_path / "state",
+                }
+            )
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.run_root = tmp_path / "runs"
+    trader.state_root = tmp_path / "state"
+    trader.submit_paper_orders = True
+    trader.logger = _LoggerStub()
+    trader.save_ledger = lambda _ledger: None
+    trader.save_session = lambda _session: None
+    trader._session_run_dir = lambda trade_date: tmp_path / "runs" / trade_date.isoformat()
+    trader._run_end_of_day_cleanup_safeguard = lambda **_kwargs: {"shutdown_reconciled": True}
+    trader._active_broker_positions = lambda: []
+    trader._build_trade_reconciliation_outputs = lambda **_kwargs: (
+        pd.DataFrame([{"event_type": "order_terminal", "status": "filled", "order_id": "entry-1"}]),
+        pd.DataFrame(),
+        pd.DataFrame(),
+        pd.DataFrame(),
+        {"trade_reconciliation_available": True},
+    )
+    trader._build_broker_order_audit_outputs = lambda **_kwargs: (
+        pd.DataFrame(),
+        {
+            "broker_order_audit_available": True,
+            "broker_order_count": 0,
+        },
+    )
+    trader._build_broker_activity_outputs = lambda **_kwargs: (
+        pd.DataFrame(
+            [
+                {
+                    "activity_id": "activity-1",
+                    "order_id": "entry-1",
+                    "matched_to_local": True,
+                }
+            ]
+        ),
+        {
+            "broker_activity_audit_available": True,
+            "broker_activity_count": 1,
+            "broker_fill_activity_count": 1,
+            "broker_partial_fill_activity_count": 0,
+            "broker_activity_matched_count": 1,
+            "broker_activity_unmatched_count": 0,
+            "local_filled_order_without_activity_match_count": 0,
+        },
+    )
+    trader._build_guardrail_scorecard_outputs = lambda **_kwargs: (
+        {
+            "guardrail_fire_count": 0,
+            "guardrail_reason_count": 0,
+            "manual_review_recommendation_count": 0,
+            "already_auto_fixed_count": 0,
+            "needs_manual_review": False,
+        },
+        {},
+    )
+    trader._notify_lines = lambda *_lines: True
+    trader._build_end_of_day_notification_lines = lambda session, ending_equity: [
+        f"{session.trade_date} {ending_equity}"
+    ]
+
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_250.0,
+    )
+    ledger = PortfolioLedger(realized_equity=25_000.0, high_watermark=25_000.0)
+
+    summary = trader.finalize_session(session, ledger, stock_frames={})
+
+    assert summary["broker_activity_audit_available"] is True
+    assert summary["broker_activity_count"] == 1
+    assert (
+        tmp_path
+        / "runs"
+        / "2026-04-15"
+        / "multi_ticker_portfolio_session_summary_broker_account_activities.csv"
+    ).exists()

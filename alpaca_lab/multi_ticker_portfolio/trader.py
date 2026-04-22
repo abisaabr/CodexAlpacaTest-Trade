@@ -3512,6 +3512,112 @@ class MultiTickerPortfolioPaperTrader:
         }
         return audit_df, summary
 
+    def _build_broker_activity_outputs(
+        self,
+        *,
+        trade_date: date,
+        events_df: pd.DataFrame,
+    ) -> tuple[pd.DataFrame, dict[str, Any]]:
+        get_account_activities = getattr(getattr(self, "broker", None), "get_account_activities", None)
+        if get_account_activities is None:
+            return pd.DataFrame(), {
+                "broker_activity_audit_available": False,
+                "broker_activity_count": 0,
+                "broker_fill_activity_count": 0,
+                "broker_partial_fill_activity_count": 0,
+                "broker_activity_matched_count": 0,
+                "broker_activity_unmatched_count": 0,
+                "local_filled_order_without_activity_match_count": 0,
+            }
+
+        session_start_utc = datetime.combine(trade_date, dt_time.min, tzinfo=ET).astimezone(UTC)
+        session_end_utc = (datetime.combine(trade_date + timedelta(days=1), dt_time.min, tzinfo=ET)).astimezone(UTC)
+        activities = get_account_activities(
+            category="trade_activity",
+            after=session_start_utc,
+            until=session_end_utc,
+            direction="asc",
+            page_size=100,
+        )
+
+        local_filled_order_ids = (
+            {
+                str(value).strip()
+                for value in events_df.loc[
+                    (events_df.get("event_type", pd.Series(dtype="object")) == "order_terminal")
+                    & (events_df.get("status", pd.Series(dtype="object")) == "filled"),
+                    "order_id",
+                ]
+                .dropna()
+                .astype(str)
+                .tolist()
+                if str(value).strip()
+            }
+            if not events_df.empty and "order_id" in events_df.columns
+            else set()
+        )
+
+        activity_rows: list[dict[str, Any]] = []
+        matched_order_ids: set[str] = set()
+        for activity in activities:
+            activity_type = str(activity.get("activity_type") or "").strip()
+            if activity_type and activity_type != "FILL":
+                continue
+            order_id = str(activity.get("order_id") or "").strip()
+            transaction_time_value = activity.get("transaction_time") or activity.get("date")
+            transaction_time = pd.to_datetime(transaction_time_value, errors="coerce", utc=True)
+            relevant_by_date = bool(pd.notna(transaction_time) and transaction_time.date() == trade_date)
+            if not relevant_by_date and order_id not in local_filled_order_ids:
+                continue
+            matched_to_local = bool(order_id and order_id in local_filled_order_ids)
+            if matched_to_local:
+                matched_order_ids.add(order_id)
+            activity_rows.append(
+                {
+                    "trade_date": trade_date.isoformat(),
+                    "activity_id": str(activity.get("id") or "").strip() or None,
+                    "activity_type": activity_type or None,
+                    "fill_type": str(activity.get("type") or "").strip() or None,
+                    "order_id": order_id or None,
+                    "symbol": str(activity.get("symbol") or "").strip() or None,
+                    "side": str(activity.get("side") or "").strip() or None,
+                    "qty": float(activity.get("qty") or 0.0) if activity.get("qty") not in (None, "") else None,
+                    "cum_qty": float(activity.get("cum_qty") or 0.0)
+                    if activity.get("cum_qty") not in (None, "")
+                    else None,
+                    "leaves_qty": float(activity.get("leaves_qty") or 0.0)
+                    if activity.get("leaves_qty") not in (None, "")
+                    else None,
+                    "price": float(activity.get("price") or 0.0) if activity.get("price") not in (None, "") else None,
+                    "transaction_time": str(transaction_time_value) if transaction_time_value is not None else None,
+                    "matched_to_local": matched_to_local,
+                    "relevant_by_date": relevant_by_date,
+                }
+            )
+
+        activity_df = pd.DataFrame(activity_rows)
+        local_filled_order_without_activity_match_count = int(
+            len([order_id for order_id in local_filled_order_ids if order_id not in matched_order_ids])
+        )
+        summary = {
+            "broker_activity_audit_available": True,
+            "broker_activity_count": int(len(activity_df)),
+            "broker_fill_activity_count": int(len(activity_df)),
+            "broker_partial_fill_activity_count": int(
+                (activity_df["fill_type"] == "partial_fill").sum()
+            )
+            if not activity_df.empty and "fill_type" in activity_df.columns
+            else 0,
+            "broker_activity_matched_count": int(activity_df["matched_to_local"].sum())
+            if not activity_df.empty
+            else 0,
+            "broker_activity_unmatched_count": int((~activity_df["matched_to_local"]).sum())
+            if not activity_df.empty
+            else 0,
+            "local_filled_order_without_activity_match_count": local_filled_order_without_activity_match_count,
+        }
+        return activity_df, summary
+
     def _build_trade_reconciliation_outputs(
         self,
         *,
@@ -4149,6 +4255,10 @@ class MultiTickerPortfolioPaperTrader:
             events_df=reconciliation_events_df,
             active_positions=ending_broker_positions,
         )
+        broker_activity_df, broker_activity_summary = self._build_broker_activity_outputs(
+            trade_date=date.fromisoformat(session.trade_date),
+            events_df=reconciliation_events_df,
+        )
         ending_broker_positions_df = pd.DataFrame(ending_broker_positions)
         summary = {
             "trade_date": session.trade_date,
@@ -4167,6 +4277,7 @@ class MultiTickerPortfolioPaperTrader:
         summary["shutdown_reconciled"] = shutdown_reconciled
         summary.update(reconciliation_summary)
         summary.update(broker_order_audit_summary)
+        summary.update(broker_activity_summary)
         guardrail_summary, guardrail_tables = self._build_guardrail_scorecard_outputs(
             session=session,
             trade_date=trade_date,
@@ -4187,6 +4298,7 @@ class MultiTickerPortfolioPaperTrader:
                 "trade_reconciliation": reconciliation_df,
                 "trade_reconciliation_events": reconciliation_events_df,
                 "broker_order_audit": broker_order_audit_df,
+                "broker_account_activities": broker_activity_df,
                 "ending_broker_positions": ending_broker_positions_df,
                 "ticker_performance": ticker_performance_df,
                 "strategy_performance": strategy_performance_df,

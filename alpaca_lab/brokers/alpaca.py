@@ -411,6 +411,55 @@ class AlpacaBrokerAdapter:
         )
         return payload if isinstance(payload, list) else []
 
+    def get_account_activities(
+        self,
+        *,
+        activity_types: list[str] | None = None,
+        category: str | None = None,
+        after: datetime | str | None = None,
+        until: datetime | str | None = None,
+        direction: str = "desc",
+        page_size: int = 100,
+        max_pages: int = 10,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "direction": direction,
+            "page_size": page_size,
+        }
+        if activity_types:
+            params["activity_types"] = ",".join(str(value) for value in activity_types if str(value).strip())
+        if category:
+            params["category"] = category
+        if after is not None:
+            params["after"] = _isoformat(after)
+        if until is not None:
+            params["until"] = _isoformat(until)
+
+        aggregated: list[dict[str, Any]] = []
+        page_token: str | None = None
+        page_index = 0
+        while page_index < max_pages:
+            request_params = dict(params)
+            if page_token:
+                request_params["page_token"] = page_token
+            payload = self._request_json(
+                "GET",
+                "/v2/account/activities",
+                api="trading",
+                params=request_params,
+            )
+            if not isinstance(payload, list) or not payload:
+                break
+            aggregated.extend(item for item in payload if isinstance(item, dict))
+            if len(payload) < page_size:
+                break
+            next_token = str(payload[-1].get("id") or "").strip()
+            if not next_token or next_token == page_token:
+                break
+            page_token = next_token
+            page_index += 1
+        return aggregated
+
     def get_order_by_client_order_id(self, client_order_id: str) -> dict[str, Any] | None:
         for order in self.get_orders(status="all", limit=500):
             if str(order.get("client_order_id") or "") == client_order_id:
