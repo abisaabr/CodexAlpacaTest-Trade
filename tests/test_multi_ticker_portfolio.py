@@ -1746,6 +1746,138 @@ def test_trade_reconciliation_outputs_roll_up_signals_and_pnl(tmp_path: Path) ->
     assert float(strategy_df.loc[strategy_df["strategy_name"] == "jpm__fast__trend_long_call_next_expiry", "net_pnl"].iloc[0]) == 85.4
 
 
+def test_broker_order_audit_outputs_reconcile_local_events_to_broker_orders(tmp_path: Path) -> None:
+    class _BrokerStub:
+        def get_orders(self, *, status: str = "all", limit: int = 100) -> list[dict[str, object]]:
+            assert status == "all"
+            return [
+                {
+                    "id": "entry-1",
+                    "client_order_id": "cid-entry-1",
+                    "status": "filled",
+                    "symbol": "JPM260417C00245000",
+                    "position_intent": "buy_to_open",
+                    "qty": "2",
+                    "filled_qty": "2",
+                    "filled_avg_price": "1.27",
+                    "submitted_at": "2026-04-13T10:00:01-04:00",
+                },
+                {
+                    "id": "exit-parent-1",
+                    "client_order_id": "cid-exit-1",
+                    "status": "partially_filled",
+                    "order_class": "mleg",
+                    "qty": "1",
+                    "filled_qty": "0.5",
+                    "submitted_at": "2026-04-13T11:15:00-04:00",
+                    "legs": [
+                        {
+                            "symbol": "JPM260417C00245000",
+                            "position_intent": "sell_to_close",
+                        },
+                        {
+                            "symbol": "JPM260417C00246000",
+                            "position_intent": "buy_to_close",
+                        },
+                    ],
+                },
+                {
+                    "id": "broker-only-1",
+                    "client_order_id": "cid-broker-only-1",
+                    "status": "accepted",
+                    "symbol": "XLF260417C00045000",
+                    "position_intent": "buy_to_open",
+                    "qty": "1",
+                    "filled_qty": "0",
+                    "submitted_at": "2026-04-13T12:00:00-04:00",
+                },
+            ]
+
+        def get_positions(self) -> list[dict[str, object]]:
+            return [
+                {
+                    "symbol": "JPM260417C00245000",
+                    "qty": "1",
+                    "side": "long",
+                    "asset_class": "us_option",
+                }
+            ]
+
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.run_root = tmp_path / "runs"
+    trader.broker = _BrokerStub()
+    trade_date = "2026-04-13"
+    run_dir = trader.run_root / trade_date
+    run_dir.mkdir(parents=True, exist_ok=True)
+    events = [
+        {
+            "timestamp_et": "2026-04-13T10:00:00-04:00",
+            "event_type": "order_submission",
+            "phase": "entry",
+            "attempt_id": "attempt-1",
+            "order_id": "entry-1",
+            "client_order_id": "cid-entry-1",
+        },
+        {
+            "timestamp_et": "2026-04-13T10:00:05-04:00",
+            "event_type": "order_terminal",
+            "phase": "entry",
+            "attempt_id": "attempt-1",
+            "order_id": "entry-1",
+            "client_order_id": "cid-entry-1",
+            "status": "filled",
+        },
+        {
+            "timestamp_et": "2026-04-13T11:15:00-04:00",
+            "event_type": "order_submission",
+            "phase": "exit",
+            "attempt_id": "attempt-1",
+            "order_id": None,
+            "client_order_id": "cid-exit-1",
+        },
+        {
+            "timestamp_et": "2026-04-13T11:15:08-04:00",
+            "event_type": "order_terminal",
+            "phase": "exit",
+            "attempt_id": "attempt-1",
+            "order_id": None,
+            "client_order_id": "cid-exit-1",
+            "status": "filled",
+        },
+        {
+            "timestamp_et": "2026-04-13T12:30:00-04:00",
+            "event_type": "order_submission",
+            "phase": "entry",
+            "attempt_id": "attempt-local-only",
+            "order_id": "local-only-1",
+            "client_order_id": "cid-local-only-1",
+        },
+    ]
+    (run_dir / "trade_reconciliation_events.json").write_text(json.dumps(events, indent=2), encoding="utf-8")
+
+    events_df = trader._load_trade_reconciliation_events(datetime.fromisoformat(f"{trade_date}T00:00:00").date())
+    audit_df, summary = trader._build_broker_order_audit_outputs(
+        trade_date=datetime.fromisoformat(f"{trade_date}T00:00:00").date(),
+        events_df=events_df,
+    )
+
+    assert len(audit_df) == 3
+    assert summary["broker_order_audit_available"] is True
+    assert summary["broker_order_count"] == 3
+    assert summary["broker_order_matched_count"] == 2
+    assert summary["broker_order_unmatched_count"] == 1
+    assert summary["broker_multileg_order_count"] == 1
+    assert summary["broker_partially_filled_order_count"] == 1
+    assert summary["broker_status_mismatch_count"] == 1
+    assert summary["local_order_without_broker_match_count"] == 1
+    assert summary["ending_broker_position_count"] == 1
+    exit_row = audit_df.loc[audit_df["client_order_id"] == "cid-exit-1"].iloc[0]
+    assert exit_row["match_kind"] == "client_order_id"
+    assert exit_row["close_leg_count"] == 2
+    assert bool(exit_row["partially_filled"]) is True
+    assert bool(exit_row["status_match"]) is False
+
+
 def test_guardrail_scorecard_rolls_up_firings_and_recommendations() -> None:
     trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
     trade_date = datetime.fromisoformat("2026-04-13T00:00:00").date()
@@ -3003,6 +3135,7 @@ def test_finalize_session_retries_reconciliation_until_broker_is_flat(tmp_path: 
                 "raw_position": {"symbol": "QQQ260417C00600000", "qty": "1"},
             }
         ],
+        [],
         [],
     ]
     trader._close_unexpected_broker_positions = _close_unexpected_broker_positions

@@ -3321,6 +3321,197 @@ class MultiTickerPortfolioPaperTrader:
             frame["timestamp_et"] = frame["timestamp_et"].astype(str)
         return frame
 
+    def _build_broker_order_audit_outputs(
+        self,
+        *,
+        trade_date: date,
+        events_df: pd.DataFrame,
+        active_positions: list[dict[str, Any]] | None = None,
+    ) -> tuple[pd.DataFrame, dict[str, Any]]:
+        get_orders = getattr(getattr(self, "broker", None), "get_orders", None)
+        if get_orders is None:
+            return pd.DataFrame(), {
+                "broker_order_audit_available": False,
+                "broker_order_count": 0,
+                "broker_order_matched_count": 0,
+                "broker_order_unmatched_count": 0,
+                "broker_multileg_order_count": 0,
+                "broker_partially_filled_order_count": 0,
+                "broker_status_mismatch_count": 0,
+                "local_order_without_broker_match_count": 0,
+                "ending_broker_position_count": int(
+                    len(active_positions if active_positions is not None else self._active_broker_positions())
+                ),
+            }
+
+        event_order_ids = (
+            {
+                str(value).strip()
+                for value in events_df.get("order_id", pd.Series(dtype="object")).dropna().astype(str).tolist()
+                if str(value).strip()
+            }
+            if not events_df.empty
+            else set()
+        )
+        event_client_order_ids = (
+            {
+                str(value).strip()
+                for value in events_df.get("client_order_id", pd.Series(dtype="object")).dropna().astype(str).tolist()
+                if str(value).strip()
+            }
+            if not events_df.empty
+            else set()
+        )
+
+        event_lookup: dict[tuple[str, str], pd.DataFrame] = {}
+        if not events_df.empty:
+            if "order_id" in events_df.columns:
+                order_series = events_df["order_id"].fillna("").astype(str).str.strip()
+                for order_id in sorted({value for value in order_series.tolist() if value}):
+                    event_lookup[("order_id", order_id)] = events_df.loc[order_series == order_id].copy()
+            if "client_order_id" in events_df.columns:
+                client_series = events_df["client_order_id"].fillna("").astype(str).str.strip()
+                for client_order_id in sorted({value for value in client_series.tolist() if value}):
+                    event_lookup[("client_order_id", client_order_id)] = events_df.loc[client_series == client_order_id].copy()
+
+        audit_rows: list[dict[str, Any]] = []
+        matched_order_ids: set[str] = set()
+        matched_client_order_ids: set[str] = set()
+        for order in get_orders(status="all", limit=500):
+            order_id = str(order.get("id") or "").strip()
+            client_order_id = str(order.get("client_order_id") or "").strip()
+            timestamp_value = (
+                order.get("submitted_at")
+                or order.get("created_at")
+                or order.get("filled_at")
+                or order.get("updated_at")
+            )
+            timestamp = pd.to_datetime(timestamp_value, errors="coerce")
+            relevant_by_date = bool(pd.notna(timestamp) and timestamp.date() == trade_date)
+
+            matched_events = pd.DataFrame()
+            match_kind = "none"
+            if order_id and ("order_id", order_id) in event_lookup:
+                matched_events = event_lookup[("order_id", order_id)]
+                match_kind = "order_id"
+                matched_order_ids.add(order_id)
+            elif client_order_id and ("client_order_id", client_order_id) in event_lookup:
+                matched_events = event_lookup[("client_order_id", client_order_id)]
+                match_kind = "client_order_id"
+                matched_client_order_ids.add(client_order_id)
+
+            if not relevant_by_date and matched_events.empty:
+                continue
+
+            close_symbols = sorted(self._close_order_symbols(order))
+            legs = [leg for leg in (order.get("legs") or []) if isinstance(leg, dict)]
+            local_terminal_rows = (
+                matched_events.loc[matched_events["event_type"] == "order_terminal"].copy()
+                if not matched_events.empty and "event_type" in matched_events.columns
+                else pd.DataFrame()
+            )
+            local_phase_values = (
+                sorted({str(value) for value in matched_events.get("phase", pd.Series(dtype="object")).dropna().astype(str).tolist()})
+                if not matched_events.empty and "phase" in matched_events.columns
+                else []
+            )
+            local_terminal_status = (
+                str(local_terminal_rows.iloc[-1].get("status") or "")
+                if not local_terminal_rows.empty
+                else ""
+            )
+            broker_status = str(order.get("status") or "")
+            qty = float(order.get("qty") or 0.0)
+            filled_qty = float(order.get("filled_qty") or 0.0)
+            partially_filled = filled_qty > 0.0 and (qty <= 0.0 or filled_qty < qty)
+
+            audit_rows.append(
+                {
+                    "trade_date": trade_date.isoformat(),
+                    "order_id": order_id or None,
+                    "client_order_id": client_order_id or None,
+                    "broker_status": broker_status or None,
+                    "local_terminal_status": local_terminal_status or None,
+                    "status_match": None
+                    if not local_terminal_status
+                    else bool(local_terminal_status == broker_status),
+                    "matched_to_local": not matched_events.empty,
+                    "match_kind": match_kind,
+                    "local_phase": ",".join(local_phase_values) if local_phase_values else None,
+                    "local_event_count": int(len(matched_events)),
+                    "local_submission_count": int(
+                        len(matched_events.loc[matched_events["event_type"] == "order_submission"])
+                    )
+                    if not matched_events.empty and "event_type" in matched_events.columns
+                    else 0,
+                    "symbol": str(order.get("symbol") or "").strip() or None,
+                    "order_class": str(order.get("order_class") or "").strip() or None,
+                    "side": str(order.get("side") or "").strip() or None,
+                    "position_intent": str(order.get("position_intent") or "").strip() or None,
+                    "leg_count": int(len(legs)),
+                    "close_leg_count": int(len(close_symbols)),
+                    "close_symbols": ",".join(close_symbols) if close_symbols else None,
+                    "qty": qty,
+                    "filled_qty": filled_qty,
+                    "filled_avg_price": float(order.get("filled_avg_price") or 0.0)
+                    if order.get("filled_avg_price") not in (None, "")
+                    else None,
+                    "partially_filled": bool(partially_filled or broker_status == "partially_filled"),
+                    "submitted_at": str(timestamp_value) if timestamp_value is not None else None,
+                    "relevant_by_date": relevant_by_date,
+                }
+            )
+
+        audit_df = pd.DataFrame(audit_rows)
+        local_reference_frame = (
+            events_df.loc[events_df["event_type"] == "order_submission", ["order_id", "client_order_id"]].copy()
+            if not events_df.empty and "event_type" in events_df.columns
+            else pd.DataFrame(columns=["order_id", "client_order_id"])
+        )
+        if not local_reference_frame.empty:
+            local_reference_frame["order_id"] = local_reference_frame["order_id"].fillna("").astype(str).str.strip()
+            local_reference_frame["client_order_id"] = local_reference_frame["client_order_id"].fillna("").astype(str).str.strip()
+            local_reference_frame = local_reference_frame.drop_duplicates().reset_index(drop=True)
+            local_reference_frame["matched"] = local_reference_frame.apply(
+                lambda row: bool(
+                    (row["order_id"] and row["order_id"] in matched_order_ids)
+                    or (row["client_order_id"] and row["client_order_id"] in matched_client_order_ids)
+                ),
+                axis=1,
+            )
+            local_unmatched_order_ids = sorted(
+                value for value in local_reference_frame.loc[~local_reference_frame["matched"], "order_id"].tolist() if value
+            )
+            local_unmatched_client_order_ids = sorted(
+                value
+                for value in local_reference_frame.loc[~local_reference_frame["matched"], "client_order_id"].tolist()
+                if value
+            )
+            local_order_without_broker_match_count = int((~local_reference_frame["matched"]).sum())
+        else:
+            local_unmatched_order_ids = []
+            local_unmatched_client_order_ids = []
+            local_order_without_broker_match_count = 0
+        resolved_active_positions = active_positions if active_positions is not None else self._active_broker_positions()
+        summary = {
+            "broker_order_audit_available": True,
+            "broker_order_count": int(len(audit_df)),
+            "broker_order_matched_count": int(audit_df["matched_to_local"].sum()) if not audit_df.empty else 0,
+            "broker_order_unmatched_count": int((~audit_df["matched_to_local"]).sum()) if not audit_df.empty else 0,
+            "broker_multileg_order_count": int((audit_df["leg_count"] > 1).sum()) if not audit_df.empty else 0,
+            "broker_partially_filled_order_count": int(audit_df["partially_filled"].sum()) if not audit_df.empty else 0,
+            "broker_status_mismatch_count": int(
+                (~audit_df["status_match"].map(lambda value: True if pd.isna(value) else bool(value))).sum()
+            )
+            if not audit_df.empty and "status_match" in audit_df.columns
+            else 0,
+            "local_order_without_broker_match_count": local_order_without_broker_match_count,
+            "local_unmatched_order_ids": local_unmatched_order_ids,
+            "local_unmatched_client_order_ids": local_unmatched_client_order_ids,
+            "ending_broker_position_count": int(len(resolved_active_positions)),
+        }
+        return audit_df, summary
+
     def _build_trade_reconciliation_outputs(
         self,
         *,
@@ -3952,6 +4143,13 @@ class MultiTickerPortfolioPaperTrader:
             session=session,
             trade_date=date.fromisoformat(session.trade_date),
         )
+        ending_broker_positions = self._active_broker_positions()
+        broker_order_audit_df, broker_order_audit_summary = self._build_broker_order_audit_outputs(
+            trade_date=date.fromisoformat(session.trade_date),
+            events_df=reconciliation_events_df,
+            active_positions=ending_broker_positions,
+        )
+        ending_broker_positions_df = pd.DataFrame(ending_broker_positions)
         summary = {
             "trade_date": session.trade_date,
             "submit_paper_orders": self.submit_paper_orders,
@@ -3968,6 +4166,7 @@ class MultiTickerPortfolioPaperTrader:
             summary["end_of_day_cleanup"] = cleanup_summary
         summary["shutdown_reconciled"] = shutdown_reconciled
         summary.update(reconciliation_summary)
+        summary.update(broker_order_audit_summary)
         guardrail_summary, guardrail_tables = self._build_guardrail_scorecard_outputs(
             session=session,
             trade_date=trade_date,
@@ -3987,6 +4186,8 @@ class MultiTickerPortfolioPaperTrader:
                 "completed_trades": completed_df,
                 "trade_reconciliation": reconciliation_df,
                 "trade_reconciliation_events": reconciliation_events_df,
+                "broker_order_audit": broker_order_audit_df,
+                "ending_broker_positions": ending_broker_positions_df,
                 "ticker_performance": ticker_performance_df,
                 "strategy_performance": strategy_performance_df,
             },
