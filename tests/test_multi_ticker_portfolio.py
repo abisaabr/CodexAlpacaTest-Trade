@@ -3309,7 +3309,7 @@ def test_finalize_session_retries_reconciliation_until_broker_is_flat(tmp_path: 
     assert session.notified_end_of_day is True
 
 
-def test_finalize_session_writes_broker_activity_audit_outputs(tmp_path: Path) -> None:
+def test_finalize_session_writes_broker_activity_audit_outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     class _LoggerStub:
         def warning(self, *_args, **_kwargs) -> None:
             return None
@@ -3386,6 +3386,17 @@ def test_finalize_session_writes_broker_activity_audit_outputs(tmp_path: Path) -
     trader._build_end_of_day_notification_lines = lambda session, ending_equity: [
         f"{session.trade_date} {ending_equity}"
     ]
+    monkeypatch.setattr(
+        "alpaca_lab.multi_ticker_portfolio.trader._runner_execution_metadata",
+        lambda: {
+            "runner_capability_epoch": 1,
+            "runner_capability_label": "broker_audited_session_bundle_v1",
+            "runner_repo_commit": "runnercommit1",
+            "runner_repo_branch": "codex/qqq-paper-portfolio",
+            "runner_repo_dirty": False,
+            "runner_repo_metadata_available": True,
+        },
+    )
 
     session = SessionState(
         trade_date="2026-04-15",
@@ -3398,6 +3409,10 @@ def test_finalize_session_writes_broker_activity_audit_outputs(tmp_path: Path) -
 
     assert summary["broker_activity_audit_available"] is True
     assert summary["broker_activity_count"] == 1
+    assert summary["runner_capability_epoch"] == 1
+    assert summary["runner_capability_label"] == "broker_audited_session_bundle_v1"
+    assert summary["runner_repo_commit"] == "runnercommit1"
+    assert summary["runner_repo_dirty"] is False
     assert (
         tmp_path
         / "runs"

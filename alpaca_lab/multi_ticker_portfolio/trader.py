@@ -4,6 +4,7 @@ import getpass
 import json
 import math
 import platform
+import subprocess
 import time
 from collections import Counter
 from dataclasses import asdict, dataclass, field, replace
@@ -37,10 +38,13 @@ from alpaca_lab.notifications import DiscordWebhookNotifier, EmailNotifier, Ntfy
 from alpaca_lab.qqq_portfolio.greeks import bs_greeks, implied_volatility
 from alpaca_lab.reporting import append_journal_entry, write_alert_queue, write_summary_bundle
 
+RUNNER_REPO_ROOT = Path(__file__).resolve().parents[2]
 ET = ZoneInfo("America/New_York")
 OPEN_STATUSES = {"accepted", "new", "partially_filled", "pending_new", "accepted_for_bidding"}
 TERMINAL_STATUSES = {"filled", "canceled", "expired", "done_for_day", "rejected"}
 CONTRACT_MULTIPLIER = 100.0
+RUNNER_EXECUTION_CAPABILITY_EPOCH = 1
+RUNNER_EXECUTION_CAPABILITY_LABEL = "broker_audited_session_bundle_v1"
 ALPACA_OPTION_BROKER_COMMISSION_PER_CONTRACT = 0.0
 ALPACA_OPTION_ORF_PER_CONTRACT = 0.02295
 ALPACA_OPTION_OCC_PER_CONTRACT = 0.025
@@ -60,6 +64,43 @@ LATE_DAY_ENTRY_CUTOFF_REASON = "late_day_entry_cutoff"
 EVENT_BLACKOUT_REASON = "event_blackout"
 REGIME_ENTRY_CLUSTER_REASON = "regime_entry_cluster"
 BUCKET_REGIME_ENTRY_CLUSTER_REASON = "bucket_regime_entry_cluster"
+
+
+def _git_metadata(repo_root: Path) -> dict[str, Any]:
+    def run_git(*args: str) -> str | None:
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(repo_root), *args],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=5,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if result.returncode != 0:
+            return None
+        output = (result.stdout or "").strip()
+        return output or None
+
+    status_output = run_git("status", "--porcelain")
+    return {
+        "runner_repo_commit": run_git("rev-parse", "--short=12", "HEAD"),
+        "runner_repo_branch": run_git("branch", "--show-current"),
+        "runner_repo_dirty": bool(status_output),
+        "runner_repo_metadata_available": run_git("rev-parse", "--show-toplevel") is not None,
+    }
+
+
+def _runner_execution_metadata() -> dict[str, Any]:
+    metadata = _git_metadata(RUNNER_REPO_ROOT)
+    metadata.update(
+        {
+            "runner_capability_epoch": RUNNER_EXECUTION_CAPABILITY_EPOCH,
+            "runner_capability_label": RUNNER_EXECUTION_CAPABILITY_LABEL,
+        }
+    )
+    return metadata
 
 
 @dataclass(slots=True)
@@ -4272,6 +4313,7 @@ class MultiTickerPortfolioPaperTrader:
             "last_symbol_regimes": session.last_symbol_regimes,
             "startup_check_status": session.startup_check_status,
         }
+        summary.update(_runner_execution_metadata())
         if cleanup_summary:
             summary["end_of_day_cleanup"] = cleanup_summary
         summary["shutdown_reconciled"] = shutdown_reconciled
