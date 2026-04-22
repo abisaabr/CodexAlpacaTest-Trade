@@ -41,8 +41,11 @@ ET = ZoneInfo("America/New_York")
 OPEN_STATUSES = {"accepted", "new", "partially_filled", "pending_new", "accepted_for_bidding"}
 TERMINAL_STATUSES = {"filled", "canceled", "expired", "done_for_day", "rejected"}
 CONTRACT_MULTIPLIER = 100.0
-ENTRY_COMMISSION_PER_CONTRACT = 0.65
-EXIT_COMMISSION_PER_CONTRACT = 0.65
+ALPACA_OPTION_BROKER_COMMISSION_PER_CONTRACT = 0.0
+ALPACA_OPTION_ORF_PER_CONTRACT = 0.02295
+ALPACA_OPTION_OCC_PER_CONTRACT = 0.025
+ALPACA_OPTION_TAF_PER_CONTRACT = 0.00329
+ALPACA_OPTION_CAT_PER_EQUIVALENT_SHARE = 0.0
 AUTO_FLATTEN_UNEXPECTED_STARTUP_REASON = "auto_flatten_unexpected_startup_position"
 AUTO_FLATTEN_KNOWN_EOD_REASON = "auto_flatten_known_end_of_day_position"
 AUTO_FLATTEN_UNEXPECTED_EOD_REASON = "auto_flatten_unexpected_end_of_day_position"
@@ -123,6 +126,21 @@ class CompletedTrade:
     vega_dollars_1pct_at_entry: float
     legs: list[dict[str, Any]]
     entry_attempt_id: str | None = None
+    entry_total_fees: float = 0.0
+    exit_total_fees: float = 0.0
+    entry_regulatory_fees: float = 0.0
+    exit_regulatory_fees: float = 0.0
+
+
+@dataclass(slots=True)
+class OptionFeeBreakdown:
+    broker_commission: float
+    regulatory_fees: float
+    orf: float
+    occ: float
+    cat: float
+    taf: float
+    total_fees: float
 
 
 @dataclass(slots=True)
@@ -251,16 +269,63 @@ def _estimate_combo_bounds(legs: list[dict[str, Any]]) -> tuple[float, float]:
     return max(0.01, -min(pnl_values)), max(pnl_values)
 
 
-def _entry_cashflow_from_debit(entry_debit: float, quantity: int, leg_count: int) -> float:
+def _round_up_to_cents(amount: float) -> float:
+    if amount <= 0.0:
+        return 0.0
+    return math.ceil(amount * 100.0) / 100.0
+
+
+def _entry_sell_contract_count(legs: list[dict[str, Any]], quantity: int) -> int:
+    return sum(1 for leg in legs if str(leg["side"]) == "short") * quantity
+
+
+def _exit_sell_contract_count(legs: list[dict[str, Any]], quantity: int) -> int:
+    return sum(1 for leg in legs if str(leg["side"]) == "long") * quantity
+
+
+def _alpaca_option_fee_breakdown(*, total_contracts: int, sold_contracts: int) -> OptionFeeBreakdown:
+    broker_commission = ALPACA_OPTION_BROKER_COMMISSION_PER_CONTRACT * total_contracts
+    orf = ALPACA_OPTION_ORF_PER_CONTRACT * total_contracts
+    occ = ALPACA_OPTION_OCC_PER_CONTRACT * total_contracts
+    cat = ALPACA_OPTION_CAT_PER_EQUIVALENT_SHARE * CONTRACT_MULTIPLIER * total_contracts
+    taf = ALPACA_OPTION_TAF_PER_CONTRACT * sold_contracts
+    regulatory_fees = _round_up_to_cents(orf + occ + cat + taf)
+    total_fees = _round_up_to_cents(broker_commission + regulatory_fees)
+    return OptionFeeBreakdown(
+        broker_commission=round(broker_commission, 6),
+        regulatory_fees=regulatory_fees,
+        orf=round(orf, 6),
+        occ=round(occ, 6),
+        cat=round(cat, 6),
+        taf=round(taf, 6),
+        total_fees=total_fees,
+    )
+
+
+def _entry_fee_breakdown(legs: list[dict[str, Any]], quantity: int) -> OptionFeeBreakdown:
+    total_contracts = len(legs) * quantity
+    return _alpaca_option_fee_breakdown(
+        total_contracts=total_contracts,
+        sold_contracts=_entry_sell_contract_count(legs, quantity),
+    )
+
+
+def _exit_fee_breakdown(legs: list[dict[str, Any]], quantity: int) -> OptionFeeBreakdown:
+    total_contracts = len(legs) * quantity
+    return _alpaca_option_fee_breakdown(
+        total_contracts=total_contracts,
+        sold_contracts=_exit_sell_contract_count(legs, quantity),
+    )
+
+
+def _entry_cashflow_from_debit(entry_debit: float, quantity: int, legs: list[dict[str, Any]]) -> float:
     gross = -entry_debit * CONTRACT_MULTIPLIER * quantity
-    commission = ENTRY_COMMISSION_PER_CONTRACT * leg_count * quantity
-    return gross - commission
+    return gross - _entry_fee_breakdown(legs, quantity).total_fees
 
 
-def _exit_cashflow_from_fill(*, fill_price: float, quantity: int, leg_count: int) -> float:
+def _exit_cashflow_from_fill(*, fill_price: float, quantity: int, legs: list[dict[str, Any]]) -> float:
     gross = fill_price * CONTRACT_MULTIPLIER * quantity
-    commission = EXIT_COMMISSION_PER_CONTRACT * leg_count * quantity
-    return gross - commission
+    return gross - _exit_fee_breakdown(legs, quantity).total_fees
 
 
 def _current_equity(state: SessionState, mark_map: dict[str, float] | None = None) -> float:
@@ -271,10 +336,11 @@ def _current_equity(state: SessionState, mark_map: dict[str, float] | None = Non
             mark_cashflow = _position_mark_cashflow(trade_payload["legs"], mark_map)
         except KeyError:
             continue
-        commission = EXIT_COMMISSION_PER_CONTRACT * len(trade_payload["legs"]) * int(
-            trade_payload["quantity"]
-        )
-        equity += mark_cashflow * int(trade_payload["quantity"]) - commission
+        exit_fees = _exit_fee_breakdown(
+            cast(list[dict[str, Any]], trade_payload["legs"]),
+            int(trade_payload["quantity"]),
+        ).total_fees
+        equity += mark_cashflow * int(trade_payload["quantity"]) - exit_fees
     return equity
 
 
@@ -1906,8 +1972,9 @@ class MultiTickerPortfolioPaperTrader:
             success=True,
             adverse_slippage_fraction=adverse_slippage_fraction,
         )
+        entry_fee_breakdown = _entry_fee_breakdown(trade.legs, int(trade.quantity))
         session.virtual_cash += _entry_cashflow_from_debit(
-            float(trade.entry_debit), int(trade.quantity), len(trade.legs)
+            float(trade.entry_debit), int(trade.quantity), trade.legs
         )
         session.open_trades.append(asdict(trade))
         session.signals_fired.append(trade.strategy_name)
@@ -1922,6 +1989,13 @@ class MultiTickerPortfolioPaperTrader:
                 "actual_entry_fill_price": round(float(trade.entry_fill_price), 4),
                 "entry_slippage": round(float(trade.entry_fill_price) - expected_entry_fill_price, 4),
                 "entry_adverse_slippage_fraction": round(float(adverse_slippage_fraction), 6),
+                "entry_total_fees": round(entry_fee_breakdown.total_fees, 4),
+                "entry_regulatory_fees": round(entry_fee_breakdown.regulatory_fees, 4),
+                "entry_broker_commission": round(entry_fee_breakdown.broker_commission, 4),
+                "entry_orf_fees": round(entry_fee_breakdown.orf, 6),
+                "entry_occ_fees": round(entry_fee_breakdown.occ, 6),
+                "entry_cat_fees": round(entry_fee_breakdown.cat, 6),
+                "entry_taf_fees": round(entry_fee_breakdown.taf, 6),
                 "virtual_cash_after": round(float(session.virtual_cash), 4),
             },
         )
@@ -1942,10 +2016,11 @@ class MultiTickerPortfolioPaperTrader:
         mark_map: dict[str, float],
     ) -> tuple[bool, str, float]:
         current_close_cashflow = _position_mark_cashflow(trade.legs, mark_map)
+        exit_fee_breakdown = _exit_fee_breakdown(trade.legs, int(trade.quantity))
         current_pnl = (
-            _entry_cashflow_from_debit(float(trade.entry_debit), int(trade.quantity), len(trade.legs))
+            _entry_cashflow_from_debit(float(trade.entry_debit), int(trade.quantity), trade.legs)
             + current_close_cashflow * int(trade.quantity)
-            - EXIT_COMMISSION_PER_CONTRACT * len(trade.legs) * int(trade.quantity)
+            - exit_fee_breakdown.total_fees
         )
         if current_pnl >= trade.profit_target_dollars * int(trade.quantity):
             return True, "profit_target", current_pnl
@@ -1973,10 +2048,11 @@ class MultiTickerPortfolioPaperTrader:
             else -(_position_mark_cashflow(trade.legs, mark_map) / CONTRACT_MULTIPLIER)
         )
         current_close_cashflow = _position_mark_cashflow(trade.legs, mark_map)
+        exit_fee_breakdown = _exit_fee_breakdown(trade.legs, int(trade.quantity))
         expected_pnl = (
-            _entry_cashflow_from_debit(float(trade.entry_debit), int(trade.quantity), len(trade.legs))
+            _entry_cashflow_from_debit(float(trade.entry_debit), int(trade.quantity), trade.legs)
             + current_close_cashflow * int(trade.quantity)
-            - EXIT_COMMISSION_PER_CONTRACT * len(trade.legs) * int(trade.quantity)
+            - exit_fee_breakdown.total_fees
         )
         self._append_trade_event(
             trade_date,
@@ -2020,14 +2096,15 @@ class MultiTickerPortfolioPaperTrader:
         exit_cashflow = _exit_cashflow_from_fill(
             fill_price=normalized_fill_price,
             quantity=int(trade.quantity),
-            leg_count=len(trade.legs),
+            legs=trade.legs,
         )
         session.virtual_cash += exit_cashflow
         delta_shares, vega_dollars = self._expected_entry_greeks(trade)
         net_pnl = (
-            _entry_cashflow_from_debit(float(trade.entry_debit), int(trade.quantity), len(trade.legs))
+            _entry_cashflow_from_debit(float(trade.entry_debit), int(trade.quantity), trade.legs)
             + exit_cashflow
         )
+        entry_fee_breakdown = _entry_fee_breakdown(trade.legs, int(trade.quantity))
         completed = CompletedTrade(
             strategy_name=trade.strategy_name,
             underlying_symbol=trade.underlying_symbol,
@@ -2051,6 +2128,10 @@ class MultiTickerPortfolioPaperTrader:
             vega_dollars_1pct_at_entry=round(vega_dollars, 4),
             legs=list(trade.legs),
             entry_attempt_id=trade.entry_attempt_id,
+            entry_total_fees=round(entry_fee_breakdown.total_fees, 4),
+            exit_total_fees=round(exit_fee_breakdown.total_fees, 4),
+            entry_regulatory_fees=round(entry_fee_breakdown.regulatory_fees, 4),
+            exit_regulatory_fees=round(exit_fee_breakdown.regulatory_fees, 4),
         )
         session.completed_trades.append(asdict(completed))
         self._remove_open_trade_from_session(session, trade)
@@ -2065,6 +2146,13 @@ class MultiTickerPortfolioPaperTrader:
                 "expected_exit_fill_price": round(float(expected_exit_fill_price), 4),
                 "actual_exit_fill_price": round(float(fill_price), 4),
                 "exit_slippage": round(float(fill_price) - float(expected_exit_fill_price), 4),
+                "exit_total_fees": round(exit_fee_breakdown.total_fees, 4),
+                "exit_regulatory_fees": round(exit_fee_breakdown.regulatory_fees, 4),
+                "exit_broker_commission": round(exit_fee_breakdown.broker_commission, 4),
+                "exit_orf_fees": round(exit_fee_breakdown.orf, 6),
+                "exit_occ_fees": round(exit_fee_breakdown.occ, 6),
+                "exit_cat_fees": round(exit_fee_breakdown.cat, 6),
+                "exit_taf_fees": round(exit_fee_breakdown.taf, 6),
                 "net_pnl": round(float(net_pnl), 4),
                 "virtual_cash_after": round(float(session.virtual_cash), 4),
             },
@@ -2292,9 +2380,8 @@ class MultiTickerPortfolioPaperTrader:
             cashflow_sign = 1.0 if leg_side == "long" else -1.0
             gross_exit_cashflow += cashflow_sign * fill_price * CONTRACT_MULTIPLIER * quantity
 
-        exit_cashflow = gross_exit_cashflow - (
-            EXIT_COMMISSION_PER_CONTRACT * len(trade.legs) * quantity
-        )
+        exit_fee_breakdown = _exit_fee_breakdown(trade.legs, quantity)
+        exit_cashflow = gross_exit_cashflow - exit_fee_breakdown.total_fees
         effective_exit_fill_price = (
             gross_exit_cashflow / (CONTRACT_MULTIPLIER * quantity)
             if quantity > 0
@@ -2302,8 +2389,9 @@ class MultiTickerPortfolioPaperTrader:
         )
         session.virtual_cash += exit_cashflow
         delta_shares, vega_dollars = self._expected_entry_greeks(trade)
+        entry_fee_breakdown = _entry_fee_breakdown(trade.legs, quantity)
         net_pnl = (
-            _entry_cashflow_from_debit(float(trade.entry_debit), quantity, len(trade.legs))
+            _entry_cashflow_from_debit(float(trade.entry_debit), quantity, trade.legs)
             + exit_cashflow
         )
         completed = CompletedTrade(
@@ -2329,6 +2417,10 @@ class MultiTickerPortfolioPaperTrader:
             vega_dollars_1pct_at_entry=round(vega_dollars, 4),
             legs=list(trade.legs),
             entry_attempt_id=trade.entry_attempt_id,
+            entry_total_fees=round(entry_fee_breakdown.total_fees, 4),
+            exit_total_fees=round(exit_fee_breakdown.total_fees, 4),
+            entry_regulatory_fees=round(entry_fee_breakdown.regulatory_fees, 4),
+            exit_regulatory_fees=round(exit_fee_breakdown.regulatory_fees, 4),
         )
         session.completed_trades.append(asdict(completed))
         self._remove_open_trade_from_session(session, trade)
@@ -2343,6 +2435,8 @@ class MultiTickerPortfolioPaperTrader:
                 "expected_exit_fill_price": expected_exit_fill_price,
                 "actual_exit_fill_price": round(float(effective_exit_fill_price), 4),
                 "exit_slippage": None,
+                "exit_total_fees": round(exit_fee_breakdown.total_fees, 4),
+                "exit_regulatory_fees": round(exit_fee_breakdown.regulatory_fees, 4),
                 "net_pnl": round(float(net_pnl), 4),
                 "virtual_cash_after": round(float(session.virtual_cash), 4),
                 "via_cleanup": True,

@@ -8,6 +8,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+import pytest
 
 from alpaca_lab.brokers.alpaca import OrderRequest
 from alpaca_lab.config import LabSettings
@@ -25,6 +26,11 @@ from alpaca_lab.multi_ticker_portfolio.trader import (
     SelectedLeg,
     SessionState,
     SymbolSnapshot,
+    _current_equity,
+    _entry_cashflow_from_debit,
+    _entry_fee_breakdown,
+    _exit_cashflow_from_fill,
+    _exit_fee_breakdown,
 )
 
 
@@ -268,6 +274,67 @@ def test_multileg_order_requests_use_combo_order_path(monkeypatch) -> None:
     assert [leg.position_intent for leg in exit_requests[0].legs] == ["sell_to_close", "buy_to_close"]
     assert exit_requests[0].limit_price is not None
     assert exit_requests[0].limit_price < 0
+
+
+def test_alpaca_option_fee_breakdown_matches_current_schedule() -> None:
+    long_trade = OpenTrade(
+        **_sample_open_trade(
+            strategy_name="qqq__reactive__trend_long_call_next_expiry",
+            underlying_symbol="QQQ",
+        )
+    )
+    entry_fees = _entry_fee_breakdown(long_trade.legs, 1)
+    exit_fees = _exit_fee_breakdown(long_trade.legs, 1)
+
+    assert entry_fees.broker_commission == 0.0
+    assert entry_fees.orf == pytest.approx(0.02295)
+    assert entry_fees.occ == pytest.approx(0.025)
+    assert entry_fees.cat == 0.0
+    assert entry_fees.taf == 0.0
+    assert entry_fees.total_fees == 0.05
+
+    assert exit_fees.orf == pytest.approx(0.02295)
+    assert exit_fees.occ == pytest.approx(0.025)
+    assert exit_fees.taf == pytest.approx(0.00329)
+    assert exit_fees.total_fees == 0.06
+
+
+def test_credit_spread_entry_fee_counts_only_sold_contracts_for_taf() -> None:
+    credit_trade = OpenTrade(
+        **_sample_multileg_open_trade(
+            strategy_name="qqq__fast__credit_call_spread_same_day",
+            underlying_symbol="QQQ",
+        )
+    )
+    credit_trade.entry_fill_price = -0.80
+    credit_trade.entry_debit = -0.80
+
+    entry_fees = _entry_fee_breakdown(credit_trade.legs, 1)
+    entry_cashflow = _entry_cashflow_from_debit(credit_trade.entry_debit, 1, credit_trade.legs)
+
+    assert entry_fees.taf == pytest.approx(0.00329)
+    assert entry_fees.total_fees == 0.1
+    assert entry_cashflow == pytest.approx(79.9)
+
+
+def test_current_equity_uses_exit_fee_estimate() -> None:
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+        open_trades=[
+            _sample_open_trade(
+                strategy_name="qqq__reactive__trend_long_call_next_expiry",
+                underlying_symbol="QQQ",
+            )
+        ],
+    )
+    mark_map = {"QQQ260417C00600000": 3.20}
+
+    assert _current_equity(session, mark_map) == pytest.approx(25319.94)
+    assert _exit_cashflow_from_fill(fill_price=3.20, quantity=1, legs=session.open_trades[0]["legs"]) == pytest.approx(
+        319.94
+    )
 
 
 def test_run_entry_accepts_negative_multileg_fill_price() -> None:
