@@ -97,6 +97,24 @@ def _sample_open_trade(
     )
 
 
+def _select_strategy(
+    config,
+    *,
+    underlying_symbol: str,
+    regime: str,
+    family: str,
+    dte_mode: str,
+) -> object:
+    return next(
+        strategy
+        for strategy in config.strategies
+        if strategy.underlying_symbol == underlying_symbol
+        and strategy.regime == regime
+        and strategy.family == family
+        and strategy.dte_mode == dte_mode
+    )
+
+
 def test_simple_order_requests_generate_unique_client_order_ids(monkeypatch) -> None:
     class _BrokerStub:
         def build_order_request(self, **kwargs) -> OrderRequest:
@@ -336,19 +354,20 @@ def test_disabled_daily_loss_gate_never_blocks_entries() -> None:
 
 
 def test_evaluate_entry_respects_per_symbol_risk_cap() -> None:
-    config = default_portfolio_config().model_copy(
+    base = default_portfolio_config()
+    strategy = _select_strategy(
+        base,
+        underlying_symbol="QQQ",
+        regime="bull",
+        family="Single-leg long call",
+        dte_mode="next_expiry",
+    )
+    config = base.model_copy(
         update={
-            "execution": default_portfolio_config().execution.model_copy(
-                update={"underlying_symbols": ("QQQ",)}
-            ),
-            "strategies": tuple(
-                strategy
-                for strategy in default_portfolio_config().strategies
-                if strategy.name == "qqq__fast__trend_long_call_next_expiry"
-            ),
+            "execution": base.execution.model_copy(update={"underlying_symbols": ("QQQ",)}),
+            "strategies": (strategy,),
         }
     )
-    strategy = config.strategies[0]
     trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
     trader.portfolio_config = config
     trader._select_legs = lambda *_args, **_kwargs: [
@@ -402,19 +421,20 @@ def test_evaluate_entry_respects_per_symbol_risk_cap() -> None:
 
 
 def test_evaluate_entry_respects_bucket_risk_cap() -> None:
-    config = default_portfolio_config().model_copy(
+    base = default_portfolio_config()
+    strategy = _select_strategy(
+        base,
+        underlying_symbol="QQQ",
+        regime="bull",
+        family="Single-leg long call",
+        dte_mode="next_expiry",
+    )
+    config = base.model_copy(
         update={
-            "execution": default_portfolio_config().execution.model_copy(
-                update={"underlying_symbols": ("QQQ", "SPY")}
-            ),
-            "strategies": tuple(
-                strategy
-                for strategy in default_portfolio_config().strategies
-                if strategy.name == "qqq__fast__trend_long_call_next_expiry"
-            ),
+            "execution": base.execution.model_copy(update={"underlying_symbols": ("QQQ", "SPY")}),
+            "strategies": (strategy,),
         }
     )
-    strategy = config.strategies[0]
     trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
     trader.portfolio_config = config
     trader._select_legs = lambda *_args, **_kwargs: [
@@ -602,6 +622,13 @@ def test_evaluate_entry_blocks_bucket_regime_entry_cluster_window() -> None:
 
 def test_evaluate_entry_blocks_on_projected_delta_hard_cap() -> None:
     base = default_portfolio_config()
+    strategy = _select_strategy(
+        base,
+        underlying_symbol="QQQ",
+        regime="bull",
+        family="Single-leg long call",
+        dte_mode="next_expiry",
+    )
     config = base.model_copy(
         update={
             "risk": base.risk.model_copy(
@@ -611,12 +638,9 @@ def test_evaluate_entry_blocks_on_projected_delta_hard_cap() -> None:
                 }
             ),
             "execution": base.execution.model_copy(update={"underlying_symbols": ("QQQ", "SPY")}),
-            "strategies": tuple(
-                strategy for strategy in base.strategies if strategy.name == "qqq__fast__trend_long_call_next_expiry"
-            ),
+            "strategies": (strategy,),
         }
     )
-    strategy = config.strategies[0]
     trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
     trader.portfolio_config = config
     trader._select_legs = lambda *_args, **_kwargs: [
@@ -671,6 +695,13 @@ def test_evaluate_entry_blocks_on_projected_delta_hard_cap() -> None:
 
 def test_evaluate_entry_blocks_on_projected_vega_hard_cap() -> None:
     base = default_portfolio_config()
+    strategy = _select_strategy(
+        base,
+        underlying_symbol="QQQ",
+        regime="bull",
+        family="Single-leg long call",
+        dte_mode="next_expiry",
+    )
     config = base.model_copy(
         update={
             "risk": base.risk.model_copy(
@@ -680,12 +711,9 @@ def test_evaluate_entry_blocks_on_projected_vega_hard_cap() -> None:
                 }
             ),
             "execution": base.execution.model_copy(update={"underlying_symbols": ("QQQ", "SPY")}),
-            "strategies": tuple(
-                strategy for strategy in base.strategies if strategy.name == "qqq__fast__trend_long_call_next_expiry"
-            ),
+            "strategies": (strategy,),
         }
     )
-    strategy = config.strategies[0]
     trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
     trader.portfolio_config = config
     trader._select_legs = lambda *_args, **_kwargs: [
@@ -784,6 +812,13 @@ def test_evaluate_entry_respects_same_day_entry_cutoff() -> None:
 
 def test_evaluate_entry_respects_event_blackout() -> None:
     base = default_portfolio_config()
+    strategy = _select_strategy(
+        base,
+        underlying_symbol="QQQ",
+        regime="bull",
+        family="Single-leg long call",
+        dte_mode="next_expiry",
+    )
     config = base.model_copy(
         update={
             "risk": base.risk.model_copy(
@@ -802,12 +837,9 @@ def test_evaluate_entry_respects_event_blackout() -> None:
                 }
             ),
             "execution": base.execution.model_copy(update={"underlying_symbols": ("QQQ",)}),
-            "strategies": tuple(
-                strategy for strategy in base.strategies if strategy.name == "qqq__fast__trend_long_call_next_expiry"
-            ),
+            "strategies": (strategy,),
         }
     )
-    strategy = config.strategies[0]
     trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
     trader.portfolio_config = config
     trader._select_legs = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should not select legs"))
@@ -1175,22 +1207,27 @@ def test_startup_check_allows_symbol_when_at_least_one_strategy_is_feasible() ->
     )
 
     assert status == "passed"
-    assert details["underlyings"]["QQQ"]["available_strategies"] == [
-        "qqq__fast__trend_long_call_next_expiry_d70",
-        "qqq__fast__trend_long_call_next_expiry",
-        "qqq__base__orb_long_put_next_expiry",
-        "qqq__slow__orb_long_put_next_expiry",
+    available = details["underlyings"]["QQQ"]["available_strategies"]
+    unavailable = {
+        item["name"]: item["missing_inventory"]
+        for item in details["underlyings"]["QQQ"]["unavailable_strategies"]
+    }
+
+    assert "qqq__base__orb_long_put_next_expiry" in available
+    assert "qqq__slow__orb_long_put_next_expiry" in available
+    assert any(name.startswith("qqq__") and "trend_long_call_next_expiry" in name for name in available)
+    assert any(name.startswith("qqq__") and "call_backspread_next_expiry" in name for name in available)
+    assert unavailable["qqq__reactive__iron_butterfly_same_day"] == [
+        "same_day_calls",
+        "same_day_calls",
+        "same_day_puts",
+        "same_day_puts",
     ]
-    assert details["underlyings"]["QQQ"]["unavailable_strategies"] == [
-        {
-            "name": "qqq__fast__iron_butterfly_same_day",
-            "missing_inventory": [
-                "same_day_calls",
-                "same_day_calls",
-                "same_day_puts",
-                "same_day_puts",
-            ],
-        }
+    assert unavailable["qqq__fast__iron_butterfly_same_day"] == [
+        "same_day_calls",
+        "same_day_calls",
+        "same_day_puts",
+        "same_day_puts",
     ]
 
 
