@@ -1,14 +1,50 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from alpaca_lab.config import LabSettings
-from alpaca_lab.execution.ownership import FileOwnershipLease
+from alpaca_lab.execution.ownership import (
+    FileOwnershipLease,
+    GenerationMatchOwnershipLease,
+    LeaseConflictError,
+    ObjectLeaseRecord,
+)
 from alpaca_lab.multi_ticker_portfolio import (
     MultiTickerPortfolioPaperTrader,
     default_portfolio_config,
 )
+
+
+class _InMemoryObjectLeaseStore:
+    def __init__(self) -> None:
+        self.payload: dict[str, object] | None = None
+        self.generation: int = 0
+
+    def read(self) -> ObjectLeaseRecord | None:
+        if self.payload is None:
+            return None
+        return ObjectLeaseRecord(payload=dict(self.payload), generation=str(self.generation))
+
+    def create_if_absent(self, payload: dict[str, object]) -> str:
+        if self.payload is not None:
+            raise LeaseConflictError("object already exists")
+        self.generation += 1
+        self.payload = dict(payload)
+        return str(self.generation)
+
+    def replace_if_generation(self, *, generation: str, payload: dict[str, object]) -> str:
+        if self.payload is None or str(self.generation) != str(generation):
+            raise LeaseConflictError("generation mismatch")
+        self.generation += 1
+        self.payload = dict(payload)
+        return str(self.generation)
+
+    def delete_if_generation(self, *, generation: str) -> None:
+        if self.payload is None or str(self.generation) != str(generation):
+            raise LeaseConflictError("generation mismatch")
+        self.generation += 1
+        self.payload = None
 
 
 def test_file_ownership_lease_blocks_other_owner(tmp_path: Path) -> None:
@@ -169,3 +205,130 @@ def test_file_ownership_lease_without_existing_owner_is_not_blocked(tmp_path: Pa
 
     assert status.owner_id is None
     assert status.blocked is False
+
+
+def test_file_ownership_lease_release_removes_last_role(tmp_path: Path) -> None:
+    lease = FileOwnershipLease(
+        path=tmp_path / "shared_lease.json",
+        owner_id="owner-a",
+        owner_label="machine-a",
+        ttl_seconds=180,
+    )
+    lease.acquire(role="portfolio_trader")
+
+    released = lease.release(role="portfolio_trader")
+
+    assert released.owner_id is None
+    assert released.roles == {}
+    assert (tmp_path / "shared_lease.json").exists() is False
+
+
+def test_generation_match_ownership_lease_blocks_other_owner() -> None:
+    store = _InMemoryObjectLeaseStore()
+    owner_a = GenerationMatchOwnershipLease(
+        store=store,
+        lease_path="gs://codexalpaca-control-us/leases/paper-execution/lease.json",
+        owner_id="owner-a",
+        owner_label="machine-a",
+        machine_label="machine-a",
+        runner_path="vm-execution-paper-01",
+        git_commit="abc123",
+        audit_context={"plane": "execution", "environment": "paper", "source": "vm"},
+    )
+    owner_b = GenerationMatchOwnershipLease(
+        store=store,
+        lease_path="gs://codexalpaca-control-us/leases/paper-execution/lease.json",
+        owner_id="owner-b",
+        owner_label="machine-b",
+        machine_label="machine-b",
+        runner_path="desktop-b",
+        git_commit="def456",
+        audit_context={"plane": "execution", "environment": "paper", "source": "workstation"},
+    )
+
+    acquired = owner_a.acquire(role="portfolio_trader")
+    blocked = owner_b.acquire(role="portfolio_trader")
+
+    assert acquired.acquired is True
+    assert acquired.generation == "1"
+    assert blocked.blocked is True
+    assert blocked.blocked_by_owner_id == "owner-a"
+    assert blocked.blocked_by_owner_label == "machine-a"
+
+
+def test_generation_match_ownership_lease_allows_same_owner_multiple_roles() -> None:
+    store = _InMemoryObjectLeaseStore()
+    lease = GenerationMatchOwnershipLease(
+        store=store,
+        lease_path="gs://codexalpaca-control-us/leases/paper-execution/lease.json",
+        owner_id="owner-a",
+        owner_label="machine-a",
+        machine_label="machine-a",
+        runner_path="vm-execution-paper-01",
+        git_commit="abc123",
+        audit_context={"plane": "execution", "environment": "paper", "source": "vm"},
+    )
+
+    trader_role = lease.acquire(role="portfolio_trader")
+    close_role = lease.acquire(role="eod_close_guard")
+
+    assert trader_role.acquired is True
+    assert close_role.acquired is True
+    assert set((close_role.roles or {}).keys()) == {"portfolio_trader", "eod_close_guard"}
+    assert close_role.generation == "2"
+
+
+def test_generation_match_ownership_lease_can_take_over_expired_lease(monkeypatch) -> None:
+    store = _InMemoryObjectLeaseStore()
+    base_time = datetime(2026, 4, 23, 15, 0, tzinfo=UTC)
+    monkeypatch.setattr("alpaca_lab.execution.ownership._now_utc", lambda: base_time)
+    owner_a = GenerationMatchOwnershipLease(
+        store=store,
+        lease_path="gs://codexalpaca-control-us/leases/paper-execution/lease.json",
+        owner_id="owner-a",
+        owner_label="machine-a",
+        machine_label="machine-a",
+        runner_path="vm-execution-paper-01",
+        git_commit="abc123",
+    )
+    acquired = owner_a.acquire(role="portfolio_trader")
+
+    monkeypatch.setattr(
+        "alpaca_lab.execution.ownership._now_utc",
+        lambda: base_time + timedelta(minutes=10),
+    )
+    owner_b = GenerationMatchOwnershipLease(
+        store=store,
+        lease_path="gs://codexalpaca-control-us/leases/paper-execution/lease.json",
+        owner_id="owner-b",
+        owner_label="machine-b",
+        machine_label="machine-b",
+        runner_path="desktop-b",
+        git_commit="def456",
+    )
+    takeover = owner_b.acquire(role="portfolio_trader")
+
+    assert acquired.acquired is True
+    assert takeover.acquired is True
+    assert takeover.owner_id == "owner-b"
+    assert takeover.owner_label == "machine-b"
+
+
+def test_generation_match_ownership_lease_release_removes_last_role() -> None:
+    store = _InMemoryObjectLeaseStore()
+    lease = GenerationMatchOwnershipLease(
+        store=store,
+        lease_path="gs://codexalpaca-control-us/leases/paper-execution/lease.json",
+        owner_id="owner-a",
+        owner_label="machine-a",
+        machine_label="machine-a",
+        runner_path="vm-execution-paper-01",
+        git_commit="abc123",
+    )
+    lease.acquire(role="portfolio_trader")
+
+    released = lease.release(role="portfolio_trader")
+
+    assert released.owner_id is None
+    assert released.roles == {}
+    assert store.read() is None
