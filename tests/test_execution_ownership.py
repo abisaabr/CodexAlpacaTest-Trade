@@ -137,6 +137,7 @@ def test_trader_run_returns_ownership_blocked_when_other_owner_holds_lease(tmp_p
             ),
             "ownership": default_portfolio_config().ownership.model_copy(
                 update={
+                    "enabled": True,
                     "lease_path": lease_path,
                     "machine_label": "machine-b",
                 }
