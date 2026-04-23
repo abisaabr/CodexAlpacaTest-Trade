@@ -45,6 +45,7 @@ def main() -> None:
     config = load_portfolio_config(args.portfolio_config)
     result = evaluate_standby_failover_readiness(
         ownership_enabled=config.ownership.enabled,
+        lease_backend=config.ownership.lease_backend,
         lease_path=config.ownership.lease_path,
         machine_label=config.ownership.machine_label,
         lease_ttl_seconds=config.ownership.lease_ttl_seconds,

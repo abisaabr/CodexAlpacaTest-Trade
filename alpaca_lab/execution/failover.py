@@ -53,6 +53,7 @@ class FailoverCheckResult:
     ready: bool
     status: str
     ownership_enabled: bool
+    lease_backend: str
     machine_label: str | None
     lease_path: str | None
     expected_lease_path: str | None
@@ -73,6 +74,7 @@ class FailoverCheckResult:
 def evaluate_standby_failover_readiness(
     *,
     ownership_enabled: bool,
+    lease_backend: str = "file",
     lease_path: Path,
     machine_label: str | None,
     lease_ttl_seconds: int,
@@ -82,6 +84,7 @@ def evaluate_standby_failover_readiness(
 ) -> FailoverCheckResult:
     issues: list[FailoverCheckIssue] = []
     notes: list[str] = []
+    normalized_backend = str(lease_backend or "file").strip().lower()
     resolved_lease_path = lease_path.expanduser().resolve(strict=False)
     resolved_expected_path = (
         expected_lease_path.expanduser().resolve(strict=False)
@@ -96,6 +99,17 @@ def evaluate_standby_failover_readiness(
                 severity="error",
                 code="ownership_disabled",
                 message="Ownership lease is disabled, so a standby machine cannot coordinate safely.",
+            )
+        )
+    if normalized_backend != "file":
+        issues.append(
+            FailoverCheckIssue(
+                severity="error",
+                code="non_file_ownership_backend_not_supported",
+                message=(
+                    "Standby failover validation is intentionally scoped to the shared file lease. "
+                    "Do not widen the temporary parallel-runtime exception to the GCS ownership backend."
+                ),
             )
         )
     if not machine_label:
@@ -212,6 +226,7 @@ def evaluate_standby_failover_readiness(
         ready=ready,
         status=status,
         ownership_enabled=ownership_enabled,
+        lease_backend=normalized_backend,
         machine_label=machine_label,
         lease_path=str(resolved_lease_path),
         expected_lease_path=str(resolved_expected_path) if resolved_expected_path is not None else None,

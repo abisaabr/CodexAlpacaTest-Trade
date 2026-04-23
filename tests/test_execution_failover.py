@@ -20,6 +20,7 @@ def test_failover_check_ready_when_shared_lease_is_visible(tmp_path: Path) -> No
 
     result = evaluate_standby_failover_readiness(
         ownership_enabled=True,
+        lease_backend="file",
         lease_path=lease_path,
         machine_label="desktop-b",
         lease_ttl_seconds=180,
@@ -40,6 +41,7 @@ def test_failover_check_rejects_repo_local_lease_path(tmp_path: Path) -> None:
 
     result = evaluate_standby_failover_readiness(
         ownership_enabled=True,
+        lease_backend="file",
         lease_path=lease_path,
         machine_label="desktop-b",
         lease_ttl_seconds=180,
@@ -59,6 +61,7 @@ def test_failover_check_rejects_expected_path_mismatch(tmp_path: Path) -> None:
 
     result = evaluate_standby_failover_readiness(
         ownership_enabled=True,
+        lease_backend="file",
         lease_path=actual_path,
         machine_label="desktop-b",
         lease_ttl_seconds=180,
@@ -78,6 +81,7 @@ def test_failover_check_allows_missing_file_when_expected_path_matches(tmp_path:
 
     result = evaluate_standby_failover_readiness(
         ownership_enabled=True,
+        lease_backend="file",
         lease_path=expected_path,
         machine_label="desktop-b",
         lease_ttl_seconds=180,
@@ -88,3 +92,23 @@ def test_failover_check_allows_missing_file_when_expected_path_matches(tmp_path:
 
     assert result.ready is True
     assert any("matches the expected shared lease path" in note for note in result.notes)
+
+
+def test_failover_check_rejects_non_file_backend(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    lease_path = tmp_path / "OneDrive" / "CodexAlpaca" / "leases" / "multi_ticker_portfolio.json"
+
+    result = evaluate_standby_failover_readiness(
+        ownership_enabled=True,
+        lease_backend="gcs_generation_match",
+        lease_path=lease_path,
+        machine_label="desktop-b",
+        lease_ttl_seconds=180,
+        repo_root=repo_root,
+        require_existing_lease=False,
+    )
+
+    assert result.ready is False
+    assert result.lease_backend == "gcs_generation_match"
+    assert any(issue.code == "non_file_ownership_backend_not_supported" for issue in result.issues)

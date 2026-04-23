@@ -17,7 +17,12 @@ bootstrap_repo_root()
 
 from alpaca_lab.brokers.alpaca import AlpacaBrokerAdapter
 from alpaca_lab.config import load_settings
-from alpaca_lab.execution.ownership import FileOwnershipLease, NoopOwnershipLease
+from alpaca_lab.execution.ownership import (
+    FileOwnershipLease,
+    GCSGenerationMatchLeaseStore,
+    GenerationMatchOwnershipLease,
+    NoopOwnershipLease,
+)
 from alpaca_lab.logging_utils import configure_logging, get_logger
 from alpaca_lab.multi_ticker_portfolio import load_portfolio_config
 from alpaca_lab.notifications import NtfyNotifier
@@ -269,6 +274,32 @@ def _send_health_notification(
     return notifier.send_lines(*lines)
 
 
+def build_health_check_ownership_lease(portfolio_config):
+    ownership = portfolio_config.ownership
+    if not ownership.enabled:
+        return NoopOwnershipLease()
+    if ownership.lease_backend == "gcs_generation_match":
+        return GenerationMatchOwnershipLease(
+            store=GCSGenerationMatchLeaseStore.from_gcs_uri(str(ownership.gcs_lease_uri)),
+            lease_path=str(ownership.gcs_lease_uri),
+            owner_label=ownership.machine_label,
+            ttl_seconds=ownership.lease_ttl_seconds,
+            machine_label=ownership.machine_label,
+            runner_path=str(PROJECT_ROOT),
+            audit_context={
+                "plane": "execution",
+                "environment": "paper",
+                "runtime": "health_check",
+                "lease_backend": ownership.lease_backend,
+            },
+        )
+    return FileOwnershipLease(
+        path=ownership.lease_path,
+        owner_label=ownership.machine_label,
+        ttl_seconds=ownership.lease_ttl_seconds,
+    )
+
+
 def main() -> None:
     args = parse_args()
     settings = load_settings(config_file=args.config)
@@ -277,14 +308,7 @@ def main() -> None:
     portfolio_config = load_portfolio_config(args.portfolio_config)
     broker = AlpacaBrokerAdapter(settings, dry_run=True)
     notifier = NtfyNotifier(settings)
-    if portfolio_config.ownership.enabled:
-        ownership_lease = FileOwnershipLease(
-            path=portfolio_config.ownership.lease_path,
-            owner_label=portfolio_config.ownership.machine_label,
-            ttl_seconds=portfolio_config.ownership.lease_ttl_seconds,
-        )
-    else:
-        ownership_lease = NoopOwnershipLease()
+    ownership_lease = build_health_check_ownership_lease(portfolio_config)
     ownership_status = ownership_lease.inspect()
     standby_mode = ownership_status.blocked and not ownership_status.held_by_self
 
