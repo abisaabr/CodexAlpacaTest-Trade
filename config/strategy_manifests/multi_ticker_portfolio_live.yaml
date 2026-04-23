@@ -1,15 +1,19 @@
 version: 1
 description: Checked-in live paper-runner strategy manifest.
-strategy_count: 94
+strategy_count: 113
 summary:
-  underlying_count: 21
+  underlying_count: 26
   by_underlying_symbol:
     AMZN: 7
     ARKK: 4
+    ARM: 3
     BAC: 2
     CRM: 5
+    CRWV: 5
+    DIS: 1
     GDX: 5
     GLD: 3
+    GOOG: 5
     IWM: 6
     JPM: 6
     MSFT: 5
@@ -21,6 +25,7 @@ summary:
     SCHW: 2
     SHOP: 5
     SLV: 5
+    SMCI: 5
     SPY: 5
     TSLA: 4
     XLE: 5
@@ -28,8 +33,8 @@ summary:
   by_family:
     Call backspread: 2
     Iron butterfly: 2
-    Single-leg long call: 48
-    Single-leg long put: 42
+    Single-leg long call: 59
+    Single-leg long put: 50
 strategies:
 - name: qqq__reactive__call_backspread_next_expiry
   underlying_symbol: QQQ
@@ -1959,5 +1964,385 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: crwv__base__trend_long_put_next_expiry
+  underlying_symbol: CRWV
+  regime: bear
+  family: Single-leg long put
+  description: CRWV [base] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: crwv__fast__trend_long_put_next_expiry
+  underlying_symbol: CRWV
+  regime: bear
+  family: Single-leg long put
+  description: CRWV [fast] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: crwv__slow__trend_long_put_next_expiry
+  underlying_symbol: CRWV
+  regime: bear
+  family: Single-leg long put
+  description: CRWV [slow] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: crwv__base__trend_long_call_next_expiry
+  underlying_symbol: CRWV
+  regime: bull
+  family: Single-leg long call
+  description: CRWV [base] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: crwv__fast__trend_long_call_next_expiry
+  underlying_symbol: CRWV
+  regime: bull
+  family: Single-leg long call
+  description: CRWV [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: goog__base__trend_long_put_next_expiry
+  underlying_symbol: GOOG
+  regime: bear
+  family: Single-leg long put
+  description: GOOG [base] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: goog__fast__trend_long_put_next_expiry
+  underlying_symbol: GOOG
+  regime: bear
+  family: Single-leg long put
+  description: GOOG [fast] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: goog__base__trend_long_call_next_expiry
+  underlying_symbol: GOOG
+  regime: bull
+  family: Single-leg long call
+  description: GOOG [base] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: goog__fast__trend_long_call_next_expiry
+  underlying_symbol: GOOG
+  regime: bull
+  family: Single-leg long call
+  description: GOOG [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: goog__slow__trend_long_call_next_expiry
+  underlying_symbol: GOOG
+  regime: bull
+  family: Single-leg long call
+  description: GOOG [slow] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: smci__base__trend_long_put_next_expiry
+  underlying_symbol: SMCI
+  regime: bear
+  family: Single-leg long put
+  description: SMCI [base] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: smci__fast__trend_long_put_next_expiry
+  underlying_symbol: SMCI
+  regime: bear
+  family: Single-leg long put
+  description: SMCI [fast] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: smci__base__trend_long_call_next_expiry
+  underlying_symbol: SMCI
+  regime: bull
+  family: Single-leg long call
+  description: SMCI [base] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: smci__fast__trend_long_call_next_expiry
+  underlying_symbol: SMCI
+  regime: bull
+  family: Single-leg long call
+  description: SMCI [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: smci__slow__trend_long_call_next_expiry
+  underlying_symbol: SMCI
+  regime: bull
+  family: Single-leg long call
+  description: SMCI [slow] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: arm__fast__trend_long_put_next_expiry
+  underlying_symbol: ARM
+  regime: bear
+  family: Single-leg long put
+  description: ARM [fast] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: arm__base__trend_long_call_next_expiry
+  underlying_symbol: ARM
+  regime: bull
+  family: Single-leg long call
+  description: ARM [base] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: arm__fast__trend_long_call_next_expiry
+  underlying_symbol: ARM
+  regime: bull
+  family: Single-leg long call
+  description: ARM [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: dis__fast__trend_long_call_next_expiry
+  underlying_symbol: DIS
+  regime: bull
+  family: Single-leg long call
+  description: DIS [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
     min_abs_delta: 0.05
     max_abs_delta: 0.95
