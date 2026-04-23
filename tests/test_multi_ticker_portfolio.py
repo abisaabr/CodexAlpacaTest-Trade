@@ -747,6 +747,7 @@ def test_trader_builds_generation_match_lease_when_gcs_backend_selected(monkeypa
         update={
             "ownership": default_portfolio_config().ownership.model_copy(
                 update={
+                    "enabled": True,
                     "lease_backend": "gcs_generation_match",
                     "gcs_lease_uri": "gs://codexalpaca-control-us/leases/paper-execution/lease.json",
                     "machine_label": "vm-execution-paper-01",
