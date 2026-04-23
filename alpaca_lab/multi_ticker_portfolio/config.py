@@ -7,7 +7,7 @@ from typing import Literal
 
 import yaml
 from dotenv import dotenv_values
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class StrategyLegConfig(BaseModel):
@@ -234,7 +234,9 @@ class OwnershipConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = True
+    lease_backend: Literal["file", "gcs_generation_match"] = "file"
     lease_path: Path = Path("reports/multi_ticker_portfolio/state/ownership_lease.json")
+    gcs_lease_uri: str | None = None
     lease_ttl_seconds: int = 180
     machine_label: str | None = None
 
@@ -242,6 +244,15 @@ class OwnershipConfig(BaseModel):
     @classmethod
     def normalize_path(cls, value: object) -> Path:
         return Path(str(value))
+
+    @model_validator(mode="after")
+    def validate_backend_requirements(self) -> OwnershipConfig:
+        if self.lease_backend == "gcs_generation_match" and not self.gcs_lease_uri:
+            raise ValueError(
+                "ownership.gcs_lease_uri is required when ownership.lease_backend is "
+                "'gcs_generation_match'."
+            )
+        return self
 
 
 class MultiTickerPortfolioConfig(BaseModel):
@@ -605,6 +616,10 @@ def load_portfolio_config(path: str | Path | None = None) -> MultiTickerPortfoli
         raise ValueError("Ownership config must contain a top-level mapping.")
     if _env_override("MULTI_TICKER_OWNERSHIP_LEASE_PATH"):
         ownership_payload["lease_path"] = _env_override("MULTI_TICKER_OWNERSHIP_LEASE_PATH")
+    if _env_override("MULTI_TICKER_OWNERSHIP_LEASE_BACKEND"):
+        ownership_payload["lease_backend"] = _env_override("MULTI_TICKER_OWNERSHIP_LEASE_BACKEND")
+    if _env_override("MULTI_TICKER_OWNERSHIP_GCS_LEASE_URI"):
+        ownership_payload["gcs_lease_uri"] = _env_override("MULTI_TICKER_OWNERSHIP_GCS_LEASE_URI")
     if _env_override("MULTI_TICKER_OWNERSHIP_ENABLED"):
         ownership_payload["enabled"] = _env_override("MULTI_TICKER_OWNERSHIP_ENABLED")
     if _env_override("MULTI_TICKER_OWNERSHIP_TTL_SECONDS"):

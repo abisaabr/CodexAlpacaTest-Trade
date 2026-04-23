@@ -310,6 +310,121 @@ class ObjectLeaseStore(Protocol):
         ...
 
 
+def _parse_gcs_uri(gcs_uri: str) -> tuple[str, str]:
+    uri = str(gcs_uri).strip()
+    if not uri.startswith("gs://"):
+        raise ValueError(f"GCS lease URI must start with 'gs://': {gcs_uri}")
+    bucket_and_object = uri[5:]
+    bucket, separator, object_name = bucket_and_object.partition("/")
+    if not bucket or not separator or not object_name:
+        raise ValueError(f"GCS lease URI must include both bucket and object path: {gcs_uri}")
+    return bucket, object_name
+
+
+def _error_status_code(exc: BaseException) -> int | None:
+    for attribute_name in ("code", "status_code"):
+        value = getattr(exc, attribute_name, None)
+        if callable(value):
+            try:
+                value = value()
+            except Exception:
+                value = None
+        if isinstance(value, int):
+            return value
+    return None
+
+
+def _is_not_found_error(exc: BaseException) -> bool:
+    if exc.__class__.__name__ == "NotFound":
+        return True
+    return _error_status_code(exc) == 404
+
+
+def _is_precondition_error(exc: BaseException) -> bool:
+    if exc.__class__.__name__ in {"PreconditionFailed", "Conflict", "FailedPrecondition"}:
+        return True
+    return _error_status_code(exc) in {409, 412}
+
+
+class GCSGenerationMatchLeaseStore:
+    def __init__(self, *, blob: Any, gcs_uri: str) -> None:
+        self.blob = blob
+        self.gcs_uri = gcs_uri
+
+    @classmethod
+    def from_gcs_uri(cls, gcs_uri: str, *, client: Any | None = None) -> GCSGenerationMatchLeaseStore:
+        bucket_name, object_name = _parse_gcs_uri(gcs_uri)
+        if client is None:
+            try:
+                from google.cloud import storage  # type: ignore[import-not-found]
+            except ImportError as exc:  # pragma: no cover - exercised through explicit config only
+                raise RuntimeError(
+                    "GCS lease backend requires google-cloud-storage. Install the runner with the "
+                    "'gcp' extra or otherwise provide the dependency before using "
+                    "ownership.lease_backend=gcs_generation_match."
+                ) from exc
+            client = storage.Client()
+        blob = client.bucket(bucket_name).blob(object_name)
+        return cls(blob=blob, gcs_uri=gcs_uri)
+
+    def _read_generation(self) -> str:
+        generation = getattr(self.blob, "generation", None)
+        if generation in (None, ""):
+            raise RuntimeError(f"GCS lease object does not expose a generation: {self.gcs_uri}")
+        return str(generation)
+
+    def read(self) -> ObjectLeaseRecord | None:
+        try:
+            self.blob.reload()
+        except Exception as exc:
+            if _is_not_found_error(exc):
+                return None
+            raise
+        payload_text = self.blob.download_as_text(encoding="utf-8")
+        payload = json.loads(payload_text)
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"GCS lease object did not contain a JSON object: {self.gcs_uri}")
+        return ObjectLeaseRecord(payload=payload, generation=self._read_generation())
+
+    def create_if_absent(self, payload: dict[str, Any]) -> str:
+        try:
+            self.blob.upload_from_string(
+                json.dumps(payload, indent=2),
+                content_type="application/json",
+                if_generation_match=0,
+            )
+            self.blob.reload()
+        except Exception as exc:
+            if _is_precondition_error(exc):
+                raise LeaseConflictError("lease object already exists") from exc
+            raise
+        return self._read_generation()
+
+    def replace_if_generation(self, *, generation: str, payload: dict[str, Any]) -> str:
+        try:
+            self.blob.upload_from_string(
+                json.dumps(payload, indent=2),
+                content_type="application/json",
+                if_generation_match=int(str(generation)),
+            )
+            self.blob.reload()
+        except Exception as exc:
+            if _is_precondition_error(exc):
+                raise LeaseConflictError("lease generation mismatch") from exc
+            raise
+        return self._read_generation()
+
+    def delete_if_generation(self, *, generation: str) -> None:
+        try:
+            self.blob.delete(if_generation_match=int(str(generation)))
+        except Exception as exc:
+            if _is_precondition_error(exc):
+                raise LeaseConflictError("lease generation mismatch") from exc
+            if _is_not_found_error(exc):
+                raise LeaseConflictError("lease object not found") from exc
+            raise
+
+
 class GenerationMatchOwnershipLease:
     def __init__(
         self,

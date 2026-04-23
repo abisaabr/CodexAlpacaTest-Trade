@@ -6,6 +6,7 @@ from pathlib import Path
 from alpaca_lab.config import LabSettings
 from alpaca_lab.execution.ownership import (
     FileOwnershipLease,
+    GCSGenerationMatchLeaseStore,
     GenerationMatchOwnershipLease,
     LeaseConflictError,
     ObjectLeaseRecord,
@@ -45,6 +46,71 @@ class _InMemoryObjectLeaseStore:
             raise LeaseConflictError("generation mismatch")
         self.generation += 1
         self.payload = None
+
+
+class _FakeGcsError(Exception):
+    def __init__(self, status_code: int, message: str) -> None:
+        super().__init__(message)
+        self.code = status_code
+        self.status_code = status_code
+
+
+class _FakeBlob:
+    def __init__(self) -> None:
+        self._data: str | None = None
+        self.generation: int | None = None
+
+    def reload(self) -> None:
+        if self._data is None:
+            raise _FakeGcsError(404, "not found")
+
+    def download_as_text(self, *, encoding: str = "utf-8") -> str:
+        assert encoding == "utf-8"
+        if self._data is None:
+            raise _FakeGcsError(404, "not found")
+        return self._data
+
+    def upload_from_string(
+        self,
+        data: str,
+        *,
+        content_type: str,
+        if_generation_match: int | None = None,
+    ) -> None:
+        assert content_type == "application/json"
+        current_generation = self.generation
+        if if_generation_match == 0 and self._data is not None:
+            raise _FakeGcsError(412, "precondition failed")
+        if if_generation_match not in (None, 0) and current_generation != if_generation_match:
+            raise _FakeGcsError(412, "precondition failed")
+        self.generation = 1 if current_generation is None else current_generation + 1
+        self._data = data
+
+    def delete(self, *, if_generation_match: int | None = None) -> None:
+        if self._data is None:
+            raise _FakeGcsError(404, "not found")
+        if if_generation_match is not None and self.generation != if_generation_match:
+            raise _FakeGcsError(412, "precondition failed")
+        self.generation = None
+        self._data = None
+
+
+class _FakeBucket:
+    def __init__(self, blob: _FakeBlob) -> None:
+        self._blob = blob
+
+    def blob(self, object_name: str) -> _FakeBlob:
+        assert object_name == "leases/paper-execution/lease.json"
+        return self._blob
+
+
+class _FakeStorageClient:
+    def __init__(self, blob: _FakeBlob) -> None:
+        self._blob = blob
+
+    def bucket(self, bucket_name: str) -> _FakeBucket:
+        assert bucket_name == "codexalpaca-control-us"
+        return _FakeBucket(self._blob)
 
 
 def test_file_ownership_lease_blocks_other_owner(tmp_path: Path) -> None:
@@ -332,3 +398,45 @@ def test_generation_match_ownership_lease_release_removes_last_role() -> None:
     assert released.owner_id is None
     assert released.roles == {}
     assert store.read() is None
+
+
+def test_gcs_generation_match_store_round_trips_payload() -> None:
+    blob = _FakeBlob()
+    store = GCSGenerationMatchLeaseStore.from_gcs_uri(
+        "gs://codexalpaca-control-us/leases/paper-execution/lease.json",
+        client=_FakeStorageClient(blob),
+    )
+    payload = {"owner_id": "owner-a", "roles": {"portfolio_trader": {"expires_at": "2026-04-23T20:00:00+00:00"}}}
+
+    generation = store.create_if_absent(payload)
+    record = store.read()
+
+    assert generation == "1"
+    assert record is not None
+    assert record.generation == "1"
+    assert record.payload["owner_id"] == "owner-a"
+
+
+def test_gcs_generation_match_store_detects_generation_conflict() -> None:
+    blob = _FakeBlob()
+    store = GCSGenerationMatchLeaseStore.from_gcs_uri(
+        "gs://codexalpaca-control-us/leases/paper-execution/lease.json",
+        client=_FakeStorageClient(blob),
+    )
+    store.create_if_absent({"owner_id": "owner-a", "roles": {}})
+
+    try:
+        store.replace_if_generation(generation="999", payload={"owner_id": "owner-b", "roles": {}})
+    except LeaseConflictError:
+        pass
+    else:
+        raise AssertionError("expected generation mismatch to raise LeaseConflictError")
+
+
+def test_gcs_generation_match_store_rejects_invalid_uri() -> None:
+    try:
+        GCSGenerationMatchLeaseStore.from_gcs_uri("not-a-gs-uri", client=_FakeStorageClient(_FakeBlob()))
+    except ValueError as exc:
+        assert "gs://" in str(exc)
+    else:
+        raise AssertionError("expected invalid GCS URI to raise ValueError")

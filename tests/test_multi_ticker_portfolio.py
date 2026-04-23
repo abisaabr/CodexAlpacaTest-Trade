@@ -12,6 +12,7 @@ import pytest
 
 from alpaca_lab.brokers.alpaca import OrderRequest
 from alpaca_lab.config import LabSettings
+from alpaca_lab.execution.ownership import GenerationMatchOwnershipLease
 from alpaca_lab.multi_ticker_portfolio.config import (
     EventBlackoutConfig,
     default_portfolio_config,
@@ -692,6 +693,84 @@ def test_portfolio_config_loads_strategies_from_manifest_path(tmp_path: Path) ->
     assert config.strategy_manifest_path == manifest_path.resolve()
     assert len(config.strategies) == 1
     assert config.strategies[0].name == strategy["name"]
+
+
+def test_portfolio_config_allows_gcs_ownership_backend(tmp_path: Path) -> None:
+    config_path = tmp_path / "portfolio.yaml"
+    config_path.write_text(
+        "ownership:\n"
+        "  lease_backend: gcs_generation_match\n"
+        "  gcs_lease_uri: gs://codexalpaca-control-us/leases/paper-execution/lease.json\n",
+        encoding="utf-8",
+    )
+
+    config = load_portfolio_config(config_path)
+
+    assert config.ownership.lease_backend == "gcs_generation_match"
+    assert config.ownership.gcs_lease_uri == "gs://codexalpaca-control-us/leases/paper-execution/lease.json"
+
+
+def test_portfolio_config_requires_gcs_uri_when_gcs_backend_selected(tmp_path: Path) -> None:
+    config_path = tmp_path / "portfolio.yaml"
+    config_path.write_text(
+        "ownership:\n"
+        "  lease_backend: gcs_generation_match\n",
+        encoding="utf-8",
+    )
+
+    try:
+        load_portfolio_config(config_path)
+    except ValueError as exc:
+        assert "gcs_lease_uri" in str(exc)
+    else:
+        raise AssertionError("expected GCS ownership backend without URI to fail validation")
+
+
+def test_trader_builds_generation_match_lease_when_gcs_backend_selected(monkeypatch) -> None:
+    class _BrokerStub:
+        pass
+
+    class _StoreStub:
+        def read(self):  # pragma: no cover - interface placeholder
+            return None
+
+        def create_if_absent(self, payload):
+            return "1"
+
+        def replace_if_generation(self, *, generation, payload):
+            return "2"
+
+        def delete_if_generation(self, *, generation):
+            return None
+
+    config = default_portfolio_config().model_copy(
+        update={
+            "ownership": default_portfolio_config().ownership.model_copy(
+                update={
+                    "lease_backend": "gcs_generation_match",
+                    "gcs_lease_uri": "gs://codexalpaca-control-us/leases/paper-execution/lease.json",
+                    "machine_label": "vm-execution-paper-01",
+                }
+            )
+        }
+    )
+    monkeypatch.setattr(
+        "alpaca_lab.multi_ticker_portfolio.trader.GCSGenerationMatchLeaseStore.from_gcs_uri",
+        lambda gcs_uri: _StoreStub(),
+    )
+
+    trader = MultiTickerPortfolioPaperTrader(
+        LabSettings(),
+        config,
+        broker=_BrokerStub(),
+        submit_paper_orders=False,
+    )
+
+    assert isinstance(trader.ownership_lease, GenerationMatchOwnershipLease)
+    assert (
+        trader.ownership_lease.lease_path
+        == "gs://codexalpaca-control-us/leases/paper-execution/lease.json"
+    )
 
 
 def test_disabled_daily_loss_gate_never_blocks_entries() -> None:

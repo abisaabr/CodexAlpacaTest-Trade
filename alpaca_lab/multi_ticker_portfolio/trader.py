@@ -20,6 +20,8 @@ from alpaca_lab.brokers.alpaca import AlpacaBrokerAdapter, OrderLeg, OrderReques
 from alpaca_lab.config import LabSettings
 from alpaca_lab.execution.ownership import (
     FileOwnershipLease,
+    GCSGenerationMatchLeaseStore,
+    GenerationMatchOwnershipLease,
     NoopOwnershipLease,
     OwnershipLeaseStatus,
 )
@@ -419,14 +421,40 @@ class MultiTickerPortfolioPaperTrader:
         self.contract_cache: dict[tuple[str, str], list[dict[str, Any]]] = {}
         self.contract_cache_loaded_at: dict[str, datetime] = {}
         self.underlyings = list(portfolio_config.execution.underlying_symbols)
-        if portfolio_config.ownership.enabled:
-            self.ownership_lease = FileOwnershipLease(
-                path=portfolio_config.ownership.lease_path,
-                owner_label=portfolio_config.ownership.machine_label,
-                ttl_seconds=portfolio_config.ownership.lease_ttl_seconds,
+        self.ownership_lease = self._build_ownership_lease()
+
+    def _ownership_audit_context(self) -> dict[str, Any]:
+        machine_label = self.portfolio_config.ownership.machine_label or ""
+        source = "vm" if machine_label.startswith("vm-") else "workstation"
+        return {
+            "plane": "execution",
+            "environment": "paper",
+            "source": source,
+            "lease_backend": self.portfolio_config.ownership.lease_backend,
+        }
+
+    def _build_ownership_lease(self) -> Any:
+        ownership = self.portfolio_config.ownership
+        if not ownership.enabled:
+            return NoopOwnershipLease()
+        if ownership.lease_backend == "file":
+            return FileOwnershipLease(
+                path=ownership.lease_path,
+                owner_label=ownership.machine_label,
+                ttl_seconds=ownership.lease_ttl_seconds,
             )
-        else:
-            self.ownership_lease = NoopOwnershipLease()
+        store = GCSGenerationMatchLeaseStore.from_gcs_uri(str(ownership.gcs_lease_uri))
+        runner_metadata = _git_metadata(RUNNER_REPO_ROOT)
+        return GenerationMatchOwnershipLease(
+            store=store,
+            lease_path=str(ownership.gcs_lease_uri),
+            owner_label=ownership.machine_label,
+            ttl_seconds=ownership.lease_ttl_seconds,
+            machine_label=ownership.machine_label,
+            runner_path=str(RUNNER_REPO_ROOT),
+            git_commit=runner_metadata.get("runner_repo_commit"),
+            audit_context=self._ownership_audit_context(),
+        )
 
     def _ownership_metadata(self, *, role: str) -> dict[str, Any]:
         return {
