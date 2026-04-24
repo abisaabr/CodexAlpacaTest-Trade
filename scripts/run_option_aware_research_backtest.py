@@ -1,0 +1,589 @@
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import math
+import sys
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from alpaca_lab.backtest.engine import FixedFractionSizer, LinearCostModel, run_backtest
+from scripts.run_gcp_research_wave import _variant_stock_strategy, load_variants
+
+DEFAULT_QUEUE_JSON = (
+    REPO_ROOT / "reports" / "research_wave" / "option_aware_queue" / "option_aware_research_queue.json"
+)
+DEFAULT_VARIANTS_JSONL = (
+    REPO_ROOT.parent
+    / "CodexAlpacaTest-TradeMigratyion_gcp_lease_lane"
+    / "docs"
+    / "gcp_foundation"
+    / "gcp_research_wave_variants.jsonl"
+)
+DEFAULT_OPTION_DATA_ROOT = (
+    REPO_ROOT
+    / "data"
+    / "silver"
+    / "historical"
+    / "research_gld_put_options_20260421_20260423_option_bars_trades"
+)
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "reports" / "research_wave" / "option_aware_backtests"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Run research-only option-aware economics for queued candidates."
+    )
+    parser.add_argument("--queue-json", default=str(DEFAULT_QUEUE_JSON))
+    parser.add_argument("--variants-jsonl", default=str(DEFAULT_VARIANTS_JSONL))
+    parser.add_argument("--stock-bars-path", default=str(DEFAULT_OPTION_DATA_ROOT / "stock_bars"))
+    parser.add_argument("--selected-contracts-root", default=None)
+    parser.add_argument("--option-bars-root", default=None)
+    parser.add_argument("--option-trades-root", default=None)
+    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    parser.add_argument("--run-id", default=None)
+    parser.add_argument("--top-n", type=int, default=25)
+    parser.add_argument("--max-entry-lag-minutes", type=float, default=10.0)
+    parser.add_argument("--max-exit-lag-minutes", type=float, default=10.0)
+    parser.add_argument("--initial-cash", type=float, default=100_000.0)
+    parser.add_argument("--allocation-fraction", type=float, default=0.10)
+    parser.add_argument("--slippage-bps", type=float, default=10.0)
+    parser.add_argument("--fee-per-contract", type=float, default=0.65)
+    return parser.parse_args()
+
+
+def _load_json(path: Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return payload if isinstance(payload, dict) else {}
+
+
+def _load_parquet_tree(path: Path) -> pd.DataFrame:
+    if path.is_file():
+        return pd.read_parquet(path)
+    frames = [pd.read_parquet(item) for item in sorted(path.rglob("*.parquet"))]
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True)
+
+
+def _coerce_timestamp(series: pd.Series) -> pd.Series:
+    return pd.to_datetime(series, utc=True)
+
+
+def _load_option_inputs(
+    *,
+    queue: dict[str, Any],
+    selected_contracts_root: Path | None,
+    option_bars_root: Path | None,
+    option_trades_root: Path | None,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    selected_root = selected_contracts_root or Path(str(queue.get("selected_contracts_root")))
+    bars_root = option_bars_root or Path(str(queue.get("option_bars_root")))
+    trades_root = option_trades_root or Path(str(queue.get("option_trades_root")))
+    contracts = _load_parquet_tree(selected_root)
+    option_bars = _load_parquet_tree(bars_root)
+    option_trades = _load_parquet_tree(trades_root)
+    for frame in [contracts, option_bars, option_trades]:
+        if not frame.empty and "timestamp" in frame.columns:
+            frame["timestamp"] = _coerce_timestamp(frame["timestamp"])
+    if not contracts.empty and "trade_date" in contracts.columns:
+        contracts["trade_date"] = pd.to_datetime(contracts["trade_date"]).dt.date
+    if not option_bars.empty and "trade_date" in option_bars.columns:
+        option_bars["trade_date"] = pd.to_datetime(option_bars["trade_date"]).dt.date
+    if not option_trades.empty and "trade_date" in option_trades.columns:
+        option_trades["trade_date"] = pd.to_datetime(option_trades["trade_date"]).dt.date
+    return contracts, option_bars, option_trades
+
+
+def _load_stock_bars(path: Path) -> pd.DataFrame:
+    bars = _load_parquet_tree(path)
+    if bars.empty:
+        return bars
+    bars["timestamp"] = _coerce_timestamp(bars["timestamp"])
+    return bars
+
+
+def _variant_map(variants_jsonl: Path) -> dict[str, dict[str, Any]]:
+    return {
+        str(variant.get("variant_id")): variant
+        for variant in load_variants(variants_jsonl)
+        if variant.get("variant_id")
+    }
+
+
+def _choose_contract(
+    *,
+    contracts: pd.DataFrame,
+    symbol: str,
+    option_type: str,
+    trade_date: Any,
+) -> dict[str, Any] | None:
+    if contracts.empty:
+        return None
+    frame = contracts[
+        (contracts["underlying_symbol"].astype(str).str.upper() == symbol.upper())
+        & (contracts["option_type"].astype(str).str.lower() == option_type.lower())
+        & (contracts["trade_date"] == trade_date)
+    ].copy()
+    if frame.empty:
+        return None
+    frame["abs_relative_strike_step"] = frame["relative_strike_step"].abs()
+    frame = frame.sort_values(["dte", "abs_relative_strike_step", "symbol"])
+    return frame.iloc[0].to_dict()
+
+
+def _first_option_bar(
+    *,
+    option_bars: pd.DataFrame,
+    contract_symbol: str,
+    timestamp: pd.Timestamp,
+    max_lag: timedelta,
+) -> dict[str, Any] | None:
+    frame = option_bars[
+        (option_bars["symbol"].astype(str) == contract_symbol)
+        & (option_bars["timestamp"] >= timestamp)
+        & (option_bars["timestamp"] <= timestamp + max_lag)
+    ].sort_values("timestamp")
+    if frame.empty:
+        return None
+    return frame.iloc[0].to_dict()
+
+
+def _trade_print_count(
+    *,
+    option_trades: pd.DataFrame,
+    contract_symbol: str,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+) -> int:
+    if option_trades.empty:
+        return 0
+    frame = option_trades[
+        (option_trades["symbol"].astype(str) == contract_symbol)
+        & (option_trades["timestamp"] >= start)
+        & (option_trades["timestamp"] <= end)
+    ]
+    return int(len(frame))
+
+
+def _stock_trades_for_variant(
+    *,
+    variant: dict[str, Any],
+    stock_bars: pd.DataFrame,
+    initial_cash: float,
+    allocation_fraction: float,
+) -> pd.DataFrame:
+    symbol = str(variant.get("symbol") or "").upper()
+    symbol_bars = stock_bars[stock_bars["symbol"].astype(str).str.upper() == symbol].copy()
+    if symbol_bars.empty:
+        return pd.DataFrame()
+    result = run_backtest(
+        symbol_bars,
+        _variant_stock_strategy(variant),
+        initial_cash=initial_cash,
+        cost_model=LinearCostModel(slippage_bps=5.0, fee_per_unit=0.01),
+        position_sizer=FixedFractionSizer(base_allocation_fraction=allocation_fraction),
+    )
+    return result.trades.copy()
+
+
+def _split_trade_date(value: Any) -> str:
+    return str(pd.Timestamp(value).date())
+
+
+def _summarize_trade_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    if not rows:
+        return {
+            "option_trade_count": 0,
+            "net_pnl": 0.0,
+            "expectancy": 0.0,
+            "win_rate": 0.0,
+            "profit_factor": None,
+            "max_drawdown": 0.0,
+        }
+    pnl = [float(row["option_pnl"]) for row in rows]
+    wins = [value for value in pnl if value > 0]
+    losses = [value for value in pnl if value < 0]
+    gross_wins = sum(wins)
+    gross_losses = abs(sum(losses))
+    cumulative = []
+    running = 0.0
+    peak = 0.0
+    max_drawdown = 0.0
+    for value in pnl:
+        running += value
+        peak = max(peak, running)
+        max_drawdown = min(max_drawdown, running - peak)
+        cumulative.append(running)
+    return {
+        "option_trade_count": len(rows),
+        "net_pnl": round(sum(pnl), 4),
+        "expectancy": round(sum(pnl) / len(pnl), 4),
+        "win_rate": round(len(wins) / len(rows), 4),
+        "profit_factor": round(gross_wins / gross_losses, 4) if gross_losses else None,
+        "max_drawdown": round(max_drawdown, 4),
+        "ending_cumulative_pnl": round(cumulative[-1], 4),
+    }
+
+
+def _recommendation(summary: dict[str, Any]) -> str:
+    source_trades = int(summary["source_stock_trade_count"])
+    filled = int(summary["option_trade_count"])
+    fill_coverage = float(summary["fill_coverage"])
+    train_pnl = float(summary["train_net_pnl"])
+    test_pnl = float(summary["test_net_pnl"])
+    net_pnl = float(summary["net_pnl"])
+    expectancy = float(summary["expectancy"])
+    if source_trades < 3 or filled < 3:
+        return "hold_insufficient_option_fills"
+    if fill_coverage < 0.80:
+        return "hold_option_fill_coverage"
+    if net_pnl > 0 and expectancy > 0 and train_pnl >= 0 and test_pnl >= 0:
+        return "candidate_for_walk_forward_review"
+    if net_pnl < -100 or expectancy < -10:
+        return "quarantine_option_economics"
+    return "hold_option_economics"
+
+
+def _option_rows_for_candidate(
+    *,
+    queue_item: dict[str, Any],
+    variant: dict[str, Any],
+    stock_bars: pd.DataFrame,
+    contracts: pd.DataFrame,
+    option_bars: pd.DataFrame,
+    option_trades: pd.DataFrame,
+    initial_cash: float,
+    allocation_fraction: float,
+    slippage_bps: float,
+    fee_per_contract: float,
+    max_entry_lag: timedelta,
+    max_exit_lag: timedelta,
+) -> tuple[list[dict[str, Any]], int, int]:
+    source_trades = _stock_trades_for_variant(
+        variant=variant,
+        stock_bars=stock_bars,
+        initial_cash=initial_cash,
+        allocation_fraction=allocation_fraction,
+    )
+    option_rows: list[dict[str, Any]] = []
+    missing_price_count = 0
+    option_type = str(queue_item.get("directional_option_type") or "").lower()
+    symbol = str(queue_item.get("symbol") or "").upper()
+    for trade in source_trades.to_dict("records"):
+        entry_time = pd.Timestamp(trade["entry_time"])
+        exit_time = pd.Timestamp(trade["exit_time"])
+        trade_date = entry_time.date()
+        contract = _choose_contract(
+            contracts=contracts,
+            symbol=symbol,
+            option_type=option_type,
+            trade_date=trade_date,
+        )
+        if not contract:
+            missing_price_count += 1
+            continue
+        contract_symbol = str(contract["symbol"])
+        entry_bar = _first_option_bar(
+            option_bars=option_bars,
+            contract_symbol=contract_symbol,
+            timestamp=entry_time,
+            max_lag=max_entry_lag,
+        )
+        exit_bar = _first_option_bar(
+            option_bars=option_bars,
+            contract_symbol=contract_symbol,
+            timestamp=exit_time,
+            max_lag=max_exit_lag,
+        )
+        if not entry_bar or not exit_bar:
+            missing_price_count += 1
+            continue
+        raw_entry = float(entry_bar["close"])
+        raw_exit = float(exit_bar["close"])
+        entry_price = raw_entry * (1.0 + slippage_bps / 10000.0)
+        exit_price = raw_exit * (1.0 - slippage_bps / 10000.0)
+        budget = initial_cash * allocation_fraction
+        quantity = math.floor(budget / (entry_price * 100.0))
+        if quantity < 1:
+            missing_price_count += 1
+            continue
+        fees = fee_per_contract * quantity * 2.0
+        pnl = (exit_price - entry_price) * quantity * 100.0 - fees
+        option_rows.append(
+            {
+                "candidate_variant_id": queue_item.get("candidate_variant_id"),
+                "source_strategy_id": queue_item.get("source_strategy_id"),
+                "symbol": symbol,
+                "option_type": option_type,
+                "contract_symbol": contract_symbol,
+                "trade_date": str(trade_date),
+                "stock_entry_time": str(entry_time),
+                "stock_exit_time": str(exit_time),
+                "option_entry_time": str(entry_bar["timestamp"]),
+                "option_exit_time": str(exit_bar["timestamp"]),
+                "stock_pnl_proxy": round(float(trade.get("pnl") or 0.0), 4),
+                "entry_option_close": round(raw_entry, 4),
+                "exit_option_close": round(raw_exit, 4),
+                "entry_price_after_slippage": round(entry_price, 4),
+                "exit_price_after_slippage": round(exit_price, 4),
+                "quantity": quantity,
+                "fees": round(fees, 4),
+                "option_pnl": round(pnl, 4),
+                "option_return_pct": round(pnl / (entry_price * quantity * 100.0), 6),
+                "stock_exit_reason": trade.get("exit_reason"),
+                "option_trade_print_count": _trade_print_count(
+                    option_trades=option_trades,
+                    contract_symbol=contract_symbol,
+                    start=entry_time,
+                    end=exit_time,
+                ),
+            }
+        )
+    return option_rows, int(len(source_trades)), missing_price_count
+
+
+def _split_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    if not rows:
+        return {"train_trade_count": 0, "train_net_pnl": 0.0, "test_trade_count": 0, "test_net_pnl": 0.0}
+    dates = sorted({row["trade_date"] for row in rows})
+    test_dates = {dates[-1]}
+    train_rows = [row for row in rows if row["trade_date"] not in test_dates]
+    test_rows = [row for row in rows if row["trade_date"] in test_dates]
+    return {
+        "train_trade_count": len(train_rows),
+        "train_net_pnl": round(sum(float(row["option_pnl"]) for row in train_rows), 4),
+        "test_trade_count": len(test_rows),
+        "test_net_pnl": round(sum(float(row["option_pnl"]) for row in test_rows), 4),
+        "test_dates": sorted(test_dates),
+    }
+
+
+def build_option_aware_backtest(
+    *,
+    queue_json: Path,
+    variants_jsonl: Path,
+    stock_bars_path: Path,
+    selected_contracts_root: Path | None,
+    option_bars_root: Path | None,
+    option_trades_root: Path | None,
+    top_n: int,
+    initial_cash: float,
+    allocation_fraction: float,
+    slippage_bps: float,
+    fee_per_contract: float,
+    max_entry_lag: timedelta,
+    max_exit_lag: timedelta,
+) -> dict[str, Any]:
+    queue = _load_json(queue_json)
+    variants = _variant_map(variants_jsonl)
+    stock_bars = _load_stock_bars(stock_bars_path)
+    contracts, option_bars, option_trades = _load_option_inputs(
+        queue=queue,
+        selected_contracts_root=selected_contracts_root,
+        option_bars_root=option_bars_root,
+        option_trades_root=option_trades_root,
+    )
+    all_trade_rows: list[dict[str, Any]] = []
+    candidate_summaries: list[dict[str, Any]] = []
+    for queue_item in queue.get("queue_items", [])[:top_n]:
+        if not isinstance(queue_item, dict):
+            continue
+        variant_id = str(queue_item.get("candidate_variant_id") or "")
+        variant = variants.get(variant_id)
+        if not variant:
+            candidate_summaries.append(
+                {
+                    "candidate_variant_id": variant_id,
+                    "status": "blocked_missing_variant_definition",
+                    "promotion_allowed": False,
+                    "broker_facing": False,
+                }
+            )
+            continue
+        rows, source_trade_count, missing_price_count = _option_rows_for_candidate(
+            queue_item=queue_item,
+            variant=variant,
+            stock_bars=stock_bars,
+            contracts=contracts,
+            option_bars=option_bars,
+            option_trades=option_trades,
+            initial_cash=initial_cash,
+            allocation_fraction=allocation_fraction,
+            slippage_bps=slippage_bps,
+            fee_per_contract=fee_per_contract,
+            max_entry_lag=max_entry_lag,
+            max_exit_lag=max_exit_lag,
+        )
+        all_trade_rows.extend(rows)
+        economics = _summarize_trade_rows(rows)
+        split = _split_summary(rows)
+        summary = {
+            "candidate_variant_id": variant_id,
+            "symbol": queue_item.get("symbol"),
+            "source_strategy_id": queue_item.get("source_strategy_id"),
+            "directional_option_type": queue_item.get("directional_option_type"),
+            "source_stock_trade_count": source_trade_count,
+            "missing_option_price_count": missing_price_count,
+            "fill_coverage": round(len(rows) / source_trade_count, 4) if source_trade_count else 0.0,
+            **economics,
+            **split,
+            "promotion_allowed": False,
+            "broker_facing": False,
+            "live_manifest_effect": "none",
+            "risk_policy_effect": "none",
+        }
+        summary["recommendation"] = _recommendation(summary)
+        candidate_summaries.append(summary)
+    recommendation_counts: dict[str, int] = {}
+    for row in candidate_summaries:
+        recommendation = str(row.get("recommendation") or row.get("status") or "unknown")
+        recommendation_counts[recommendation] = recommendation_counts.get(recommendation, 0) + 1
+    ranked = sorted(
+        candidate_summaries,
+        key=lambda row: float(row.get("expectancy") or 0.0),
+        reverse=True,
+    )
+    return {
+        "generated_at": datetime.now().astimezone().isoformat(),
+        "status": "completed",
+        "queue_json": str(queue_json),
+        "variants_jsonl": str(variants_jsonl),
+        "stock_bars_path": str(stock_bars_path),
+        "broker_facing": False,
+        "live_manifest_effect": "none",
+        "risk_policy_effect": "none",
+        "promotion_allowed": False,
+        "candidate_count": len(candidate_summaries),
+        "option_trade_count": len(all_trade_rows),
+        "recommendation_counts": dict(sorted(recommendation_counts.items())),
+        "candidate_summaries": ranked,
+        "trade_rows": all_trade_rows,
+        "top_research_followups": ranked[:10],
+        "next_step_contract": [
+            "Keep these results out of deployment and promotion.",
+            "Do not treat sparse positive PnL as actionable; minimum fill coverage and out-of-sample option evidence are mandatory.",
+            "Use positive option-aware candidates only for data-coverage planning and loser-cluster review.",
+            "Expand option quote/bar coverage or rerun with a declared diagnostic lag profile before walk-forward review.",
+            "Require out-of-sample option-aware evidence before strategy governance review.",
+        ],
+    }
+
+
+def _json_default(value: Any) -> str:
+    return str(value)
+
+
+def write_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, default=_json_default), encoding="utf-8")
+
+
+def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = sorted({key for row in rows for key in row})
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def write_markdown(path: Path, payload: dict[str, Any]) -> None:
+    lines = [
+        "# Option-Aware Research Backtest",
+        "",
+        f"- Generated at: `{payload['generated_at']}`",
+        f"- Status: `{payload['status']}`",
+        f"- Candidate count: `{payload['candidate_count']}`",
+        f"- Option trade count: `{payload['option_trade_count']}`",
+        f"- Promotion allowed: `{payload['promotion_allowed']}`",
+        f"- Broker facing: `{payload['broker_facing']}`",
+        "",
+        "## Recommendation Counts",
+        "",
+    ]
+    for key, value in payload["recommendation_counts"].items():
+        lines.append(f"- `{key}`: `{value}`")
+    lines.extend(["", "## Top Research Follow-Ups", ""])
+    for row in payload["top_research_followups"]:
+        lines.append(
+            "- "
+            f"`{row.get('candidate_variant_id')}` "
+            f"expectancy `{row.get('expectancy')}` "
+            f"net_pnl `{row.get('net_pnl')}` "
+            f"fill `{row.get('fill_coverage')}` "
+            f"recommendation `{row.get('recommendation')}`"
+        )
+    lines.extend(["", "## Next Step Contract", ""])
+    for item in payload["next_step_contract"]:
+        lines.append(f"- {item}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_artifacts(output_dir: Path, run_id: str, payload: dict[str, Any]) -> dict[str, str]:
+    run_dir = output_dir / run_id
+    artifacts = {
+        "manifest": run_dir / "option_aware_research_run_manifest.json",
+        "manifest_md": run_dir / "option_aware_research_run_manifest.md",
+        "trade_economics": run_dir / "option_aware_trade_economics.csv",
+        "trade_economics_json": run_dir / "option_aware_trade_economics.json",
+        "candidate_summary": run_dir / "option_aware_candidate_summary.csv",
+        "candidate_summary_json": run_dir / "option_aware_candidate_summary.json",
+        "recommendation_packet": run_dir / "option_aware_recommendation_packet.json",
+        "recommendation_packet_md": run_dir / "option_aware_recommendation_packet.md",
+    }
+    write_json(artifacts["manifest"], {key: value for key, value in payload.items() if key != "trade_rows"})
+    write_markdown(artifacts["manifest_md"], payload)
+    write_csv(artifacts["trade_economics"], payload["trade_rows"])
+    write_json(artifacts["trade_economics_json"], payload["trade_rows"])
+    write_csv(artifacts["candidate_summary"], payload["candidate_summaries"])
+    write_json(artifacts["candidate_summary_json"], payload["candidate_summaries"])
+    recommendation = {
+        "generated_at": payload["generated_at"],
+        "promotion_allowed": False,
+        "broker_facing": False,
+        "live_manifest_effect": "none",
+        "risk_policy_effect": "none",
+        "recommendation_counts": payload["recommendation_counts"],
+        "top_research_followups": payload["top_research_followups"],
+        "next_step_contract": payload["next_step_contract"],
+    }
+    write_json(artifacts["recommendation_packet"], recommendation)
+    write_markdown(artifacts["recommendation_packet_md"], payload)
+    return {key: str(value) for key, value in artifacts.items()}
+
+
+def main() -> None:
+    args = parse_args()
+    run_id = args.run_id or f"option_aware_research_{datetime.now().astimezone().strftime('%Y%m%d_%H%M%S')}"
+    payload = build_option_aware_backtest(
+        queue_json=Path(args.queue_json),
+        variants_jsonl=Path(args.variants_jsonl),
+        stock_bars_path=Path(args.stock_bars_path),
+        selected_contracts_root=Path(args.selected_contracts_root) if args.selected_contracts_root else None,
+        option_bars_root=Path(args.option_bars_root) if args.option_bars_root else None,
+        option_trades_root=Path(args.option_trades_root) if args.option_trades_root else None,
+        top_n=args.top_n,
+        initial_cash=args.initial_cash,
+        allocation_fraction=args.allocation_fraction,
+        slippage_bps=args.slippage_bps,
+        fee_per_contract=args.fee_per_contract,
+        max_entry_lag=timedelta(minutes=args.max_entry_lag_minutes),
+        max_exit_lag=timedelta(minutes=args.max_exit_lag_minutes),
+    )
+    payload["run_id"] = run_id
+    payload["artifacts"] = write_artifacts(Path(args.output_dir), run_id, payload)
+    print(json.dumps({key: value for key, value in payload.items() if key != "trade_rows"}, indent=2))
+
+
+if __name__ == "__main__":
+    main()
