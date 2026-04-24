@@ -1,0 +1,25 @@
+# Research-only stock-bar build for broad universe backtests.
+# This file is intentionally stock-only: option data expansion is governed separately
+# because fill coverage, quote/trade sparsity, and cost modeling are promotion gates.
+build_name: research_150_stock_1min_20260401_20260423_stock_only
+stock_symbols: AAPL,ABBV,ABNB,ABT,ACN,ADBE,ADI,ADP,ALB,AMAT,AMD,AMGN,AMZN,ANET,ARKK,ASML,AVGO,AXP,BA,BABA,BAC,BIDU,BKNG,BMY,BX,C,CAT,CHWY,CL,CMCSA,COIN,COP,COST,CRM,CRWD,CSCO,CVS,CVX,DASH,DD,DE,DIA,DIS,DKNG,DOCU,DOW,EA,EBAY,EEM,EFA,EMR,ENPH,EWZ,F,FCX,FDX,FXI,GE,GILD,GLD,GM,GOOG,GOOGL,GS,HD,HON,HOOD,IBM,INTC,IWM,JETS,JNJ,JPM,KO,KRE,LOW,LULU,LYFT,MA,MARA,MCD,MDT,META,MRK,MRNA,MS,MSFT,MU,NFLX,NIO,NKE,NOW,NVDA,ORCL,PANW,PFE,PG,PLTR,PYPL,QCOM,QQQ,RBLX,RIOT,ROKU,SBUX,SHOP,SLV,SMCI,SNAP,SNOW,SOFI,SPY,SQ,T,TGT,TLT,TNA,TQQQ,TSLA,TSM,U,UAL,UBER,UNG,UNH,UPS,USO,V,VIXY,VLO,VWO,VXX,WBA,WFC,WMT,X,XBI,XHB,XLC,XLE,XLF,XLI,XLK,XLP,XLU,XLV,XLY,XOM,XOP,ZM
+option_underlyings: []
+start_date: 2026-04-01
+end_date: 2026-04-23
+stock_chunk_days: 5
+contract_chunk_days: 30
+option_batch_size: 25
+include_option_bars: false
+include_option_trades: false
+include_latest_enrichment: false
+feed: iex
+overwrite: false
+
+alpaca_paper_trade: true
+alpaca_api_base_url: https://paper-api.alpaca.markets
+alpaca_data_feed: iex
+live_trading: false
+dry_run: true
+data_root: data
+reports_root: reports
+log_level: INFO
