@@ -671,7 +671,18 @@ class MultiTickerPortfolioPaperTrader:
                     "used_broker_positions": authoritative_actuals,
                 }
             )
-        return plans
+        return sorted(
+            plans,
+            key=lambda plan: self._cleanup_order_priority(
+                cleanup_signed_qty=float(plan["cleanup_signed_qty"]),
+                symbol=str(plan["symbol"]),
+            ),
+        )
+
+    @staticmethod
+    def _cleanup_order_priority(*, cleanup_signed_qty: float, symbol: str) -> tuple[int, str]:
+        # Close shorts first so protective long legs are not removed before margin-reducing covers.
+        return (0 if cleanup_signed_qty < 0 else 1, symbol)
 
     def _broker_position_mismatch_messages(
         self,
@@ -2704,7 +2715,14 @@ class MultiTickerPortfolioPaperTrader:
         expected = expected_position_map or self._expected_broker_position_map(session)
         cleanup_entries: list[dict[str, Any]] = []
         symbols_with_open_close_orders = self._symbols_with_open_close_orders()
-        for position in self.broker.get_positions():
+        positions = sorted(
+            self.broker.get_positions(),
+            key=lambda position: self._cleanup_order_priority(
+                cleanup_signed_qty=self._signed_broker_position_qty(position),
+                symbol=str(position.get("symbol") or ""),
+            ),
+        )
+        for position in positions:
             symbol = str(position.get("symbol") or "").strip()
             if not symbol:
                 continue
