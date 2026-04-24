@@ -47,6 +47,7 @@ TERMINAL_STATUSES = {"filled", "canceled", "expired", "done_for_day", "rejected"
 CONTRACT_MULTIPLIER = 100.0
 RUNNER_EXECUTION_CAPABILITY_EPOCH = 1
 RUNNER_EXECUTION_CAPABILITY_LABEL = "broker_audited_session_bundle_v1"
+RUNNER_SOURCE_STAMP_FILENAME = ".codexalpaca_source_stamp.json"
 ALPACA_OPTION_BROKER_COMMISSION_PER_CONTRACT = 0.0
 ALPACA_OPTION_ORF_PER_CONTRACT = 0.02295
 ALPACA_OPTION_OCC_PER_CONTRACT = 0.025
@@ -68,6 +69,36 @@ REGIME_ENTRY_CLUSTER_REASON = "regime_entry_cluster"
 BUCKET_REGIME_ENTRY_CLUSTER_REASON = "bucket_regime_entry_cluster"
 
 
+def _source_stamp_metadata(repo_root: Path) -> dict[str, Any]:
+    stamp_path = repo_root / RUNNER_SOURCE_STAMP_FILENAME
+    if not stamp_path.exists():
+        return {
+            "runner_source_stamp_available": False,
+            "runner_source_stamp_path": str(stamp_path),
+        }
+    try:
+        payload = json.loads(stamp_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {
+            "runner_source_stamp_available": False,
+            "runner_source_stamp_path": str(stamp_path),
+            "runner_source_stamp_parse_error": True,
+        }
+    commit = str(payload.get("runner_commit") or "")
+    return {
+        "runner_source_stamp_available": True,
+        "runner_source_stamp_path": str(stamp_path),
+        "runner_source_stamp_commit": commit or None,
+        "runner_source_stamp_branch": payload.get("runner_branch"),
+        "runner_source_stamp_deployed_at": payload.get("deployed_at"),
+        "runner_source_stamp_archive_sha256": payload.get("archive_sha256"),
+        "runner_source_stamp_deploy_method": payload.get("deploy_method"),
+        "runner_source_stamp_broker_facing": payload.get("broker_facing"),
+        "runner_source_stamp_live_manifest_effect": payload.get("live_manifest_effect"),
+        "runner_source_stamp_risk_policy_effect": payload.get("risk_policy_effect"),
+    }
+
+
 def _git_metadata(repo_root: Path) -> dict[str, Any]:
     def run_git(*args: str) -> str | None:
         try:
@@ -85,12 +116,22 @@ def _git_metadata(repo_root: Path) -> dict[str, Any]:
         output = (result.stdout or "").strip()
         return output or None
 
+    stamp_metadata = _source_stamp_metadata(repo_root)
     status_output = run_git("status", "--porcelain")
+    git_toplevel = run_git("rev-parse", "--show-toplevel")
+    git_metadata_available = git_toplevel is not None
+    git_commit = run_git("rev-parse", "--short=12", "HEAD")
+    git_branch = run_git("branch", "--show-current")
+    if not git_metadata_available and stamp_metadata.get("runner_source_stamp_available"):
+        stamped_commit = str(stamp_metadata.get("runner_source_stamp_commit") or "")
+        git_commit = stamped_commit[:12] if stamped_commit else None
+        git_branch = cast(str | None, stamp_metadata.get("runner_source_stamp_branch"))
     return {
-        "runner_repo_commit": run_git("rev-parse", "--short=12", "HEAD"),
-        "runner_repo_branch": run_git("branch", "--show-current"),
-        "runner_repo_dirty": bool(status_output),
-        "runner_repo_metadata_available": run_git("rev-parse", "--show-toplevel") is not None,
+        "runner_repo_commit": git_commit,
+        "runner_repo_branch": git_branch,
+        "runner_repo_dirty": bool(status_output) if git_metadata_available else False,
+        "runner_repo_metadata_available": git_metadata_available,
+        **stamp_metadata,
     }
 
 
