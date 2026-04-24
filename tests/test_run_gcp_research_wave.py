@@ -4,7 +4,15 @@ import argparse
 import json
 from pathlib import Path
 
-from scripts.run_gcp_research_wave import filter_variants, load_variants, run, score_variant
+import pandas as pd
+
+from scripts.run_gcp_research_wave import (
+    REAL_STOCK_BAR_EVIDENCE_MODE,
+    filter_variants,
+    load_variants,
+    run,
+    score_variant,
+)
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -13,6 +21,23 @@ def _write_json(path: Path, payload: dict) -> None:
 
 def _write_jsonl(path: Path, rows: list[dict]) -> None:
     path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+
+def _write_trending_bars(path: Path) -> None:
+    timestamps = pd.date_range("2026-04-21T13:30:00Z", periods=80, freq="1min")
+    closes = [100.0 + i * 0.20 for i in range(len(timestamps))]
+    frame = pd.DataFrame(
+        {
+            "symbol": ["QQQ"] * len(timestamps),
+            "timestamp": timestamps,
+            "open": [close - 0.03 for close in closes],
+            "high": [close + 0.04 for close in closes],
+            "low": [close - 0.06 for close in closes],
+            "close": closes,
+            "volume": [10000 + i * 10 for i in range(len(timestamps))],
+        }
+    )
+    frame.to_parquet(path, index=False)
 
 
 def test_filter_variants_uses_chunk_and_limits(tmp_path: Path) -> None:
@@ -101,6 +126,11 @@ def test_run_writes_required_research_artifacts(tmp_path: Path) -> None:
         max_variants=None,
         evidence_mode="metadata_proxy_smoke",
         allow_non_smoke_evidence=False,
+        bars_path=None,
+        initial_cash=100_000.0,
+        slippage_bps=5.0,
+        fee_per_unit=0.01,
+        allocation_fraction=0.10,
     )
 
     result = run(args)
@@ -121,3 +151,68 @@ def test_run_writes_required_research_artifacts(tmp_path: Path) -> None:
     ]
     loaded = load_variants(variants_path)
     assert len(loaded) == 2
+
+
+def test_run_real_stock_bar_smoke_uses_bars_without_promotion(tmp_path: Path) -> None:
+    variants_path = tmp_path / "variants.jsonl"
+    manifest_path = tmp_path / "wave.json"
+    bars_path = tmp_path / "bars.parquet"
+    output_dir = tmp_path / "reports"
+    _write_trending_bars(bars_path)
+    _write_jsonl(
+        variants_path,
+        [
+            {
+                "variant_id": "rq002__qqq__repair",
+                "queue_id": "RQ-002-single-leg-repair-and-loss-filter",
+                "priority": 2,
+                "symbol": "QQQ",
+                "variant_type": "single_leg_repair",
+                "source_strategy_id": "qqq__base__trend_long_call_next_expiry",
+                "parameters": {
+                    "hard_exit_minute": 210,
+                    "liquidity_gate": "baseline",
+                    "profit_target_multiple": 0.45,
+                    "stop_loss_multiple": 0.18,
+                },
+            }
+        ],
+    )
+    _write_json(
+        manifest_path,
+        {
+            "wave_id": "test_wave",
+            "chunks": [{"chunk_id": "chunk_0001", "start_index": 0, "end_index": 0}],
+        },
+    )
+    args = argparse.Namespace(
+        variants_jsonl=str(variants_path),
+        wave_manifest_json=str(manifest_path),
+        output_dir=str(output_dir),
+        run_id="real_bar_unit_run",
+        chunk_id="chunk_0001",
+        queue_id=[],
+        symbol=[],
+        priority=[],
+        max_variants=None,
+        evidence_mode=REAL_STOCK_BAR_EVIDENCE_MODE,
+        allow_non_smoke_evidence=False,
+        bars_path=str(bars_path),
+        initial_cash=100_000.0,
+        slippage_bps=5.0,
+        fee_per_unit=0.01,
+        allocation_fraction=0.10,
+    )
+
+    result = run(args)
+
+    assert result["evidence_mode"] == REAL_STOCK_BAR_EVIDENCE_MODE
+    assert result["broker_facing"] is False
+    rows = json.loads(Path(result["artifacts"]["normalized_backtest_results_json"]).read_text())
+    assert rows[0]["actual_trade_count"] > 0
+    assert rows[0]["live_manifest_effect"] == "none"
+    recommendation = json.loads(
+        Path(result["artifacts"]["candidate_hold_kill_quarantine_recommendation"]).read_text()
+    )
+    assert recommendation["promotion_allowed"] is False
+    assert "option-aware research" in recommendation["promotion_note"]

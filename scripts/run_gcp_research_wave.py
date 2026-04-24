@@ -10,9 +10,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+
+from alpaca_lab.backtest.engine import FixedFractionSizer, LinearCostModel, run_backtest
+from alpaca_lab.strategies.base import BaseStrategy
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "reports" / "research_wave"
 DEFAULT_EVIDENCE_MODE = "metadata_proxy_smoke"
+REAL_STOCK_BAR_EVIDENCE_MODE = "real_stock_bar_smoke"
 REQUIRED_OUTPUTS = [
     "research_run_manifest",
     "normalized_backtest_results",
@@ -58,6 +64,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-variants", type=int, default=None)
     parser.add_argument("--evidence-mode", default=DEFAULT_EVIDENCE_MODE)
     parser.add_argument("--allow-non-smoke-evidence", action="store_true")
+    parser.add_argument("--bars-path", default=None, help="Parquet stock bars for real stock-bar smoke.")
+    parser.add_argument("--initial-cash", type=float, default=100_000.0)
+    parser.add_argument("--slippage-bps", type=float, default=5.0)
+    parser.add_argument("--fee-per-unit", type=float, default=0.01)
+    parser.add_argument("--allocation-fraction", type=float, default=0.10)
     return parser.parse_args()
 
 
@@ -155,6 +166,99 @@ def _parameter_score(parameters: dict[str, Any]) -> float:
     return score
 
 
+class VariantStockProxyStrategy(BaseStrategy):
+    def __init__(
+        self,
+        *,
+        name: str,
+        direction: int,
+        fast_window: int,
+        slow_window: int,
+        breakout_window: int,
+        min_volume_ratio: float,
+        stop_pct: float,
+        target_pct: float,
+        timeout_bars: int,
+    ) -> None:
+        super().__init__(name=name, instrument_type="stock", contract_multiplier=1.0)
+        self.direction = 1 if direction >= 0 else -1
+        self.fast_window = fast_window
+        self.slow_window = slow_window
+        self.breakout_window = breakout_window
+        self.min_volume_ratio = min_volume_ratio
+        self.stop_pct = stop_pct
+        self.target_pct = target_pct
+        self.timeout_bars = timeout_bars
+
+    def generate_signals(self, bars: pd.DataFrame) -> pd.DataFrame:
+        self.validate_bars(bars, ("symbol", "timestamp", "open", "high", "low", "close", "volume"))
+        frame = bars.sort_values(["symbol", "timestamp"]).copy()
+        grouped = frame.groupby("symbol", sort=False)
+        frame["fast_sma"] = grouped["close"].transform(
+            lambda series: series.rolling(self.fast_window).mean()
+        )
+        frame["slow_sma"] = grouped["close"].transform(
+            lambda series: series.rolling(self.slow_window).mean()
+        )
+        frame["rolling_high"] = grouped["high"].transform(
+            lambda series: series.shift(1).rolling(self.breakout_window).max()
+        )
+        frame["rolling_low"] = grouped["low"].transform(
+            lambda series: series.shift(1).rolling(self.breakout_window).min()
+        )
+        frame["volume_sma"] = grouped["volume"].transform(
+            lambda series: series.rolling(self.slow_window).mean()
+        )
+        frame["volume_ratio"] = frame["volume"] / frame["volume_sma"].replace(0, pd.NA)
+        volume_ok = frame["volume_ratio"].fillna(0).ge(self.min_volume_ratio)
+        if self.direction > 0:
+            active = (
+                frame["close"].gt(frame["rolling_high"])
+                & frame["fast_sma"].gt(frame["slow_sma"])
+                & volume_ok
+            )
+            frame["signal"] = active.fillna(False).astype(int)
+        else:
+            active = (
+                frame["close"].lt(frame["rolling_low"])
+                & frame["fast_sma"].lt(frame["slow_sma"])
+                & volume_ok
+            )
+            frame["signal"] = -active.fillna(False).astype(int)
+        frame["stop_pct"] = self.stop_pct
+        frame["target_pct"] = self.target_pct
+        frame["timeout_bars"] = self.timeout_bars
+        frame["size_fraction"] = 1.0
+        return self.finalize_signal_frame(frame)
+
+
+def _variant_direction(variant: dict[str, Any]) -> int:
+    source = str(variant.get("source_strategy_id") or variant.get("variant_id") or "").lower()
+    if "put" in source or "short" in source or "bear" in source:
+        return -1
+    return 1
+
+
+def _variant_stock_strategy(variant: dict[str, Any]) -> VariantStockProxyStrategy:
+    parameters = variant.get("parameters") if isinstance(variant.get("parameters"), dict) else {}
+    hard_exit = int(parameters.get("hard_exit_minute") or 300)
+    timing_scale = 0 if hard_exit <= 210 else 1 if hard_exit <= 300 else 2
+    stop_multiple = float(parameters.get("stop_loss_multiple") or 0.24)
+    target_multiple = float(parameters.get("profit_target_multiple") or 0.45)
+    liquidity_gate = str(parameters.get("liquidity_gate") or "baseline")
+    return VariantStockProxyStrategy(
+        name=f"variant_stock_proxy__{variant.get('variant_id')}",
+        direction=_variant_direction(variant),
+        fast_window=4 + timing_scale,
+        slow_window=18 + timing_scale * 3,
+        breakout_window=18 + timing_scale * 3,
+        min_volume_ratio=1.05 if liquidity_gate == "tight" else 0.80,
+        stop_pct=max(0.003, min(0.04, stop_multiple * 0.05)),
+        target_pct=max(0.005, min(0.08, target_multiple * 0.05)),
+        timeout_bars=max(5, min(390, hard_exit)),
+    )
+
+
 def score_variant(variant: dict[str, Any], *, evidence_mode: str) -> dict[str, Any]:
     symbol = str(variant.get("symbol") or "UNKNOWN")
     variant_type = str(variant.get("variant_type") or "unknown")
@@ -202,6 +306,108 @@ def score_variant(variant: dict[str, Any], *, evidence_mode: str) -> dict[str, A
         "live_manifest_effect": "none",
         "risk_policy_effect": "none",
         "broker_facing": False,
+    }
+
+
+def score_variant_with_real_stock_bars(
+    variant: dict[str, Any],
+    *,
+    bars: pd.DataFrame,
+    initial_cash: float,
+    slippage_bps: float,
+    fee_per_unit: float,
+    allocation_fraction: float,
+) -> dict[str, Any]:
+    symbol = str(variant.get("symbol") or "UNKNOWN").upper()
+    variant_type = str(variant.get("variant_type") or "unknown")
+    base = {
+        "variant_id": variant.get("variant_id"),
+        "queue_id": variant.get("queue_id"),
+        "priority": variant.get("priority"),
+        "symbol": symbol,
+        "variant_type": variant_type,
+        "source_strategy_id": variant.get("source_strategy_id"),
+        "evidence_mode": REAL_STOCK_BAR_EVIDENCE_MODE,
+        "live_manifest_effect": "none",
+        "risk_policy_effect": "none",
+        "broker_facing": False,
+    }
+    if variant_type != "single_leg_repair":
+        return {
+            **base,
+            "synthetic_trade_count": 0,
+            "actual_trade_count": 0,
+            "net_pnl": 0.0,
+            "expectancy_after_cost": 0.0,
+            "win_rate": 0.0,
+            "profit_factor": None,
+            "max_drawdown": 0.0,
+            "gross_expectancy_proxy": 0.0,
+            "estimated_cost_proxy": 0.0,
+            "net_expectancy_after_cost_proxy": 0.0,
+            "win_rate_proxy": 0.0,
+            "max_drawdown_proxy": 0.0,
+            "tail_loss_proxy": 0.0,
+            "recommendation": "hold_unsupported_real_bar_variant",
+        }
+    symbol_bars = bars[bars["symbol"].astype(str).str.upper() == symbol].copy()
+    if symbol_bars.empty:
+        return {
+            **base,
+            "synthetic_trade_count": 0,
+            "actual_trade_count": 0,
+            "net_pnl": 0.0,
+            "expectancy_after_cost": 0.0,
+            "win_rate": 0.0,
+            "profit_factor": None,
+            "max_drawdown": 0.0,
+            "gross_expectancy_proxy": 0.0,
+            "estimated_cost_proxy": 0.0,
+            "net_expectancy_after_cost_proxy": 0.0,
+            "win_rate_proxy": 0.0,
+            "max_drawdown_proxy": 0.0,
+            "tail_loss_proxy": 0.0,
+            "recommendation": "hold_missing_symbol_bars",
+        }
+    result = run_backtest(
+        symbol_bars,
+        _variant_stock_strategy(variant),
+        initial_cash=initial_cash,
+        cost_model=LinearCostModel(slippage_bps=slippage_bps, fee_per_unit=fee_per_unit),
+        position_sizer=FixedFractionSizer(base_allocation_fraction=allocation_fraction),
+    )
+    summary = result.summary
+    trade_count = int(summary.get("trade_count") or 0)
+    expectancy = float(summary.get("expectancy") or 0.0)
+    net_pnl = float(summary.get("net_pnl") or 0.0)
+    max_drawdown = float(summary.get("max_drawdown") or 0.0)
+    worst_trade = float(result.trades["pnl"].min()) if not result.trades.empty else 0.0
+    profit_factor = summary.get("profit_factor")
+    if trade_count < 3:
+        recommendation = "hold_insufficient_trades"
+    elif expectancy > 0 and net_pnl > 0 and max_drawdown >= -0.015:
+        recommendation = "candidate_for_deeper_option_backtest"
+    elif expectancy < -5 or net_pnl < -250 or (profit_factor is not None and profit_factor < 0.75):
+        recommendation = "quarantine"
+    else:
+        recommendation = "hold"
+    return {
+        **base,
+        "synthetic_trade_count": trade_count,
+        "actual_trade_count": trade_count,
+        "net_pnl": round(net_pnl, 4),
+        "expectancy_after_cost": round(expectancy, 4),
+        "win_rate": round(float(summary.get("win_rate") or 0.0), 4),
+        "profit_factor": profit_factor,
+        "max_drawdown": round(max_drawdown, 6),
+        "sharpe_like_daily": summary.get("sharpe_like_daily"),
+        "gross_expectancy_proxy": round(expectancy, 4),
+        "estimated_cost_proxy": round(float(slippage_bps) / 10000.0 + float(fee_per_unit), 6),
+        "net_expectancy_after_cost_proxy": round(expectancy, 4),
+        "win_rate_proxy": round(float(summary.get("win_rate") or 0.0), 4),
+        "max_drawdown_proxy": round(abs(max_drawdown) * initial_cash, 4),
+        "tail_loss_proxy": round(abs(min(worst_trade, 0.0)), 4),
+        "recommendation": recommendation,
     }
 
 
@@ -274,14 +480,20 @@ def group_summary(results: list[dict[str, Any]], group_key: str) -> list[dict[st
 
 def build_recommendation_packet(results: list[dict[str, Any]], evidence_mode: str) -> dict[str, Any]:
     ranked = sorted(results, key=lambda row: float(row["net_expectancy_after_cost_proxy"]), reverse=True)
+    promotion_allowed = False if evidence_mode in {DEFAULT_EVIDENCE_MODE, REAL_STOCK_BAR_EVIDENCE_MODE} else True
+    if evidence_mode == DEFAULT_EVIDENCE_MODE:
+        promotion_note = "Metadata proxy smoke output cannot promote strategies; it only prioritizes real backtests."
+    elif evidence_mode == REAL_STOCK_BAR_EVIDENCE_MODE:
+        promotion_note = (
+            "Real stock-bar smoke output cannot promote strategies; "
+            "it only gates deeper option-aware research."
+        )
+    else:
+        promotion_note = "Promotion still requires governance review and broker-audited evidence."
     return {
         "evidence_mode": evidence_mode,
-        "promotion_allowed": evidence_mode != "metadata_proxy_smoke",
-        "promotion_note": (
-            "Metadata proxy smoke output cannot promote strategies; it only prioritizes real backtests."
-            if evidence_mode == "metadata_proxy_smoke"
-            else "Promotion still requires governance review and broker-audited evidence."
-        ),
+        "promotion_allowed": promotion_allowed,
+        "promotion_note": promotion_note,
         "top_research_priorities": ranked[:10],
         "quarantine_candidates": [row for row in ranked if row["recommendation"] == "quarantine"][:25],
     }
@@ -366,7 +578,8 @@ def write_artifacts(
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
-    if args.evidence_mode != DEFAULT_EVIDENCE_MODE and not args.allow_non_smoke_evidence:
+    smoke_modes = {DEFAULT_EVIDENCE_MODE, REAL_STOCK_BAR_EVIDENCE_MODE}
+    if args.evidence_mode not in smoke_modes and not args.allow_non_smoke_evidence:
         raise ValueError("--allow-non-smoke-evidence is required for evidence modes beyond metadata proxy smoke.")
     variants_path = resolve_input_path(args.variants_jsonl)
     wave_manifest_path = resolve_input_path(args.wave_manifest_json) if args.wave_manifest_json else None
@@ -381,7 +594,23 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         priorities=set(args.priority),
         max_variants=args.max_variants,
     )
-    results = [score_variant(variant, evidence_mode=args.evidence_mode) for variant in selected]
+    if args.evidence_mode == REAL_STOCK_BAR_EVIDENCE_MODE:
+        if not args.bars_path:
+            raise ValueError("--bars-path is required for real stock-bar smoke.")
+        bars = pd.read_parquet(resolve_input_path(args.bars_path))
+        results = [
+            score_variant_with_real_stock_bars(
+                variant,
+                bars=bars,
+                initial_cash=args.initial_cash,
+                slippage_bps=args.slippage_bps,
+                fee_per_unit=args.fee_per_unit,
+                allocation_fraction=args.allocation_fraction,
+            )
+            for variant in selected
+        ]
+    else:
+        results = [score_variant(variant, evidence_mode=args.evidence_mode) for variant in selected]
     run_id = args.run_id or f"research_wave_{datetime.now().astimezone().strftime('%Y%m%d_%H%M%S')}"
     artifacts = write_artifacts(
         output_dir=Path(args.output_dir),
