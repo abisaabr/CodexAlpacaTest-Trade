@@ -19,7 +19,11 @@ from alpaca_lab.backtest.engine import FixedFractionSizer, LinearCostModel, run_
 from scripts.run_gcp_research_wave import _variant_stock_strategy, load_variants
 
 DEFAULT_QUEUE_JSON = (
-    REPO_ROOT / "reports" / "research_wave" / "option_aware_queue" / "option_aware_research_queue.json"
+    REPO_ROOT
+    / "reports"
+    / "research_wave"
+    / "option_aware_queue"
+    / "option_aware_research_queue.json"
 )
 DEFAULT_VARIANTS_JSONL = (
     REPO_ROOT.parent
@@ -36,6 +40,8 @@ DEFAULT_OPTION_DATA_ROOT = (
     / "research_gld_put_options_20260421_20260423_option_bars_trades"
 )
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "reports" / "research_wave" / "option_aware_backtests"
+CONTRACT_SELECTION_NEAREST = "nearest_contract"
+CONTRACT_SELECTION_LIQUIDITY_FIRST = "entry_liquidity_first_research_only"
 
 
 def parse_args() -> argparse.Namespace:
@@ -57,6 +63,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--allocation-fraction", type=float, default=0.10)
     parser.add_argument("--slippage-bps", type=float, default=10.0)
     parser.add_argument("--fee-per-contract", type=float, default=0.65)
+    parser.add_argument(
+        "--contract-selection-method",
+        choices=[CONTRACT_SELECTION_NEAREST, CONTRACT_SELECTION_LIQUIDITY_FIRST],
+        default=CONTRACT_SELECTION_NEAREST,
+        help=(
+            "Research-only contract selector. The default preserves the nearest-contract "
+            "path; liquidity-first only uses entry-window information and is not broker-facing."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -119,6 +134,26 @@ def _variant_map(variants_jsonl: Path) -> dict[str, dict[str, Any]]:
     }
 
 
+def _candidate_contracts(
+    *,
+    contracts: pd.DataFrame,
+    symbol: str,
+    option_type: str,
+    trade_date: Any,
+) -> pd.DataFrame:
+    if contracts.empty:
+        return pd.DataFrame()
+    frame = contracts[
+        (contracts["underlying_symbol"].astype(str).str.upper() == symbol.upper())
+        & (contracts["option_type"].astype(str).str.lower() == option_type.lower())
+        & (contracts["trade_date"] == trade_date)
+    ].copy()
+    if frame.empty:
+        return frame
+    frame["abs_relative_strike_step"] = frame["relative_strike_step"].abs()
+    return frame.sort_values(["dte", "abs_relative_strike_step", "symbol"])
+
+
 def _choose_contract(
     *,
     contracts: pd.DataFrame,
@@ -126,18 +161,66 @@ def _choose_contract(
     option_type: str,
     trade_date: Any,
 ) -> dict[str, Any] | None:
-    if contracts.empty:
-        return None
-    frame = contracts[
-        (contracts["underlying_symbol"].astype(str).str.upper() == symbol.upper())
-        & (contracts["option_type"].astype(str).str.lower() == option_type.lower())
-        & (contracts["trade_date"] == trade_date)
-    ].copy()
+    frame = _candidate_contracts(
+        contracts=contracts,
+        symbol=symbol,
+        option_type=option_type,
+        trade_date=trade_date,
+    )
     if frame.empty:
         return None
-    frame["abs_relative_strike_step"] = frame["relative_strike_step"].abs()
-    frame = frame.sort_values(["dte", "abs_relative_strike_step", "symbol"])
     return frame.iloc[0].to_dict()
+
+
+def _choose_entry_liquidity_first_contract(
+    *,
+    contracts: pd.DataFrame,
+    option_bars: pd.DataFrame,
+    option_trades: pd.DataFrame,
+    symbol: str,
+    option_type: str,
+    trade_date: Any,
+    entry_time: pd.Timestamp,
+    max_lag: timedelta,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str]:
+    frame = _candidate_contracts(
+        contracts=contracts,
+        symbol=symbol,
+        option_type=option_type,
+        trade_date=trade_date,
+    )
+    if frame.empty:
+        return None, None, "no_selected_contract"
+
+    choices: list[tuple[tuple[float, ...], str, dict[str, Any], dict[str, Any]]] = []
+    for contract in frame.to_dict("records"):
+        contract_symbol = str(contract["symbol"])
+        entry_bar = _first_option_bar(
+            option_bars=option_bars,
+            contract_symbol=contract_symbol,
+            timestamp=entry_time,
+            max_lag=max_lag,
+        )
+        if not entry_bar:
+            continue
+        prints = _trade_print_count(
+            option_trades=option_trades,
+            contract_symbol=contract_symbol,
+            start=entry_time,
+            end=entry_time + max_lag,
+        )
+        volume = float(entry_bar.get("volume") or 0.0)
+        abs_step = abs(float(contract.get("relative_strike_step") or 0.0))
+        dte = float(contract.get("dte") or 999.0)
+        # No future bars are used here: the selector ranks only entry-window evidence.
+        rank_key = (-float(prints), -volume, abs_step, dte)
+        choices.append((rank_key, contract_symbol, contract, entry_bar))
+
+    if not choices:
+        return None, None, "no_entry_bar"
+    choices.sort(key=lambda item: (item[0], item[1]))
+    _, _, contract, entry_bar = choices[0]
+    return contract, entry_bar, "selected"
 
 
 def _first_option_bar(
@@ -247,6 +330,8 @@ def _recommendation(summary: dict[str, Any]) -> str:
     if fill_coverage < 0.80:
         return "hold_option_fill_coverage"
     if net_pnl > 0 and expectancy > 0 and train_pnl >= 0 and test_pnl >= 0:
+        if summary.get("contract_selection_method") == CONTRACT_SELECTION_LIQUIDITY_FIRST:
+            return "research_candidate_liquidity_first_review"
         return "candidate_for_walk_forward_review"
     if net_pnl < -100 or expectancy < -10:
         return "quarantine_option_economics"
@@ -267,7 +352,8 @@ def _option_rows_for_candidate(
     fee_per_contract: float,
     max_entry_lag: timedelta,
     max_exit_lag: timedelta,
-) -> tuple[list[dict[str, Any]], int, int]:
+    contract_selection_method: str,
+) -> tuple[list[dict[str, Any]], int, dict[str, int]]:
     source_trades = _stock_trades_for_variant(
         variant=variant,
         stock_bars=stock_bars,
@@ -275,37 +361,62 @@ def _option_rows_for_candidate(
         allocation_fraction=allocation_fraction,
     )
     option_rows: list[dict[str, Any]] = []
-    missing_price_count = 0
+    missing_counts = {
+        "no_selected_contract": 0,
+        "no_entry_bar": 0,
+        "no_exit_bar": 0,
+        "too_expensive": 0,
+    }
     option_type = str(queue_item.get("directional_option_type") or "").lower()
     symbol = str(queue_item.get("symbol") or "").upper()
     for trade in source_trades.to_dict("records"):
         entry_time = pd.Timestamp(trade["entry_time"])
         exit_time = pd.Timestamp(trade["exit_time"])
         trade_date = entry_time.date()
-        contract = _choose_contract(
-            contracts=contracts,
-            symbol=symbol,
-            option_type=option_type,
-            trade_date=trade_date,
-        )
-        if not contract:
-            missing_price_count += 1
-            continue
+        if contract_selection_method == CONTRACT_SELECTION_LIQUIDITY_FIRST:
+            contract, entry_bar, status = _choose_entry_liquidity_first_contract(
+                contracts=contracts,
+                option_bars=option_bars,
+                option_trades=option_trades,
+                symbol=symbol,
+                option_type=option_type,
+                trade_date=trade_date,
+                entry_time=entry_time,
+                max_lag=max_entry_lag,
+            )
+            if status != "selected" or not contract or not entry_bar:
+                missing_counts[status] = missing_counts.get(status, 0) + 1
+                continue
+        else:
+            contract = _choose_contract(
+                contracts=contracts,
+                symbol=symbol,
+                option_type=option_type,
+                trade_date=trade_date,
+            )
+            if not contract:
+                missing_counts["no_selected_contract"] += 1
+                continue
+            contract_symbol = str(contract["symbol"])
+            entry_bar = _first_option_bar(
+                option_bars=option_bars,
+                contract_symbol=contract_symbol,
+                timestamp=entry_time,
+                max_lag=max_entry_lag,
+            )
+            if not entry_bar:
+                missing_counts["no_entry_bar"] += 1
+                continue
+
         contract_symbol = str(contract["symbol"])
-        entry_bar = _first_option_bar(
-            option_bars=option_bars,
-            contract_symbol=contract_symbol,
-            timestamp=entry_time,
-            max_lag=max_entry_lag,
-        )
         exit_bar = _first_option_bar(
             option_bars=option_bars,
             contract_symbol=contract_symbol,
             timestamp=exit_time,
             max_lag=max_exit_lag,
         )
-        if not entry_bar or not exit_bar:
-            missing_price_count += 1
+        if not exit_bar:
+            missing_counts["no_exit_bar"] += 1
             continue
         raw_entry = float(entry_bar["close"])
         raw_exit = float(exit_bar["close"])
@@ -314,7 +425,7 @@ def _option_rows_for_candidate(
         budget = initial_cash * allocation_fraction
         quantity = math.floor(budget / (entry_price * 100.0))
         if quantity < 1:
-            missing_price_count += 1
+            missing_counts["too_expensive"] += 1
             continue
         fees = fee_per_contract * quantity * 2.0
         pnl = (exit_price - entry_price) * quantity * 100.0 - fees
@@ -340,6 +451,15 @@ def _option_rows_for_candidate(
                 "option_pnl": round(pnl, 4),
                 "option_return_pct": round(pnl / (entry_price * quantity * 100.0), 6),
                 "stock_exit_reason": trade.get("exit_reason"),
+                "contract_selection_method": contract_selection_method,
+                "contract_dte": contract.get("dte"),
+                "contract_relative_strike_step": contract.get("relative_strike_step"),
+                "entry_selection_trade_print_count": _trade_print_count(
+                    option_trades=option_trades,
+                    contract_symbol=contract_symbol,
+                    start=entry_time,
+                    end=entry_time + max_entry_lag,
+                ),
                 "option_trade_print_count": _trade_print_count(
                     option_trades=option_trades,
                     contract_symbol=contract_symbol,
@@ -348,12 +468,17 @@ def _option_rows_for_candidate(
                 ),
             }
         )
-    return option_rows, int(len(source_trades)), missing_price_count
+    return option_rows, int(len(source_trades)), missing_counts
 
 
 def _split_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     if not rows:
-        return {"train_trade_count": 0, "train_net_pnl": 0.0, "test_trade_count": 0, "test_net_pnl": 0.0}
+        return {
+            "train_trade_count": 0,
+            "train_net_pnl": 0.0,
+            "test_trade_count": 0,
+            "test_net_pnl": 0.0,
+        }
     dates = sorted({row["trade_date"] for row in rows})
     test_dates = {dates[-1]}
     train_rows = [row for row in rows if row["trade_date"] not in test_dates]
@@ -382,6 +507,7 @@ def build_option_aware_backtest(
     fee_per_contract: float,
     max_entry_lag: timedelta,
     max_exit_lag: timedelta,
+    contract_selection_method: str = CONTRACT_SELECTION_NEAREST,
 ) -> dict[str, Any]:
     queue = _load_json(queue_json)
     variants = _variant_map(variants_jsonl)
@@ -409,7 +535,7 @@ def build_option_aware_backtest(
                 }
             )
             continue
-        rows, source_trade_count, missing_price_count = _option_rows_for_candidate(
+        rows, source_trade_count, missing_counts = _option_rows_for_candidate(
             queue_item=queue_item,
             variant=variant,
             stock_bars=stock_bars,
@@ -422,7 +548,9 @@ def build_option_aware_backtest(
             fee_per_contract=fee_per_contract,
             max_entry_lag=max_entry_lag,
             max_exit_lag=max_exit_lag,
+            contract_selection_method=contract_selection_method,
         )
+        missing_price_count = sum(int(value) for value in missing_counts.values())
         all_trade_rows.extend(rows)
         economics = _summarize_trade_rows(rows)
         split = _split_summary(rows)
@@ -433,13 +561,25 @@ def build_option_aware_backtest(
             "directional_option_type": queue_item.get("directional_option_type"),
             "source_stock_trade_count": source_trade_count,
             "missing_option_price_count": missing_price_count,
-            "fill_coverage": round(len(rows) / source_trade_count, 4) if source_trade_count else 0.0,
+            "missing_no_selected_contract": int(missing_counts.get("no_selected_contract", 0)),
+            "missing_no_entry_bar": int(missing_counts.get("no_entry_bar", 0)),
+            "missing_no_exit_bar": int(missing_counts.get("no_exit_bar", 0)),
+            "missing_too_expensive": int(missing_counts.get("too_expensive", 0)),
+            "fill_coverage": (
+                round(len(rows) / source_trade_count, 4) if source_trade_count else 0.0
+            ),
             **economics,
             **split,
             "promotion_allowed": False,
             "broker_facing": False,
             "live_manifest_effect": "none",
             "risk_policy_effect": "none",
+            "contract_selection_method": contract_selection_method,
+            "contract_selection_lookahead": (
+                "entry_window_only"
+                if contract_selection_method == CONTRACT_SELECTION_LIQUIDITY_FIRST
+                else "none"
+            ),
         }
         summary["recommendation"] = _recommendation(summary)
         candidate_summaries.append(summary)
@@ -462,6 +602,12 @@ def build_option_aware_backtest(
         "live_manifest_effect": "none",
         "risk_policy_effect": "none",
         "promotion_allowed": False,
+        "contract_selection_method": contract_selection_method,
+        "contract_selection_lookahead": (
+            "entry_window_only"
+            if contract_selection_method == CONTRACT_SELECTION_LIQUIDITY_FIRST
+            else "none"
+        ),
         "candidate_count": len(candidate_summaries),
         "option_trade_count": len(all_trade_rows),
         "recommendation_counts": dict(sorted(recommendation_counts.items())),
@@ -472,7 +618,8 @@ def build_option_aware_backtest(
             "Keep these results out of deployment and promotion.",
             "Do not treat sparse positive PnL as actionable; minimum fill coverage and out-of-sample option evidence are mandatory.",
             "Use positive option-aware candidates only for data-coverage planning and loser-cluster review.",
-            "Expand option quote/bar coverage or rerun with a declared diagnostic lag profile before walk-forward review.",
+            "Expand option quote/bar coverage or rerun with a declared diagnostic lag/selection profile before walk-forward review.",
+            "Treat liquidity-first selection as research-only unless separately approved by governance.",
             "Require out-of-sample option-aware evidence before strategy governance review.",
         ],
     }
@@ -506,6 +653,8 @@ def write_markdown(path: Path, payload: dict[str, Any]) -> None:
         f"- Option trade count: `{payload['option_trade_count']}`",
         f"- Promotion allowed: `{payload['promotion_allowed']}`",
         f"- Broker facing: `{payload['broker_facing']}`",
+        f"- Contract selection method: `{payload.get('contract_selection_method')}`",
+        f"- Contract selection lookahead: `{payload.get('contract_selection_lookahead')}`",
         "",
         "## Recommendation Counts",
         "",
@@ -541,7 +690,9 @@ def write_artifacts(output_dir: Path, run_id: str, payload: dict[str, Any]) -> d
         "recommendation_packet": run_dir / "option_aware_recommendation_packet.json",
         "recommendation_packet_md": run_dir / "option_aware_recommendation_packet.md",
     }
-    write_json(artifacts["manifest"], {key: value for key, value in payload.items() if key != "trade_rows"})
+    write_json(
+        artifacts["manifest"], {key: value for key, value in payload.items() if key != "trade_rows"}
+    )
     write_markdown(artifacts["manifest_md"], payload)
     write_csv(artifacts["trade_economics"], payload["trade_rows"])
     write_json(artifacts["trade_economics_json"], payload["trade_rows"])
@@ -564,12 +715,17 @@ def write_artifacts(output_dir: Path, run_id: str, payload: dict[str, Any]) -> d
 
 def main() -> None:
     args = parse_args()
-    run_id = args.run_id or f"option_aware_research_{datetime.now().astimezone().strftime('%Y%m%d_%H%M%S')}"
+    run_id = (
+        args.run_id
+        or f"option_aware_research_{datetime.now().astimezone().strftime('%Y%m%d_%H%M%S')}"
+    )
     payload = build_option_aware_backtest(
         queue_json=Path(args.queue_json),
         variants_jsonl=Path(args.variants_jsonl),
         stock_bars_path=Path(args.stock_bars_path),
-        selected_contracts_root=Path(args.selected_contracts_root) if args.selected_contracts_root else None,
+        selected_contracts_root=(
+            Path(args.selected_contracts_root) if args.selected_contracts_root else None
+        ),
         option_bars_root=Path(args.option_bars_root) if args.option_bars_root else None,
         option_trades_root=Path(args.option_trades_root) if args.option_trades_root else None,
         top_n=args.top_n,
@@ -579,10 +735,13 @@ def main() -> None:
         fee_per_contract=args.fee_per_contract,
         max_entry_lag=timedelta(minutes=args.max_entry_lag_minutes),
         max_exit_lag=timedelta(minutes=args.max_exit_lag_minutes),
+        contract_selection_method=args.contract_selection_method,
     )
     payload["run_id"] = run_id
     payload["artifacts"] = write_artifacts(Path(args.output_dir), run_id, payload)
-    print(json.dumps({key: value for key, value in payload.items() if key != "trade_rows"}, indent=2))
+    print(
+        json.dumps({key: value for key, value in payload.items() if key != "trade_rows"}, indent=2)
+    )
 
 
 if __name__ == "__main__":
