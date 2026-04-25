@@ -57,8 +57,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--run-id", default=None)
     parser.add_argument("--top-n", type=int, default=25)
+    parser.add_argument(
+        "--symbol-filter", default=None, help="Optional comma-separated symbol allowlist."
+    )
+    parser.add_argument(
+        "--skip-blocked-queue-items",
+        action="store_true",
+        help="Skip queue items carrying blockers such as missing selected contracts.",
+    )
     parser.add_argument("--max-entry-lag-minutes", type=float, default=10.0)
     parser.add_argument("--max-exit-lag-minutes", type=float, default=10.0)
+    parser.add_argument(
+        "--test-date-count",
+        type=int,
+        default=1,
+        help="Number of most-recent filled trade dates reserved for OOS/test summary.",
+    )
     parser.add_argument("--initial-cash", type=float, default=100_000.0)
     parser.add_argument("--allocation-fraction", type=float, default=0.10)
     parser.add_argument("--slippage-bps", type=float, default=10.0)
@@ -282,6 +296,13 @@ def _split_trade_date(value: Any) -> str:
     return str(pd.Timestamp(value).date())
 
 
+def _symbol_filter(value: str | None) -> set[str] | None:
+    if not value:
+        return None
+    symbols = {item.strip().upper() for item in value.split(",") if item.strip()}
+    return symbols or None
+
+
 def _summarize_trade_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     if not rows:
         return {
@@ -471,16 +492,18 @@ def _option_rows_for_candidate(
     return option_rows, int(len(source_trades)), missing_counts
 
 
-def _split_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _split_summary(rows: list[dict[str, Any]], *, test_date_count: int) -> dict[str, Any]:
     if not rows:
         return {
             "train_trade_count": 0,
             "train_net_pnl": 0.0,
             "test_trade_count": 0,
             "test_net_pnl": 0.0,
+            "test_dates": [],
         }
     dates = sorted({row["trade_date"] for row in rows})
-    test_dates = {dates[-1]}
+    count = max(1, min(int(test_date_count), len(dates)))
+    test_dates = set(dates[-count:])
     train_rows = [row for row in rows if row["trade_date"] not in test_dates]
     test_rows = [row for row in rows if row["trade_date"] in test_dates]
     return {
@@ -507,6 +530,9 @@ def build_option_aware_backtest(
     fee_per_contract: float,
     max_entry_lag: timedelta,
     max_exit_lag: timedelta,
+    symbol_filter: set[str] | None = None,
+    skip_blocked_queue_items: bool = False,
+    test_date_count: int = 1,
     contract_selection_method: str = CONTRACT_SELECTION_NEAREST,
 ) -> dict[str, Any]:
     queue = _load_json(queue_json)
@@ -520,7 +546,15 @@ def build_option_aware_backtest(
     )
     all_trade_rows: list[dict[str, Any]] = []
     candidate_summaries: list[dict[str, Any]] = []
-    for queue_item in queue.get("queue_items", [])[:top_n]:
+    source_queue_items = [item for item in queue.get("queue_items", []) if isinstance(item, dict)]
+    filtered_queue_items = []
+    for item in source_queue_items:
+        if symbol_filter and str(item.get("symbol") or "").upper() not in symbol_filter:
+            continue
+        if skip_blocked_queue_items and item.get("blockers"):
+            continue
+        filtered_queue_items.append(item)
+    for queue_item in filtered_queue_items[:top_n]:
         if not isinstance(queue_item, dict):
             continue
         variant_id = str(queue_item.get("candidate_variant_id") or "")
@@ -553,7 +587,7 @@ def build_option_aware_backtest(
         missing_price_count = sum(int(value) for value in missing_counts.values())
         all_trade_rows.extend(rows)
         economics = _summarize_trade_rows(rows)
-        split = _split_summary(rows)
+        split = _split_summary(rows, test_date_count=test_date_count)
         summary = {
             "candidate_variant_id": variant_id,
             "symbol": queue_item.get("symbol"),
@@ -575,6 +609,7 @@ def build_option_aware_backtest(
             "live_manifest_effect": "none",
             "risk_policy_effect": "none",
             "contract_selection_method": contract_selection_method,
+            "test_date_count": int(test_date_count),
             "contract_selection_lookahead": (
                 "entry_window_only"
                 if contract_selection_method == CONTRACT_SELECTION_LIQUIDITY_FIRST
@@ -602,6 +637,11 @@ def build_option_aware_backtest(
         "live_manifest_effect": "none",
         "risk_policy_effect": "none",
         "promotion_allowed": False,
+        "source_queue_item_count": len(source_queue_items),
+        "queue_item_count_after_filters": len(filtered_queue_items),
+        "symbol_filter": sorted(symbol_filter) if symbol_filter else [],
+        "skip_blocked_queue_items": bool(skip_blocked_queue_items),
+        "test_date_count": int(test_date_count),
         "contract_selection_method": contract_selection_method,
         "contract_selection_lookahead": (
             "entry_window_only"
@@ -729,12 +769,15 @@ def main() -> None:
         option_bars_root=Path(args.option_bars_root) if args.option_bars_root else None,
         option_trades_root=Path(args.option_trades_root) if args.option_trades_root else None,
         top_n=args.top_n,
+        symbol_filter=_symbol_filter(args.symbol_filter),
+        skip_blocked_queue_items=args.skip_blocked_queue_items,
         initial_cash=args.initial_cash,
         allocation_fraction=args.allocation_fraction,
         slippage_bps=args.slippage_bps,
         fee_per_contract=args.fee_per_contract,
         max_entry_lag=timedelta(minutes=args.max_entry_lag_minutes),
         max_exit_lag=timedelta(minutes=args.max_exit_lag_minutes),
+        test_date_count=args.test_date_count,
         contract_selection_method=args.contract_selection_method,
     )
     payload["run_id"] = run_id
