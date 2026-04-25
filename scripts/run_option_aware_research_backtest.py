@@ -5,6 +5,7 @@ import csv
 import json
 import math
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,13 @@ DEFAULT_OPTION_DATA_ROOT = (
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "reports" / "research_wave" / "option_aware_backtests"
 CONTRACT_SELECTION_NEAREST = "nearest_contract"
 CONTRACT_SELECTION_LIQUIDITY_FIRST = "entry_liquidity_first_research_only"
+
+
+@dataclass(frozen=True)
+class OptionResearchIndex:
+    contracts_by_key: dict[tuple[str, str, Any], pd.DataFrame]
+    bars_by_symbol: dict[str, pd.DataFrame]
+    trade_timestamps_by_symbol: dict[str, pd.Series]
 
 
 def parse_args() -> argparse.Namespace:
@@ -148,6 +156,52 @@ def _variant_map(variants_jsonl: Path) -> dict[str, dict[str, Any]]:
     }
 
 
+def _build_option_research_index(
+    *,
+    contracts: pd.DataFrame,
+    option_bars: pd.DataFrame,
+    option_trades: pd.DataFrame,
+) -> OptionResearchIndex:
+    contracts_by_key: dict[tuple[str, str, Any], pd.DataFrame] = {}
+    if not contracts.empty:
+        contract_frame = contracts.copy()
+        contract_frame["underlying_symbol_norm"] = (
+            contract_frame["underlying_symbol"].astype(str).str.upper()
+        )
+        contract_frame["option_type_norm"] = contract_frame["option_type"].astype(str).str.lower()
+        contract_frame["abs_relative_strike_step"] = pd.to_numeric(
+            contract_frame["relative_strike_step"], errors="coerce"
+        ).abs()
+        for (symbol, option_type, trade_date), group in contract_frame.groupby(
+            ["underlying_symbol_norm", "option_type_norm", "trade_date"], sort=False
+        ):
+            contracts_by_key[(str(symbol), str(option_type), trade_date)] = group.sort_values(
+                ["dte", "abs_relative_strike_step", "symbol"]
+            ).reset_index(drop=True)
+
+    bars_by_symbol: dict[str, pd.DataFrame] = {}
+    if not option_bars.empty:
+        bar_frame = option_bars.copy()
+        bar_frame["symbol_norm"] = bar_frame["symbol"].astype(str)
+        for symbol, group in bar_frame.groupby("symbol_norm", sort=False):
+            bars_by_symbol[str(symbol)] = group.sort_values("timestamp").reset_index(drop=True)
+
+    trade_timestamps_by_symbol: dict[str, pd.Series] = {}
+    if not option_trades.empty:
+        trade_frame = option_trades.copy()
+        trade_frame["symbol_norm"] = trade_frame["symbol"].astype(str)
+        for symbol, group in trade_frame.groupby("symbol_norm", sort=False):
+            trade_timestamps_by_symbol[str(symbol)] = (
+                group["timestamp"].sort_values().reset_index(drop=True)
+            )
+
+    return OptionResearchIndex(
+        contracts_by_key=contracts_by_key,
+        bars_by_symbol=bars_by_symbol,
+        trade_timestamps_by_symbol=trade_timestamps_by_symbol,
+    )
+
+
 def _candidate_contracts(
     *,
     contracts: pd.DataFrame,
@@ -168,18 +222,40 @@ def _candidate_contracts(
     return frame.sort_values(["dte", "abs_relative_strike_step", "symbol"])
 
 
+def _candidate_contracts_from_index(
+    *,
+    option_index: OptionResearchIndex,
+    symbol: str,
+    option_type: str,
+    trade_date: Any,
+) -> pd.DataFrame:
+    return option_index.contracts_by_key.get(
+        (symbol.upper(), option_type.lower(), trade_date), pd.DataFrame()
+    )
+
+
 def _choose_contract(
     *,
     contracts: pd.DataFrame,
+    option_index: OptionResearchIndex | None = None,
     symbol: str,
     option_type: str,
     trade_date: Any,
 ) -> dict[str, Any] | None:
-    frame = _candidate_contracts(
-        contracts=contracts,
-        symbol=symbol,
-        option_type=option_type,
-        trade_date=trade_date,
+    frame = (
+        _candidate_contracts_from_index(
+            option_index=option_index,
+            symbol=symbol,
+            option_type=option_type,
+            trade_date=trade_date,
+        )
+        if option_index
+        else _candidate_contracts(
+            contracts=contracts,
+            symbol=symbol,
+            option_type=option_type,
+            trade_date=trade_date,
+        )
     )
     if frame.empty:
         return None
@@ -191,17 +267,27 @@ def _choose_entry_liquidity_first_contract(
     contracts: pd.DataFrame,
     option_bars: pd.DataFrame,
     option_trades: pd.DataFrame,
+    option_index: OptionResearchIndex | None = None,
     symbol: str,
     option_type: str,
     trade_date: Any,
     entry_time: pd.Timestamp,
     max_lag: timedelta,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str]:
-    frame = _candidate_contracts(
-        contracts=contracts,
-        symbol=symbol,
-        option_type=option_type,
-        trade_date=trade_date,
+    frame = (
+        _candidate_contracts_from_index(
+            option_index=option_index,
+            symbol=symbol,
+            option_type=option_type,
+            trade_date=trade_date,
+        )
+        if option_index
+        else _candidate_contracts(
+            contracts=contracts,
+            symbol=symbol,
+            option_type=option_type,
+            trade_date=trade_date,
+        )
     )
     if frame.empty:
         return None, None, "no_selected_contract"
@@ -211,6 +297,7 @@ def _choose_entry_liquidity_first_contract(
         contract_symbol = str(contract["symbol"])
         entry_bar = _first_option_bar(
             option_bars=option_bars,
+            option_index=option_index,
             contract_symbol=contract_symbol,
             timestamp=entry_time,
             max_lag=max_lag,
@@ -219,6 +306,7 @@ def _choose_entry_liquidity_first_contract(
             continue
         prints = _trade_print_count(
             option_trades=option_trades,
+            option_index=option_index,
             contract_symbol=contract_symbol,
             start=entry_time,
             end=entry_time + max_lag,
@@ -240,10 +328,24 @@ def _choose_entry_liquidity_first_contract(
 def _first_option_bar(
     *,
     option_bars: pd.DataFrame,
+    option_index: OptionResearchIndex | None = None,
     contract_symbol: str,
     timestamp: pd.Timestamp,
     max_lag: timedelta,
 ) -> dict[str, Any] | None:
+    if option_index:
+        frame = option_index.bars_by_symbol.get(contract_symbol)
+        if frame is None or frame.empty:
+            return None
+        timestamps = frame["timestamp"]
+        position = int(timestamps.searchsorted(timestamp, side="left"))
+        if position >= len(frame):
+            return None
+        row = frame.iloc[position].to_dict()
+        if pd.Timestamp(row["timestamp"]) <= timestamp + max_lag:
+            return row
+        return None
+
     frame = option_bars[
         (option_bars["symbol"].astype(str) == contract_symbol)
         & (option_bars["timestamp"] >= timestamp)
@@ -257,10 +359,19 @@ def _first_option_bar(
 def _trade_print_count(
     *,
     option_trades: pd.DataFrame,
+    option_index: OptionResearchIndex | None = None,
     contract_symbol: str,
     start: pd.Timestamp,
     end: pd.Timestamp,
 ) -> int:
+    if option_index:
+        timestamps = option_index.trade_timestamps_by_symbol.get(contract_symbol)
+        if timestamps is None or timestamps.empty:
+            return 0
+        left = int(timestamps.searchsorted(start, side="left"))
+        right = int(timestamps.searchsorted(end, side="right"))
+        return max(0, right - left)
+
     if option_trades.empty:
         return 0
     frame = option_trades[
@@ -367,6 +478,7 @@ def _option_rows_for_candidate(
     contracts: pd.DataFrame,
     option_bars: pd.DataFrame,
     option_trades: pd.DataFrame,
+    option_index: OptionResearchIndex | None = None,
     initial_cash: float,
     allocation_fraction: float,
     slippage_bps: float,
@@ -399,6 +511,7 @@ def _option_rows_for_candidate(
                 contracts=contracts,
                 option_bars=option_bars,
                 option_trades=option_trades,
+                option_index=option_index,
                 symbol=symbol,
                 option_type=option_type,
                 trade_date=trade_date,
@@ -411,6 +524,7 @@ def _option_rows_for_candidate(
         else:
             contract = _choose_contract(
                 contracts=contracts,
+                option_index=option_index,
                 symbol=symbol,
                 option_type=option_type,
                 trade_date=trade_date,
@@ -421,6 +535,7 @@ def _option_rows_for_candidate(
             contract_symbol = str(contract["symbol"])
             entry_bar = _first_option_bar(
                 option_bars=option_bars,
+                option_index=option_index,
                 contract_symbol=contract_symbol,
                 timestamp=entry_time,
                 max_lag=max_entry_lag,
@@ -432,6 +547,7 @@ def _option_rows_for_candidate(
         contract_symbol = str(contract["symbol"])
         exit_bar = _first_option_bar(
             option_bars=option_bars,
+            option_index=option_index,
             contract_symbol=contract_symbol,
             timestamp=exit_time,
             max_lag=max_exit_lag,
@@ -477,12 +593,14 @@ def _option_rows_for_candidate(
                 "contract_relative_strike_step": contract.get("relative_strike_step"),
                 "entry_selection_trade_print_count": _trade_print_count(
                     option_trades=option_trades,
+                    option_index=option_index,
                     contract_symbol=contract_symbol,
                     start=entry_time,
                     end=entry_time + max_entry_lag,
                 ),
                 "option_trade_print_count": _trade_print_count(
                     option_trades=option_trades,
+                    option_index=option_index,
                     contract_symbol=contract_symbol,
                     start=entry_time,
                     end=exit_time,
@@ -544,6 +662,11 @@ def build_option_aware_backtest(
         option_bars_root=option_bars_root,
         option_trades_root=option_trades_root,
     )
+    option_index = _build_option_research_index(
+        contracts=contracts,
+        option_bars=option_bars,
+        option_trades=option_trades,
+    )
     all_trade_rows: list[dict[str, Any]] = []
     candidate_summaries: list[dict[str, Any]] = []
     source_queue_items = [item for item in queue.get("queue_items", []) if isinstance(item, dict)]
@@ -576,6 +699,7 @@ def build_option_aware_backtest(
             contracts=contracts,
             option_bars=option_bars,
             option_trades=option_trades,
+            option_index=option_index,
             initial_cash=initial_cash,
             allocation_fraction=allocation_fraction,
             slippage_bps=slippage_bps,
@@ -643,6 +767,12 @@ def build_option_aware_backtest(
         "skip_blocked_queue_items": bool(skip_blocked_queue_items),
         "test_date_count": int(test_date_count),
         "contract_selection_method": contract_selection_method,
+        "option_lookup_mode": "indexed_by_contract_and_symbol",
+        "option_index_counts": {
+            "contract_keys": len(option_index.contracts_by_key),
+            "bar_symbols": len(option_index.bars_by_symbol),
+            "trade_symbols": len(option_index.trade_timestamps_by_symbol),
+        },
         "contract_selection_lookahead": (
             "entry_window_only"
             if contract_selection_method == CONTRACT_SELECTION_LIQUIDITY_FIRST

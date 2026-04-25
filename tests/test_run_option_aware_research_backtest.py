@@ -156,6 +156,12 @@ def test_option_aware_backtest_prices_stock_signal_windows_against_options(
 
     assert payload["broker_facing"] is False
     assert payload["promotion_allowed"] is False
+    assert payload["option_lookup_mode"] == "indexed_by_contract_and_symbol"
+    assert payload["option_index_counts"] == {
+        "contract_keys": 1,
+        "bar_symbols": 1,
+        "trade_symbols": 1,
+    }
     assert payload["candidate_count"] == 1
     assert payload["option_trade_count"] > 0
     summary = payload["candidate_summaries"][0]
@@ -306,6 +312,7 @@ def test_liquidity_first_selector_uses_entry_window_without_future_bars(
     assert payload["promotion_allowed"] is False
     assert payload["contract_selection_method"] == CONTRACT_SELECTION_LIQUIDITY_FIRST
     assert payload["contract_selection_lookahead"] == "entry_window_only"
+    assert payload["option_lookup_mode"] == "indexed_by_contract_and_symbol"
     assert payload["option_trade_count"] > 0
     assert {row["contract_symbol"] for row in payload["trade_rows"]} == {"GLD260424P00101000"}
     summary = payload["candidate_summaries"][0]
