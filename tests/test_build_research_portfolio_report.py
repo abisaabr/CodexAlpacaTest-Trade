@@ -78,6 +78,7 @@ def test_research_portfolio_report_blocks_low_fill_but_builds_interim_plan(tmp_p
         min_option_trades=20,
         min_test_net_pnl=0.0,
         max_positions=5,
+        max_strategies_per_symbol=2,
         max_symbol_weight=0.50,
         initial_cash=25_000.0,
     )
@@ -127,6 +128,7 @@ def test_research_portfolio_report_allows_review_when_gates_pass(tmp_path: Path)
         min_option_trades=20,
         min_test_net_pnl=0.0,
         max_positions=5,
+        max_strategies_per_symbol=2,
         max_symbol_weight=0.50,
         initial_cash=25_000.0,
     )
@@ -188,6 +190,7 @@ def test_research_portfolio_report_prefers_eligible_candidate_over_blocked_high_
         min_option_trades=20,
         min_test_net_pnl=0.0,
         max_positions=5,
+        max_strategies_per_symbol=2,
         max_symbol_weight=0.50,
         initial_cash=25_000.0,
     )
@@ -195,3 +198,103 @@ def test_research_portfolio_report_prefers_eligible_candidate_over_blocked_high_
     assert packet["eligible_for_promotion_review_count"] == 1
     assert packet["capital_plan"][0]["candidate_variant_id"] == "amd_eligible_lower_score"
     assert packet["capital_plan"][0]["promotion_status"] == "eligible_for_promotion_review"
+
+
+def test_research_portfolio_report_allows_multiple_strategies_per_symbol_with_symbol_cap(
+    tmp_path: Path,
+) -> None:
+    replay_root = tmp_path / "replay"
+    rows = [
+        {
+            "candidate_variant_id": "amd_strategy_a",
+            "symbol": "AMD",
+            "source_strategy_id": "amd_opening_call",
+            "directional_option_type": "call",
+            "net_pnl": 10_000.0,
+            "test_net_pnl": 1_000.0,
+            "fill_coverage": 0.95,
+            "option_trade_count": 60,
+            "max_drawdown": -900.0,
+            "win_rate": 0.7,
+            "profit_factor": 4.0,
+            "missing_option_price_count": 0,
+            "missing_no_selected_contract": 0,
+            "missing_no_entry_bar": 0,
+            "missing_no_exit_bar": 0,
+        },
+        {
+            "candidate_variant_id": "amd_strategy_b",
+            "symbol": "AMD",
+            "source_strategy_id": "amd_late_call",
+            "directional_option_type": "call",
+            "net_pnl": 8_000.0,
+            "test_net_pnl": 800.0,
+            "fill_coverage": 0.94,
+            "option_trade_count": 55,
+            "max_drawdown": -800.0,
+            "win_rate": 0.68,
+            "profit_factor": 3.5,
+            "missing_option_price_count": 0,
+            "missing_no_selected_contract": 0,
+            "missing_no_entry_bar": 0,
+            "missing_no_exit_bar": 0,
+        },
+        {
+            "candidate_variant_id": "amd_strategy_c",
+            "symbol": "AMD",
+            "source_strategy_id": "amd_extra",
+            "directional_option_type": "call",
+            "net_pnl": 7_000.0,
+            "test_net_pnl": 700.0,
+            "fill_coverage": 0.93,
+            "option_trade_count": 50,
+            "max_drawdown": -700.0,
+            "win_rate": 0.66,
+            "profit_factor": 3.0,
+            "missing_option_price_count": 0,
+            "missing_no_selected_contract": 0,
+            "missing_no_entry_bar": 0,
+            "missing_no_exit_bar": 0,
+        },
+        {
+            "candidate_variant_id": "orcl_strategy",
+            "symbol": "ORCL",
+            "source_strategy_id": "orcl_opening_call",
+            "directional_option_type": "call",
+            "net_pnl": 6_000.0,
+            "test_net_pnl": 600.0,
+            "fill_coverage": 0.96,
+            "option_trade_count": 45,
+            "max_drawdown": -700.0,
+            "win_rate": 0.64,
+            "profit_factor": 3.0,
+            "missing_option_price_count": 0,
+            "missing_no_selected_contract": 0,
+            "missing_no_entry_bar": 0,
+            "missing_no_exit_bar": 0,
+        },
+    ]
+    _write_profile(replay_root, "stress_a", rows)
+
+    packet = build_research_portfolio_report(
+        replay_root=replay_root,
+        output_dir=tmp_path / "out",
+        fill_coverage_gate=0.90,
+        min_option_trades=20,
+        min_test_net_pnl=0.0,
+        max_positions=5,
+        max_strategies_per_symbol=2,
+        max_symbol_weight=0.50,
+        initial_cash=25_000.0,
+    )
+
+    amd_plan = [row for row in packet["capital_plan"] if row["symbol"] == "AMD"]
+    assert [row["candidate_variant_id"] for row in amd_plan] == [
+        "amd_strategy_a",
+        "amd_strategy_b",
+    ]
+    assert "amd_strategy_c" not in {
+        row["candidate_variant_id"] for row in packet["capital_plan"]
+    }
+    assert sum(row["research_only_weight"] for row in amd_plan) == 0.5
+    assert sum(row["research_only_weight"] for row in packet["capital_plan"]) == 1.0

@@ -24,6 +24,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-option-trades", type=int, default=20)
     parser.add_argument("--min-test-net-pnl", type=float, default=0.0)
     parser.add_argument("--max-positions", type=int, default=5)
+    parser.add_argument("--max-strategies-per-symbol", type=int, default=2)
     parser.add_argument("--max-symbol-weight", type=float, default=0.50)
     parser.add_argument("--initial-cash", type=float, default=25_000.0)
     return parser.parse_args()
@@ -191,6 +192,7 @@ def build_capital_plan(
     candidate_rows: list[dict[str, Any]],
     *,
     max_positions: int,
+    max_strategies_per_symbol: int,
     max_symbol_weight: float,
     initial_cash: float,
     min_option_trades: int,
@@ -202,27 +204,44 @@ def build_capital_plan(
     ]
     plan_pool = eligible_rows if eligible_rows else candidate_rows
 
-    by_symbol: dict[str, dict[str, Any]] = {}
-    for row in plan_pool:
+    selected: list[dict[str, Any]] = []
+    selected_per_symbol: dict[str, int] = {}
+    for row in sorted(plan_pool, key=lambda item: item["research_score"], reverse=True):
         if row["min_net_pnl"] <= 0 or row["min_test_net_pnl"] <= 0:
             continue
         if row["min_option_trade_count"] < min_option_trades:
             continue
         symbol = str(row["symbol"]).upper()
-        current = by_symbol.get(symbol)
-        if current is None or row["research_score"] > current["research_score"]:
-            by_symbol[symbol] = row
+        if selected_per_symbol.get(symbol, 0) >= max_strategies_per_symbol:
+            continue
+        selected.append(row)
+        selected_per_symbol[symbol] = selected_per_symbol.get(symbol, 0) + 1
+        if len(selected) >= max_positions:
+            break
 
-    selected = sorted(by_symbol.values(), key=lambda item: item["research_score"], reverse=True)[
-        :max_positions
-    ]
-    raw_weights = {}
+    candidate_raw_weights: dict[str, float] = {}
+    symbol_raw_weights: dict[str, float] = {}
     for row in selected:
         drawdown = max(abs(min(_float(row["worst_drawdown"]), 0.0)), 250.0)
-        raw_weights[row["candidate_variant_id"]] = (
-            max(_float(row["research_score"]), 1.0) / drawdown
+        raw_weight = max(_float(row["research_score"]), 1.0) / drawdown
+        candidate_raw_weights[row["candidate_variant_id"]] = raw_weight
+        symbol = str(row["symbol"]).upper()
+        symbol_raw_weights[symbol] = symbol_raw_weights.get(symbol, 0.0) + raw_weight
+
+    symbol_weights = _cap_weights(symbol_raw_weights, max_symbol_weight)
+    weights: dict[str, float] = {}
+    for row in selected:
+        symbol = str(row["symbol"]).upper()
+        symbol_raw_weight = symbol_raw_weights.get(symbol, 0.0)
+        if symbol_raw_weight <= 0:
+            weights[row["candidate_variant_id"]] = 0.0
+            continue
+        weights[row["candidate_variant_id"]] = round(
+            symbol_weights.get(symbol, 0.0)
+            * candidate_raw_weights[row["candidate_variant_id"]]
+            / symbol_raw_weight,
+            6,
         )
-    weights = _cap_weights(raw_weights, max_symbol_weight)
 
     plan = []
     for row in selected:
@@ -257,6 +276,8 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         f"- Broker facing: `{packet['broker_facing']}`",
         f"- Fill coverage gate: `{packet['fill_coverage_gate']}`",
         f"- Minimum option trades: `{packet['min_option_trades']}`",
+        f"- Maximum strategies per symbol: `{packet['max_strategies_per_symbol']}`",
+        f"- Maximum symbol weight: `{packet['max_symbol_weight']}`",
         f"- Capital plan allocated weight: `{packet['capital_plan_allocated_weight']}`",
         f"- Capital plan unallocated dollars: `${packet['capital_plan_unallocated_dollars']}`",
         "",
@@ -299,6 +320,7 @@ def build_research_portfolio_report(
     min_option_trades: int,
     min_test_net_pnl: float,
     max_positions: int,
+    max_strategies_per_symbol: int,
     max_symbol_weight: float,
     initial_cash: float,
 ) -> dict[str, Any]:
@@ -313,6 +335,7 @@ def build_research_portfolio_report(
     capital_plan = build_capital_plan(
         candidate_rows,
         max_positions=max_positions,
+        max_strategies_per_symbol=max_strategies_per_symbol,
         max_symbol_weight=max_symbol_weight,
         initial_cash=initial_cash,
         min_option_trades=min_option_trades,
@@ -335,6 +358,7 @@ def build_research_portfolio_report(
         "min_option_trades": min_option_trades,
         "min_test_net_pnl": min_test_net_pnl,
         "max_positions": max_positions,
+        "max_strategies_per_symbol": max_strategies_per_symbol,
         "max_symbol_weight": max_symbol_weight,
         "initial_cash": initial_cash,
         "capital_plan": capital_plan,
@@ -364,6 +388,7 @@ def main() -> None:
         min_option_trades=args.min_option_trades,
         min_test_net_pnl=args.min_test_net_pnl,
         max_positions=args.max_positions,
+        max_strategies_per_symbol=args.max_strategies_per_symbol,
         max_symbol_weight=args.max_symbol_weight,
         initial_cash=args.initial_cash,
     )
