@@ -156,7 +156,7 @@ def _cap_weights(raw_weights: dict[str, float], max_weight: float) -> dict[str, 
     weights = {key: max(float(value), 0.0) for key, value in raw_weights.items()}
     total = sum(weights.values())
     if total <= 0:
-        equal = 1.0 / len(weights)
+        equal = min(1.0 / len(weights), max_weight)
         return {key: equal for key in weights}
     weights = {key: value / total for key, value in weights.items()}
     capped: dict[str, float] = {}
@@ -184,8 +184,7 @@ def _cap_weights(raw_weights: dict[str, float], max_weight: float) -> dict[str, 
                 }
             )
             break
-    total = sum(capped.values())
-    return {key: round(value / total, 6) for key, value in capped.items()} if total else capped
+    return {key: round(value, 6) for key, value in capped.items()}
 
 
 def build_capital_plan(
@@ -196,8 +195,15 @@ def build_capital_plan(
     initial_cash: float,
     min_option_trades: int,
 ) -> list[dict[str, Any]]:
+    eligible_rows = [
+        row
+        for row in candidate_rows
+        if row["promotion_status"] == "eligible_for_promotion_review"
+    ]
+    plan_pool = eligible_rows if eligible_rows else candidate_rows
+
     by_symbol: dict[str, dict[str, Any]] = {}
-    for row in candidate_rows:
+    for row in plan_pool:
         if row["min_net_pnl"] <= 0 or row["min_test_net_pnl"] <= 0:
             continue
         if row["min_option_trade_count"] < min_option_trades:
@@ -251,6 +257,8 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         f"- Broker facing: `{packet['broker_facing']}`",
         f"- Fill coverage gate: `{packet['fill_coverage_gate']}`",
         f"- Minimum option trades: `{packet['min_option_trades']}`",
+        f"- Capital plan allocated weight: `{packet['capital_plan_allocated_weight']}`",
+        f"- Capital plan unallocated dollars: `${packet['capital_plan_unallocated_dollars']}`",
         "",
         "## Capital Plan",
         "",
@@ -309,6 +317,7 @@ def build_research_portfolio_report(
         initial_cash=initial_cash,
         min_option_trades=min_option_trades,
     )
+    allocated_weight = round(sum(row["research_only_weight"] for row in capital_plan), 6)
     eligible_count = sum(
         1 for row in candidate_rows if row["promotion_status"] == "eligible_for_promotion_review"
     )
@@ -329,6 +338,9 @@ def build_research_portfolio_report(
         "max_symbol_weight": max_symbol_weight,
         "initial_cash": initial_cash,
         "capital_plan": capital_plan,
+        "capital_plan_allocated_weight": allocated_weight,
+        "capital_plan_unallocated_weight": round(max(1.0 - allocated_weight, 0.0), 6),
+        "capital_plan_unallocated_dollars": round(max(1.0 - allocated_weight, 0.0) * initial_cash, 2),
         "top_candidates": candidate_rows[:50],
         "next_step_contract": [
             "Treat the capital plan as research-only until fill coverage reaches the configured gate.",

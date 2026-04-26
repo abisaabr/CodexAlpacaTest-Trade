@@ -134,3 +134,64 @@ def test_research_portfolio_report_allows_review_when_gates_pass(tmp_path: Path)
     assert packet["promotion_allowed"] is True
     assert packet["eligible_for_promotion_review_count"] == 1
     assert packet["top_candidates"][0]["promotion_status"] == "eligible_for_promotion_review"
+    assert packet["capital_plan"][0]["research_only_weight"] == 0.5
+    assert packet["capital_plan_unallocated_dollars"] == 12_500.0
+
+
+def test_research_portfolio_report_prefers_eligible_candidate_over_blocked_high_score(
+    tmp_path: Path,
+) -> None:
+    replay_root = tmp_path / "replay"
+    rows = [
+        {
+            "candidate_variant_id": "amd_blocked_high_score",
+            "symbol": "AMD",
+            "source_strategy_id": "amd_strategy",
+            "directional_option_type": "call",
+            "net_pnl": 50_000.0,
+            "test_net_pnl": 5_000.0,
+            "fill_coverage": 0.88,
+            "option_trade_count": 60,
+            "max_drawdown": -900.0,
+            "win_rate": 0.7,
+            "profit_factor": 4.0,
+            "missing_option_price_count": 0,
+            "missing_no_selected_contract": 0,
+            "missing_no_entry_bar": 0,
+            "missing_no_exit_bar": 8,
+        },
+        {
+            "candidate_variant_id": "amd_eligible_lower_score",
+            "symbol": "AMD",
+            "source_strategy_id": "amd_strategy",
+            "directional_option_type": "call",
+            "net_pnl": 20_000.0,
+            "test_net_pnl": 2_000.0,
+            "fill_coverage": 0.92,
+            "option_trade_count": 55,
+            "max_drawdown": -1_000.0,
+            "win_rate": 0.65,
+            "profit_factor": 3.5,
+            "missing_option_price_count": 0,
+            "missing_no_selected_contract": 0,
+            "missing_no_entry_bar": 0,
+            "missing_no_exit_bar": 4,
+        },
+    ]
+    _write_profile(replay_root, "stress_a", rows)
+    _write_profile(replay_root, "stress_b", rows)
+
+    packet = build_research_portfolio_report(
+        replay_root=replay_root,
+        output_dir=tmp_path / "out",
+        fill_coverage_gate=0.90,
+        min_option_trades=20,
+        min_test_net_pnl=0.0,
+        max_positions=5,
+        max_symbol_weight=0.50,
+        initial_cash=25_000.0,
+    )
+
+    assert packet["eligible_for_promotion_review_count"] == 1
+    assert packet["capital_plan"][0]["candidate_variant_id"] == "amd_eligible_lower_score"
+    assert packet["capital_plan"][0]["promotion_status"] == "eligible_for_promotion_review"
