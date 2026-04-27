@@ -2692,6 +2692,7 @@ def test_startup_preflight_suppresses_unexpected_position_cleanup(
     assert trader.broker.submit_count == 0
     assert details["broker_position_cleanup_suppressed"] == ["QQQ260417C00600000"]
     assert details["broker_position_count"] == 1
+    assert details["open_order_count"] == 0
     assert any("unexpected open position" in failure for failure in details["failures"])
     assert not (tmp_path / "runs" / "2026-04-15" / "broker_position_cleanup.json").exists()
 

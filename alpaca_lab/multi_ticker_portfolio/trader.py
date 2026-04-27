@@ -2850,14 +2850,20 @@ class MultiTickerPortfolioPaperTrader:
                 symbols.add(leg_symbol)
         return symbols
 
-    def _symbols_with_open_close_orders(self) -> set[str]:
-        symbols: set[str] = set()
+    def _open_broker_orders(self, *, limit: int = 200) -> list[dict[str, Any]]:
         get_orders = getattr(self.broker, "get_orders", None)
         if get_orders is None:
-            return symbols
-        for order in get_orders(status="open", limit=200):
+            return []
+        return list(get_orders(status="open", limit=limit))
+
+    def _symbols_from_open_close_orders(self, orders: list[dict[str, Any]]) -> set[str]:
+        symbols: set[str] = set()
+        for order in orders:
             symbols.update(self._close_order_symbols(order))
         return symbols
+
+    def _symbols_with_open_close_orders(self) -> set[str]:
+        return self._symbols_from_open_close_orders(self._open_broker_orders())
 
     def _build_symbol_snapshot(
         self,
@@ -2927,7 +2933,8 @@ class MultiTickerPortfolioPaperTrader:
 
         account = self.broker.get_account()
         positions = self.broker.get_positions()
-        symbols_with_open_close_orders = self._symbols_with_open_close_orders()
+        open_orders = self._open_broker_orders()
+        symbols_with_open_close_orders = self._symbols_from_open_close_orders(open_orders)
         buying_power = float(account.get("buying_power") or 0.0)
         broker_equity = self._extract_broker_equity(account)
         details["buying_power"] = round(buying_power, 2)
@@ -2937,6 +2944,7 @@ class MultiTickerPortfolioPaperTrader:
             2,
         )
         details["broker_position_count"] = len(positions)
+        details["open_order_count"] = len(open_orders)
 
         failures: list[str] = []
         pending_reasons: list[str] = []
@@ -2992,7 +3000,9 @@ class MultiTickerPortfolioPaperTrader:
                         details["broker_position_cleanup"] = cleanup_entries
                         positions = self.broker.get_positions()
                         details["broker_position_count"] = len(positions)
-                    symbols_with_open_close_orders = self._symbols_with_open_close_orders()
+                    open_orders = self._open_broker_orders()
+                    details["open_order_count"] = len(open_orders)
+                    symbols_with_open_close_orders = self._symbols_from_open_close_orders(open_orders)
                 else:
                     details["broker_position_cleanup_suppressed"] = sorted(
                         {
