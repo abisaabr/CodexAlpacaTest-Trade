@@ -51,7 +51,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     settings = load_settings(config_file=args.config)
-    configure_logging(settings.log_level)
+    configure_logging("CRITICAL" if args.startup_preflight else settings.log_level)
     portfolio_config = load_portfolio_config(args.portfolio_config)
     submit_paper_orders = args.submit_paper_orders or portfolio_config.execution.submit_paper_orders
     if args.no_submit_paper_orders or args.startup_preflight:
