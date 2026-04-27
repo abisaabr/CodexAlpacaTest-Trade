@@ -2605,6 +2605,97 @@ def test_startup_check_auto_flattens_unexpected_positions(
     assert cleanup_entries[0]["reason"] == "auto_flatten_unexpected_startup_position"
 
 
+def test_startup_preflight_suppresses_unexpected_position_cleanup(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    class _BrokerStub:
+        def __init__(self) -> None:
+            self.submit_count = 0
+
+        def get_account(self) -> dict[str, object]:
+            return {"buying_power": 25_000.0}
+
+        def get_positions(self) -> list[dict[str, object]]:
+            return [
+                {
+                    "symbol": "QQQ260417C00600000",
+                    "qty": "1",
+                    "side": "long",
+                    "asset_class": "us_option",
+                }
+            ]
+
+        def submit_order(self, request: OrderRequest, **_kwargs) -> dict[str, object]:
+            self.submit_count += 1
+            return {"id": "should-not-submit", "status": "accepted"}
+
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={
+                    "underlying_symbols": ("QQQ",),
+                    "run_root": tmp_path / "runs",
+                    "state_root": tmp_path / "state",
+                }
+            ),
+            "strategies": tuple(
+                strategy
+                for strategy in default_portfolio_config().strategies
+                if strategy.underlying_symbol == "QQQ"
+            ),
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.underlyings = ("QQQ",)
+    trader.broker = _BrokerStub()
+    trader.run_root = tmp_path / "runs"
+    trader.submit_paper_orders = False
+
+    now_et = datetime(2026, 4, 15, 9, 36, tzinfo=ZoneInfo("America/New_York"))
+    monkeypatch.setattr(
+        "alpaca_lab.multi_ticker_portfolio.trader._now_et",
+        lambda: now_et,
+    )
+    snapshot = SymbolSnapshot(
+        underlying_symbol="QQQ",
+        trade_date=now_et.date(),
+        stock_frame=pd.DataFrame([{"close": 500.0}]),
+        option_chain=pd.DataFrame(
+            [
+                {"dte": 0, "option_type": "call"},
+                {"dte": 0, "option_type": "put"},
+                {"dte": 1, "option_type": "call"},
+                {"dte": 1, "option_type": "put"},
+            ]
+        ),
+        mark_map={},
+        latest_close=500.0,
+        current_minute=6,
+        latest_timestamp_et=now_et,
+    )
+    session = SessionState(
+        trade_date=now_et.date().isoformat(),
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+
+    status, details = trader._perform_startup_check(
+        session=session,
+        trade_date=now_et.date(),
+        snapshots={"QQQ": snapshot},
+        allow_broker_cleanup=False,
+    )
+
+    assert status == "failed"
+    assert trader.broker.submit_count == 0
+    assert details["broker_position_cleanup_suppressed"] == ["QQQ260417C00600000"]
+    assert details["broker_position_count"] == 1
+    assert any("unexpected open position" in failure for failure in details["failures"])
+    assert not (tmp_path / "runs" / "2026-04-15" / "broker_position_cleanup.json").exists()
+
+
 def test_startup_check_respects_existing_close_orders_without_duplicate_cleanup(
     tmp_path: Path,
     monkeypatch,

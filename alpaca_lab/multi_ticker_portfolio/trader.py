@@ -2918,6 +2918,7 @@ class MultiTickerPortfolioPaperTrader:
         session: SessionState,
         trade_date: date,
         snapshots: dict[str, SymbolSnapshot],
+        allow_broker_cleanup: bool = True,
     ) -> tuple[str, dict[str, Any]]:
         details: dict[str, Any] = {"trade_date": trade_date.isoformat(), "underlyings": {}}
         now_et = _now_et()
@@ -2981,16 +2982,25 @@ class MultiTickerPortfolioPaperTrader:
                         f"broker cleanup orders still pending after startup grace period for {pending_symbols_text}"
                     )
             if positions_requiring_cleanup:
-                cleanup_entries = self._close_unexpected_broker_positions(
-                    session=session,
-                    trade_date=trade_date,
-                    reason=AUTO_FLATTEN_UNEXPECTED_STARTUP_REASON,
-                )
-                if cleanup_entries:
-                    details["broker_position_cleanup"] = cleanup_entries
-                    positions = self.broker.get_positions()
-                    details["broker_position_count"] = len(positions)
-                symbols_with_open_close_orders = self._symbols_with_open_close_orders()
+                if allow_broker_cleanup:
+                    cleanup_entries = self._close_unexpected_broker_positions(
+                        session=session,
+                        trade_date=trade_date,
+                        reason=AUTO_FLATTEN_UNEXPECTED_STARTUP_REASON,
+                    )
+                    if cleanup_entries:
+                        details["broker_position_cleanup"] = cleanup_entries
+                        positions = self.broker.get_positions()
+                        details["broker_position_count"] = len(positions)
+                    symbols_with_open_close_orders = self._symbols_with_open_close_orders()
+                else:
+                    details["broker_position_cleanup_suppressed"] = sorted(
+                        {
+                            str(position.get("symbol") or "").strip()
+                            for position in positions_requiring_cleanup
+                            if str(position.get("symbol") or "").strip()
+                        }
+                    )
 
         positions_relevant_to_startup = [
             position
@@ -3115,6 +3125,45 @@ class MultiTickerPortfolioPaperTrader:
             return "pending", details
         details["status"] = "passed"
         return "passed", details
+
+    def run_startup_preflight(self) -> dict[str, Any]:
+        """Run the launch-time readiness checks without entering the trading loop."""
+        clock = self.broker.get_clock()
+        trade_date = _trade_date_from_clock(clock)
+        ledger = self.load_ledger()
+        session = self.load_or_create_session(trade_date, ledger)
+        stock_frames = self._fetch_today_stock_frames(trade_date)
+        snapshots = {
+            symbol: snapshot
+            for symbol, snapshot in (
+                (
+                    symbol,
+                    self._build_symbol_snapshot(
+                        trade_date=trade_date,
+                        underlying_symbol=symbol,
+                        stock_frame=stock_frame,
+                        session=session,
+                    ),
+                )
+                for symbol, stock_frame in stock_frames.items()
+            )
+            if snapshot is not None
+        }
+        status, details = self._perform_startup_check(
+            session=session,
+            trade_date=trade_date,
+            snapshots=snapshots,
+            allow_broker_cleanup=False,
+        )
+        return {
+            "status": f"startup_preflight_{status}",
+            "trade_date": trade_date.isoformat(),
+            "startup_check_status": status,
+            "submit_paper_orders": self.submit_paper_orders,
+            "broker_cleanup_allowed": False,
+            "would_allow_trading": status == "passed",
+            "details": details,
+        }
 
     def _send_morning_notification(self, session: SessionState, details: dict[str, Any]) -> None:
         failed_phases = getattr(self, "_failed_notification_phases", set())
