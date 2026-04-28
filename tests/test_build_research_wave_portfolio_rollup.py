@@ -158,3 +158,61 @@ def test_wave_rollup_deduplicates_candidates_with_best_complete_view(tmp_path: P
     assert packet["candidate_count"] == 1
     assert packet["top_candidates"][0]["promotion_status"] == "eligible_for_promotion_review"
     assert packet["top_candidates"][0]["source_report_count"] == 2
+
+
+def test_wave_rollup_discovers_symbol_prefixed_report_files(tmp_path: Path) -> None:
+    report_root = tmp_path / "reports"
+    _write_report(
+        report_root / "SPY_research_portfolio_report.json",
+        {"top_candidates": [_candidate("spy_a", symbol="SPY", score=1000.0, fill=0.95)]},
+    )
+
+    packet = build_research_wave_portfolio_rollup(
+        report_root=report_root,
+        output_dir=tmp_path / "out",
+        pattern="*_research_portfolio_report.json",
+        fill_coverage_gate=0.90,
+        min_option_trades=20,
+        min_test_net_pnl=0.0,
+        max_positions=4,
+        max_strategies_per_symbol=2,
+        max_symbol_weight=0.50,
+        initial_cash=25_000.0,
+        max_review_candidates=10,
+    )
+
+    assert packet["source_report_count"] == 1
+    assert packet["top_candidates"][0]["candidate_variant_id"] == "spy_a"
+
+
+def test_wave_rollup_infers_fill_failure_reason_for_older_reports(tmp_path: Path) -> None:
+    report_root = tmp_path / "reports"
+    candidate = _candidate(
+        "spy_blocked",
+        symbol="SPY",
+        score=1000.0,
+        fill=0.50,
+        status="research_only_blocked",
+        blockers=["fill_coverage_below_0.90"],
+        fill_failure_reason="",
+    )
+    candidate["max_missing_no_selected_contract"] = 0
+    candidate["max_missing_no_entry_bar"] = 8
+    candidate["max_missing_no_exit_bar"] = 2
+    _write_report(report_root / "research_portfolio_report.json", {"top_candidates": [candidate]})
+
+    packet = build_research_wave_portfolio_rollup(
+        report_root=report_root,
+        output_dir=tmp_path / "out",
+        fill_coverage_gate=0.90,
+        min_option_trades=20,
+        min_test_net_pnl=0.0,
+        max_positions=4,
+        max_strategies_per_symbol=2,
+        max_symbol_weight=0.50,
+        initial_cash=25_000.0,
+        max_review_candidates=10,
+    )
+
+    assert packet["fill_failure_counts"] == {"entry_bar_gap_or_entry_timing_mismatch": 1}
+    assert packet["data_repair_priority_candidates"][0]["candidate_variant_id"] == "spy_blocked"

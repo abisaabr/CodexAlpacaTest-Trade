@@ -15,6 +15,7 @@ if str(REPO_ROOT) not in sys.path:
 from scripts.build_research_portfolio_report import (
     _blocker_counts,
     _data_repair_candidates,
+    _fill_failure_reason,
     _fill_failure_counts,
     _float,
     _strategy_redesign_candidates,
@@ -56,9 +57,7 @@ def _load_json(path: Path) -> dict[str, Any]:
 def discover_portfolio_reports(report_root: Path, pattern: str) -> list[Path]:
     if report_root.is_file():
         return [report_root]
-    return sorted(
-        path for path in report_root.rglob(pattern) if path.is_file() and path.name == pattern
-    )
+    return sorted(path for path in report_root.rglob(pattern) if path.is_file())
 
 
 def _candidate_sort_key(row: dict[str, Any]) -> tuple[Any, ...]:
@@ -105,7 +104,9 @@ def _dedupe_candidates(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     )
 
 
-def _load_candidates(report_paths: list[Path]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _load_candidates(
+    report_paths: list[Path], *, fill_coverage_gate: float
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     rows: list[dict[str, Any]] = []
     source_reports: list[dict[str, Any]] = []
     for path in report_paths:
@@ -128,6 +129,8 @@ def _load_candidates(report_paths: list[Path]) -> tuple[list[dict[str, Any]], li
                 continue
             row = item.copy()
             row["source_report_path"] = str(path)
+            if not row.get("fill_failure_reason"):
+                row["fill_failure_reason"] = _fill_failure_reason(row, fill_coverage_gate)
             rows.append(row)
     return _dedupe_candidates(rows), source_reports
 
@@ -275,7 +278,9 @@ def build_research_wave_portfolio_rollup(
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     report_paths = discover_portfolio_reports(report_root, pattern)
-    candidates, source_reports = _load_candidates(report_paths)
+    candidates, source_reports = _load_candidates(
+        report_paths, fill_coverage_gate=fill_coverage_gate
+    )
     capital_plan = build_capital_plan(
         candidates,
         max_positions=max_positions,
