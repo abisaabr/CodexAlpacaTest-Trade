@@ -56,6 +56,16 @@ def _parse_date(value: str | None) -> date | None:
     return date.fromisoformat(value) if value else None
 
 
+def _weekday_dates(start_date: date | None, end_date: date | None) -> list[str]:
+    if start_date is None or end_date is None:
+        return []
+    if end_date < start_date:
+        return []
+    return [
+        item.date().isoformat() for item in pd.date_range(start=start_date, end=end_date, freq="B")
+    ]
+
+
 def _normalize_contracts(contracts: pd.DataFrame) -> pd.DataFrame:
     if contracts.empty:
         return contracts
@@ -241,6 +251,108 @@ def select_dense_option_universe(
     return SELECTED_OPTION_SCHEMA.apply(result.reset_index(drop=True))
 
 
+def build_dense_universe_coverage_diagnostics(
+    *,
+    stock_bars: pd.DataFrame,
+    selected: pd.DataFrame,
+    symbol_filter: set[str] | None,
+    start_date: date | None,
+    end_date: date | None,
+    reference_bar: str,
+) -> dict[str, Any]:
+    references = _stock_reference_rows(
+        stock_bars,
+        symbol_filter=symbol_filter,
+        start_date=start_date,
+        end_date=end_date,
+        reference_bar=reference_bar,
+    )
+    requested_dates = _weekday_dates(start_date, end_date)
+    requested_date_set = set(requested_dates)
+    selected_symbols = (
+        set(selected["underlying_symbol"].astype(str).str.upper().unique())
+        if not selected.empty and "underlying_symbol" in selected.columns
+        else set()
+    )
+    reference_symbols = (
+        set(references["symbol"].astype(str).str.upper().unique())
+        if not references.empty and "symbol" in references.columns
+        else set()
+    )
+    symbols = sorted(symbol_filter or reference_symbols or selected_symbols)
+    symbol_rows = []
+    low_reference_symbols = []
+    low_selected_symbols = []
+
+    for symbol in symbols:
+        if references.empty:
+            reference_dates: set[str] = set()
+        else:
+            reference_dates = {
+                pd.Timestamp(value).date().isoformat()
+                for value in references.loc[references["symbol"] == symbol, "trade_date"].dropna()
+            }
+        if selected.empty:
+            selected_dates: set[str] = set()
+        else:
+            selected_dates = {
+                pd.Timestamp(value).date().isoformat()
+                for value in selected.loc[
+                    selected["underlying_symbol"].astype(str).str.upper() == symbol,
+                    "trade_date",
+                ].dropna()
+            }
+        denominator = len(requested_date_set) or len(reference_dates) or len(selected_dates)
+        reference_ratio = round(len(reference_dates) / denominator, 6) if denominator else 0.0
+        selected_ratio = round(len(selected_dates) / denominator, 6) if denominator else 0.0
+        if denominator and reference_ratio < 0.90:
+            low_reference_symbols.append(symbol)
+        if denominator and selected_ratio < 0.90:
+            low_selected_symbols.append(symbol)
+        missing_reference = (
+            sorted(requested_date_set - reference_dates) if requested_date_set else []
+        )
+        missing_selected = sorted(requested_date_set - selected_dates) if requested_date_set else []
+        symbol_rows.append(
+            {
+                "symbol": symbol,
+                "requested_weekday_trade_date_count": len(requested_date_set),
+                "stock_reference_trade_date_count": len(reference_dates),
+                "selected_trade_date_count": len(selected_dates),
+                "stock_reference_coverage_ratio": reference_ratio,
+                "selected_trade_date_coverage_ratio": selected_ratio,
+                "first_stock_reference_date": min(reference_dates) if reference_dates else None,
+                "last_stock_reference_date": max(reference_dates) if reference_dates else None,
+                "first_selected_trade_date": min(selected_dates) if selected_dates else None,
+                "last_selected_trade_date": max(selected_dates) if selected_dates else None,
+                "missing_stock_reference_dates_sample": missing_reference[:10],
+                "missing_selected_trade_dates_sample": missing_selected[:10],
+                "coverage_status": (
+                    "ok"
+                    if denominator and reference_ratio >= 0.90 and selected_ratio >= 0.90
+                    else "coverage_gap"
+                ),
+            }
+        )
+
+    status = "ok"
+    if low_reference_symbols:
+        status = "stock_reference_coverage_gap"
+    elif low_selected_symbols:
+        status = "selected_contract_trade_date_coverage_gap"
+    elif not symbol_rows:
+        status = "no_symbols_after_filter"
+
+    return {
+        "status": status,
+        "requested_weekday_trade_dates": requested_dates,
+        "requested_weekday_trade_date_count": len(requested_dates),
+        "symbol_coverage": symbol_rows,
+        "low_stock_reference_coverage_symbols": low_reference_symbols,
+        "low_selected_trade_date_coverage_symbols": low_selected_symbols,
+    }
+
+
 def _write_partitioned(root: Path, selected: pd.DataFrame) -> int:
     if selected.empty:
         return 0
@@ -270,6 +382,7 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         f"- Max DTE: `{packet['max_dte']}`",
         f"- Strike steps: `{packet['strike_steps']}`",
         f"- Reference bar: `{packet['reference_bar']}`",
+        f"- Coverage status: `{packet['coverage_diagnostics']['status']}`",
         "",
         "## Symbol Counts",
         "",
@@ -277,6 +390,15 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
     for row in packet["symbol_counts"]:
         lines.append(
             f"- `{row['symbol']}` contracts `{row['selected_contract_count']}` days `{row['trade_date_count']}`"
+        )
+    lines.extend(["", "## Coverage Diagnostics", ""])
+    for row in packet["coverage_diagnostics"]["symbol_coverage"]:
+        lines.append(
+            "- "
+            f"`{row['symbol']}` requested weekdays `{row['requested_weekday_trade_date_count']}` "
+            f"stock refs `{row['stock_reference_trade_date_count']}` "
+            f"selected days `{row['selected_trade_date_count']}` "
+            f"status `{row['coverage_status']}`"
         )
     lines.extend(["", "## Next Step Contract", ""])
     for item in packet["next_step_contract"]:
@@ -313,6 +435,14 @@ def build_dense_option_universe_packet(
         reference_bar=reference_bar,
     )
     partition_count = _write_partitioned(selected_root, selected)
+    coverage_diagnostics = build_dense_universe_coverage_diagnostics(
+        stock_bars=stock_bars,
+        selected=selected,
+        symbol_filter=symbol_filter,
+        start_date=start_date,
+        end_date=end_date,
+        reference_bar=reference_bar,
+    )
     symbol_counts = []
     if not selected.empty:
         for symbol, group in selected.groupby("underlying_symbol", sort=True):
@@ -347,9 +477,11 @@ def build_dense_option_universe_packet(
         "selected_contract_count": int(len(selected)),
         "selected_contract_partitions": partition_count,
         "symbol_counts": symbol_counts,
+        "coverage_diagnostics": coverage_diagnostics,
         "next_step_contract": [
             "Use selected_contracts_root with download_option_market_data_for_selected_contracts.py.",
             "Replay strategy variants against the dense downloaded option data before promotion review.",
+            "Treat coverage_diagnostics status other than ok as a data-foundation blocker, not as strategy promotion evidence.",
             "Require the 0.90 fill gate, positive holdout economics, and governed stress packets before any broker-facing validation.",
         ],
     }

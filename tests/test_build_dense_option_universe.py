@@ -113,3 +113,57 @@ def test_dense_option_universe_packet_writes_partitioned_selected_contracts(tmp_
         / "trade_date=2026-04-21"
         / "part.parquet"
     ).exists()
+
+
+def test_dense_option_universe_packet_flags_reference_date_coverage_gap(
+    tmp_path: Path,
+) -> None:
+    stock_path = tmp_path / "stock.parquet"
+    contracts_root = tmp_path / "contracts"
+    contract_path = contracts_root / "underlying=QQQ" / "part.parquet"
+    contract_path.parent.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "symbol": ["QQQ260424C00400000", "QQQ260424P00400000"],
+            "underlying_symbol": ["QQQ", "QQQ"],
+            "expiration_date": ["2026-04-24", "2026-04-24"],
+            "option_type": ["call", "put"],
+            "strike_price": [400.0, 400.0],
+        }
+    ).to_parquet(contract_path, index=False)
+    pd.DataFrame(
+        {
+            "symbol": ["QQQ"],
+            "timestamp": pd.to_datetime(["2026-04-20T13:30:00Z"], utc=True),
+            "open": [400.1],
+            "high": [400.2],
+            "low": [400.0],
+            "close": [400.1],
+            "volume": [1000],
+        }
+    ).to_parquet(stock_path, index=False)
+
+    packet = build_dense_option_universe_packet(
+        stock_bars_path=stock_path,
+        option_contracts_root=contracts_root,
+        output_dir=tmp_path / "out",
+        symbol_filter={"QQQ"},
+        start_date=date(2026, 4, 20),
+        end_date=date(2026, 4, 23),
+        min_dte=0,
+        max_dte=7,
+        strike_steps=0,
+        reference_bar="first",
+    )
+
+    coverage = packet["coverage_diagnostics"]
+    assert coverage["status"] == "stock_reference_coverage_gap"
+    assert coverage["requested_weekday_trade_date_count"] == 4
+    assert coverage["low_stock_reference_coverage_symbols"] == ["QQQ"]
+    assert coverage["symbol_coverage"][0]["stock_reference_trade_date_count"] == 1
+    assert coverage["symbol_coverage"][0]["selected_trade_date_count"] == 1
+    assert coverage["symbol_coverage"][0]["missing_stock_reference_dates_sample"] == [
+        "2026-04-21",
+        "2026-04-22",
+        "2026-04-23",
+    ]
