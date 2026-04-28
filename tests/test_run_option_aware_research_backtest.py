@@ -166,6 +166,7 @@ def test_option_aware_backtest_prices_stock_signal_windows_against_options(
     assert payload["option_trade_count"] > 0
     summary = payload["candidate_summaries"][0]
     assert summary["fill_coverage"] == 1.0
+    assert summary["fill_failure_reason"] == "fill_gate_clear"
     assert summary["net_pnl"] > 0
     assert summary["recommendation"] in {
         "candidate_for_walk_forward_review",
@@ -318,4 +319,5 @@ def test_liquidity_first_selector_uses_entry_window_without_future_bars(
     summary = payload["candidate_summaries"][0]
     assert summary["missing_no_entry_bar"] == 0
     assert summary["missing_no_selected_contract"] == 0
+    assert summary["fill_failure_reason"] == "fill_gate_clear"
     assert summary["contract_selection_method"] == CONTRACT_SELECTION_LIQUIDITY_FIRST

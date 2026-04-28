@@ -91,6 +91,9 @@ def test_research_portfolio_report_blocks_low_fill_but_builds_interim_plan(tmp_p
     assert sum(row["research_only_weight"] for row in packet["capital_plan"]) == 1.0
     assert packet["capital_plan"][0]["research_only_dollars"] == 12_500.0
     assert "fill_coverage_below_0.90" in packet["top_candidates"][0]["promotion_blockers"]
+    assert packet["fill_failure_counts"] == {"entry_bar_gap_or_entry_timing_mismatch": 3}
+    assert packet["data_repair_priority_candidates"]
+    assert packet["blocker_counts"]["fill_coverage_below_0.90"] == 3
     assert (tmp_path / "out" / "research_portfolio_report.json").exists()
     assert (tmp_path / "out" / "research_portfolio_report.md").exists()
 
@@ -136,6 +139,7 @@ def test_research_portfolio_report_allows_review_when_gates_pass(tmp_path: Path)
     assert packet["promotion_allowed"] is True
     assert packet["eligible_for_promotion_review_count"] == 1
     assert packet["top_candidates"][0]["promotion_status"] == "eligible_for_promotion_review"
+    assert packet["top_candidates"][0]["fill_failure_reason"] == "fill_gate_clear"
     assert packet["capital_plan"][0]["research_only_weight"] == 0.5
     assert packet["capital_plan_unallocated_dollars"] == 12_500.0
 
@@ -293,8 +297,6 @@ def test_research_portfolio_report_allows_multiple_strategies_per_symbol_with_sy
         "amd_strategy_a",
         "amd_strategy_b",
     ]
-    assert "amd_strategy_c" not in {
-        row["candidate_variant_id"] for row in packet["capital_plan"]
-    }
+    assert "amd_strategy_c" not in {row["candidate_variant_id"] for row in packet["capital_plan"]}
     assert sum(row["research_only_weight"] for row in amd_plan) == 0.5
     assert sum(row["research_only_weight"] for row in packet["capital_plan"]) == 1.0

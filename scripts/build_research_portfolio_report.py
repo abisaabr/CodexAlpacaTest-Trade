@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -60,6 +61,24 @@ def _candidate_score(row: dict[str, Any]) -> float:
     return (
         _float(row["min_net_pnl"]) + test_bonus + fill_bonus + trade_bonus - 0.5 * drawdown_penalty
     )
+
+
+def _fill_failure_reason(row: dict[str, Any], fill_coverage_gate: float) -> str:
+    if _float(row.get("min_fill_coverage")) >= fill_coverage_gate:
+        return "fill_gate_clear"
+    existing = str(row.get("fill_failure_reason") or "")
+    if existing and existing != "nan":
+        return existing
+    missing = {
+        "selected_contract_universe_gap": int(_float(row.get("max_missing_no_selected_contract"))),
+        "entry_bar_gap_or_entry_timing_mismatch": int(_float(row.get("max_missing_no_entry_bar"))),
+        "exit_bar_gap_or_exit_policy_mismatch": int(_float(row.get("max_missing_no_exit_bar"))),
+    }
+    dominant_reason, dominant_count = max(missing.items(), key=lambda item: item[1])
+    if dominant_count <= 0:
+        return "mixed_low_fill_gap"
+    tied = [reason for reason, count in missing.items() if count == dominant_count]
+    return dominant_reason if len(tied) == 1 else "mixed_low_fill_gap"
 
 
 def summarize_candidates(
@@ -123,6 +142,15 @@ def summarize_candidates(
             "positive_net_profile_count": int((group["net_pnl"] > 0).sum()),
             "positive_test_profile_count": int((group["test_net_pnl"] > min_test_net_pnl).sum()),
         }
+        if "fill_failure_reason" in group.columns:
+            reasons = [
+                str(value)
+                for value in group["fill_failure_reason"].dropna().tolist()
+                if str(value) and str(value) != "nan"
+            ]
+            if reasons:
+                row["fill_failure_reason"] = Counter(reasons).most_common(1)[0][0]
+        row["fill_failure_reason"] = _fill_failure_reason(row, fill_coverage_gate)
         row["research_score"] = round(_candidate_score(row), 6)
         blockers = []
         if min_fill < fill_coverage_gate:
@@ -198,9 +226,7 @@ def build_capital_plan(
     min_option_trades: int,
 ) -> list[dict[str, Any]]:
     eligible_rows = [
-        row
-        for row in candidate_rows
-        if row["promotion_status"] == "eligible_for_promotion_review"
+        row for row in candidate_rows if row["promotion_status"] == "eligible_for_promotion_review"
     ]
     plan_pool = eligible_rows if eligible_rows else candidate_rows
 
@@ -266,6 +292,77 @@ def build_capital_plan(
     return plan
 
 
+def _blocker_counts(candidate_rows: list[dict[str, Any]]) -> dict[str, int]:
+    counts: Counter[str] = Counter()
+    for row in candidate_rows:
+        counts.update(str(item) for item in row.get("promotion_blockers", []))
+    return dict(sorted(counts.items()))
+
+
+def _fill_failure_counts(candidate_rows: list[dict[str, Any]]) -> dict[str, int]:
+    counts: Counter[str] = Counter()
+    for row in candidate_rows:
+        counts[str(row.get("fill_failure_reason") or "unknown")] += 1
+    return dict(sorted(counts.items()))
+
+
+def _data_repair_candidates(
+    candidate_rows: list[dict[str, Any]], max_items: int = 12
+) -> list[dict[str, Any]]:
+    repair_reasons = {
+        "selected_contract_universe_gap",
+        "entry_bar_gap_or_entry_timing_mismatch",
+        "exit_bar_gap_or_exit_policy_mismatch",
+        "mixed_low_fill_gap",
+    }
+    rows = [
+        row
+        for row in candidate_rows
+        if row.get("promotion_status") != "eligible_for_promotion_review"
+        and row.get("fill_failure_reason") in repair_reasons
+        and _float(row.get("min_net_pnl")) > 0
+        and _float(row.get("min_test_net_pnl")) > 0
+    ]
+    rows = sorted(rows, key=lambda item: item["research_score"], reverse=True)
+    keys = [
+        "candidate_variant_id",
+        "symbol",
+        "source_strategy_id",
+        "min_net_pnl",
+        "min_test_net_pnl",
+        "min_fill_coverage",
+        "max_fill_coverage",
+        "fill_failure_reason",
+        "promotion_blockers",
+        "research_score",
+    ]
+    return [{key: row.get(key) for key in keys} for row in rows[:max_items]]
+
+
+def _strategy_redesign_candidates(
+    candidate_rows: list[dict[str, Any]], max_items: int = 12
+) -> list[dict[str, Any]]:
+    rows = [
+        row
+        for row in candidate_rows
+        if row.get("promotion_status") != "eligible_for_promotion_review"
+        and (_float(row.get("min_net_pnl")) <= 0 or _float(row.get("min_test_net_pnl")) <= 0)
+    ]
+    rows = sorted(rows, key=lambda item: item["research_score"], reverse=True)
+    keys = [
+        "candidate_variant_id",
+        "symbol",
+        "source_strategy_id",
+        "min_net_pnl",
+        "min_test_net_pnl",
+        "min_fill_coverage",
+        "fill_failure_reason",
+        "promotion_blockers",
+        "research_score",
+    ]
+    return [{key: row.get(key) for key in keys} for row in rows[:max_items]]
+
+
 def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
     lines = [
         "# Research Portfolio Report",
@@ -305,6 +402,29 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
             f"min_net `{row['min_net_pnl']}` min_test `{row['min_test_net_pnl']}` "
             f"fill `{row['min_fill_coverage']}-{row['max_fill_coverage']}` "
             f"trades `{row['min_option_trade_count']}` blockers `{blockers}`"
+        )
+    lines.extend(["", "## Fill Failure Counts", ""])
+    for reason, count in packet["fill_failure_counts"].items():
+        lines.append(f"- `{reason}`: `{count}`")
+    lines.extend(["", "## Data Repair Priority", ""])
+    if not packet["data_repair_priority_candidates"]:
+        lines.append("- No positive-economics data-repair candidates selected.")
+    for row in packet["data_repair_priority_candidates"]:
+        lines.append(
+            "- "
+            f"`{row['symbol']}` `{row['candidate_variant_id']}` "
+            f"fill `{row['min_fill_coverage']}-{row['max_fill_coverage']}` "
+            f"reason `{row['fill_failure_reason']}` score `{row['research_score']}`"
+        )
+    lines.extend(["", "## Strategy Redesign Priority", ""])
+    if not packet["strategy_redesign_candidates"]:
+        lines.append("- No strategy-redesign candidates selected.")
+    for row in packet["strategy_redesign_candidates"]:
+        lines.append(
+            "- "
+            f"`{row['symbol']}` `{row['candidate_variant_id']}` "
+            f"min_net `{row['min_net_pnl']}` min_test `{row['min_test_net_pnl']}` "
+            f"reason `{row['fill_failure_reason']}`"
         )
     lines.extend(["", "## Next Step Contract", ""])
     for item in packet["next_step_contract"]:
@@ -364,11 +484,19 @@ def build_research_portfolio_report(
         "capital_plan": capital_plan,
         "capital_plan_allocated_weight": allocated_weight,
         "capital_plan_unallocated_weight": round(max(1.0 - allocated_weight, 0.0), 6),
-        "capital_plan_unallocated_dollars": round(max(1.0 - allocated_weight, 0.0) * initial_cash, 2),
+        "capital_plan_unallocated_dollars": round(
+            max(1.0 - allocated_weight, 0.0) * initial_cash, 2
+        ),
         "top_candidates": candidate_rows[:50],
+        "blocker_counts": _blocker_counts(candidate_rows),
+        "fill_failure_counts": _fill_failure_counts(candidate_rows),
+        "data_repair_priority_candidates": _data_repair_candidates(candidate_rows),
+        "strategy_redesign_candidates": _strategy_redesign_candidates(candidate_rows),
         "next_step_contract": [
             "Treat the capital plan as research-only until fill coverage reaches the configured gate.",
-            "Use the event-driven selected-contract downloader to repair no_entry_bar/no_selected_contract gaps.",
+            "Use dense daily option-universe builds when selected-contract gaps dominate otherwise positive candidates.",
+            "Use event-driven selected-contract repairs only for isolated missing entry/exit bars.",
+            "Redesign or quarantine candidates whose economics fail after fill repair.",
             "Do not modify live manifests, strategy selection, or risk policy from this report.",
         ],
     }

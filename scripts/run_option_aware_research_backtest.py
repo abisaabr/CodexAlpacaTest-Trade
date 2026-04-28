@@ -470,6 +470,29 @@ def _recommendation(summary: dict[str, Any]) -> str:
     return "hold_option_economics"
 
 
+def _fill_failure_reason(summary: dict[str, Any]) -> str:
+    source_trades = int(summary.get("source_stock_trade_count") or 0)
+    filled = int(summary.get("option_trade_count") or 0)
+    if source_trades == 0:
+        return "no_source_stock_trades"
+    fill_coverage = float(summary.get("fill_coverage") or 0.0)
+    if fill_coverage >= 0.90:
+        return "fill_gate_clear"
+    missing = {
+        "selected_contract_universe_gap": int(summary.get("missing_no_selected_contract") or 0),
+        "entry_bar_gap_or_entry_timing_mismatch": int(summary.get("missing_no_entry_bar") or 0),
+        "exit_bar_gap_or_exit_policy_mismatch": int(summary.get("missing_no_exit_bar") or 0),
+        "position_sizing_too_expensive": int(summary.get("missing_too_expensive") or 0),
+    }
+    if filled == 0 and not any(missing.values()):
+        return "no_option_fills_unknown_gap"
+    dominant_reason, dominant_count = max(missing.items(), key=lambda item: item[1])
+    if dominant_count <= 0:
+        return "mixed_low_fill_gap"
+    tied = [reason for reason, count in missing.items() if count == dominant_count]
+    return dominant_reason if len(tied) == 1 else "mixed_low_fill_gap"
+
+
 def _option_rows_for_candidate(
     *,
     queue_item: dict[str, Any],
@@ -740,12 +763,16 @@ def build_option_aware_backtest(
                 else "none"
             ),
         }
+        summary["fill_failure_reason"] = _fill_failure_reason(summary)
         summary["recommendation"] = _recommendation(summary)
         candidate_summaries.append(summary)
     recommendation_counts: dict[str, int] = {}
+    fill_failure_counts: dict[str, int] = {}
     for row in candidate_summaries:
         recommendation = str(row.get("recommendation") or row.get("status") or "unknown")
         recommendation_counts[recommendation] = recommendation_counts.get(recommendation, 0) + 1
+        fill_reason = str(row.get("fill_failure_reason") or "unknown")
+        fill_failure_counts[fill_reason] = fill_failure_counts.get(fill_reason, 0) + 1
     ranked = sorted(
         candidate_summaries,
         key=lambda row: float(row.get("expectancy") or 0.0),
@@ -781,6 +808,7 @@ def build_option_aware_backtest(
         "candidate_count": len(candidate_summaries),
         "option_trade_count": len(all_trade_rows),
         "recommendation_counts": dict(sorted(recommendation_counts.items())),
+        "fill_failure_counts": dict(sorted(fill_failure_counts.items())),
         "candidate_summaries": ranked,
         "trade_rows": all_trade_rows,
         "top_research_followups": ranked[:10],
@@ -831,6 +859,9 @@ def write_markdown(path: Path, payload: dict[str, Any]) -> None:
     ]
     for key, value in payload["recommendation_counts"].items():
         lines.append(f"- `{key}`: `{value}`")
+    lines.extend(["", "## Fill Failure Counts", ""])
+    for key, value in payload.get("fill_failure_counts", {}).items():
+        lines.append(f"- `{key}`: `{value}`")
     lines.extend(["", "## Top Research Follow-Ups", ""])
     for row in payload["top_research_followups"]:
         lines.append(
@@ -875,6 +906,7 @@ def write_artifacts(output_dir: Path, run_id: str, payload: dict[str, Any]) -> d
         "live_manifest_effect": "none",
         "risk_policy_effect": "none",
         "recommendation_counts": payload["recommendation_counts"],
+        "fill_failure_counts": payload.get("fill_failure_counts", {}),
         "top_research_followups": payload["top_research_followups"],
         "next_step_contract": payload["next_step_contract"],
     }
