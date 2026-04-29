@@ -105,7 +105,16 @@ def _load_json(path: Path) -> dict[str, Any]:
 def _load_parquet_tree(path: Path) -> pd.DataFrame:
     if path.is_file():
         return pd.read_parquet(path)
-    frames = [pd.read_parquet(item) for item in sorted(path.rglob("*.parquet"))]
+    frames = []
+    for item in sorted(path.rglob("*.parquet")):
+        frame = pd.read_parquet(item)
+        for part in item.relative_to(path).parts[:-1]:
+            if "=" not in part:
+                continue
+            key, value = part.split("=", 1)
+            if key and key not in frame.columns:
+                frame[key] = value
+        frames.append(frame)
     if not frames:
         return pd.DataFrame()
     return pd.concat(frames, ignore_index=True)
