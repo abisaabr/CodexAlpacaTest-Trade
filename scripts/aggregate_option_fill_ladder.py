@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import shutil
 import subprocess
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -39,6 +40,13 @@ def split_gcs_uri(uri: str) -> tuple[str, str]:
     return bucket, prefix.strip("/")
 
 
+def gcloud_executable() -> str:
+    executable = shutil.which("gcloud") or shutil.which("gcloud.cmd")
+    if not executable:
+        raise SystemExit("gcloud CLI is required for GCS fallback but was not found on PATH")
+    return executable
+
+
 def load_local_packets(root: Path) -> list[dict[str, Any]]:
     packets = []
     for path in sorted(root.glob("*/*/fill_ladder_status.json")):
@@ -68,8 +76,9 @@ def load_gcs_packets(root: str) -> list[dict[str, Any]]:
 
 def load_gcs_packets_with_cli(root: str) -> list[dict[str, Any]]:
     list_uri = root.rstrip("/") + "/**/fill_ladder_status.json"
+    gcloud = gcloud_executable()
     listed = subprocess.run(
-        ["gcloud", "storage", "ls", list_uri],
+        [gcloud, "storage", "ls", list_uri],
         check=True,
         capture_output=True,
         text=True,
@@ -77,7 +86,7 @@ def load_gcs_packets_with_cli(root: str) -> list[dict[str, Any]]:
     packets = []
     for uri in [line.strip() for line in listed.stdout.splitlines() if line.strip()]:
         packet = subprocess.run(
-            ["gcloud", "storage", "cat", uri],
+            [gcloud, "storage", "cat", uri],
             check=True,
             capture_output=True,
             text=True,
@@ -97,7 +106,7 @@ def upload_file(path: Path, destination: str) -> None:
     try:
         storage.Client().bucket(bucket_name).blob(blob_name).upload_from_filename(str(path))
     except Exception:
-        subprocess.run(["gcloud", "storage", "cp", str(path), destination], check=True)
+        subprocess.run([gcloud_executable(), "storage", "cp", str(path), destination], check=True)
 
 
 def packet_row(packet: dict[str, Any], fill_gate: float) -> dict[str, Any]:
