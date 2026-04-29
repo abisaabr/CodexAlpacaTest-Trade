@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 import pandas as pd
 
 from alpaca_lab.data.chunking import market_session_bounds
-from alpaca_lab.data.schemas import DatasetSchema, QUALITY_AUDIT_SCHEMA
+from alpaca_lab.data.schemas import QUALITY_AUDIT_SCHEMA, DatasetSchema
 
 
 def add_trade_date(
@@ -118,7 +119,7 @@ def build_quality_rows(
     for group_key, subset in group_frame.groupby(list(effective_groups), dropna=False, sort=True):
         if not isinstance(group_key, tuple):
             group_key = (group_key,)
-        group_values = dict(zip(effective_groups, group_key))
+        group_values = dict(zip(effective_groups, group_key, strict=True))
         duplicate_rows = (
             int(subset.duplicated(subset=list(schema.primary_key)).sum()) if schema.primary_key else 0
         )

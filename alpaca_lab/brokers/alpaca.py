@@ -2,15 +2,23 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from hashlib import sha1
 from typing import Any, Literal
 
 import requests
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+try:
+    import truststore
+except ImportError:  # pragma: no cover - optional runtime hardening
+    truststore = None
+
 from alpaca_lab.config import LabSettings, LiveTradingRefusedError
 from alpaca_lab.logging_utils import get_logger, redact_value
+
+if truststore is not None:  # pragma: no branch - one-time interpreter setup
+    truststore.inject_into_ssl()
 
 
 def _isoformat(value: datetime | str | None) -> str | None:
@@ -28,9 +36,32 @@ def build_client_order_id(*, strategy_name: str, symbol: str, side: str, request
 
 
 @dataclass(slots=True)
-class OrderRequest:
+class OrderLeg:
     symbol: str
     side: Literal["buy", "sell"]
+    ratio_qty: int = 1
+    position_intent: Literal[
+        "buy_to_open",
+        "buy_to_close",
+        "sell_to_open",
+        "sell_to_close",
+    ] | None = None
+
+    def to_payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "symbol": self.symbol,
+            "ratio_qty": self.ratio_qty,
+            "side": self.side,
+        }
+        if self.position_intent is not None:
+            payload["position_intent"] = self.position_intent
+        return payload
+
+
+@dataclass(slots=True)
+class OrderRequest:
+    symbol: str | None = None
+    side: Literal["buy", "sell"] | None = None
     qty: float | None = None
     notional: float | None = None
     order_type: str = "market"
@@ -41,15 +72,18 @@ class OrderRequest:
     asset_class: Literal["stock", "option"] = "stock"
     requested_live: bool = False
     strategy_name: str = "manual"
+    legs: list[OrderLeg] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            "symbol": self.symbol,
-            "side": self.side,
             "type": self.order_type,
             "time_in_force": self.time_in_force,
         }
+        if self.symbol is not None:
+            payload["symbol"] = self.symbol
+        if self.side is not None:
+            payload["side"] = self.side
         if self.qty is not None:
             payload["qty"] = self.qty
         if self.notional is not None:
@@ -60,6 +94,8 @@ class OrderRequest:
             payload["stop_price"] = self.stop_price
         if self.client_order_id is not None:
             payload["client_order_id"] = self.client_order_id
+        if self.legs:
+            payload["legs"] = [leg.to_payload() for leg in self.legs]
         payload.update(self.extra)
         return payload
 
@@ -159,7 +195,7 @@ class AlpacaBrokerAdapter:
         )
         url = f"{base_url}{path}"
         prepared_url = self._prepare_url(method, url, params=params, json_body=json_body)
-        requested_at = datetime.now(timezone.utc).isoformat()
+        requested_at = datetime.now(UTC).isoformat()
         safe_request = {
             "method": method,
             "url": url,
@@ -263,6 +299,15 @@ class AlpacaBrokerAdapter:
             raise LiveTradingRefusedError("Live order routing is refused in this repository.")
         self.settings.assert_paper_only_runtime()
 
+    @staticmethod
+    def _validate_order_request(order: OrderRequest) -> None:
+        position_intent = str(order.extra.get("position_intent") or "").strip()
+        if order.asset_class == "option" and not order.legs and position_intent == "sell_to_open":
+            raise ValueError(
+                "Naked option sell_to_open orders are blocked for this runner. "
+                "Use an approved multi-leg order flow if short option exposure is intentional."
+            )
+
     def build_order_request(
         self,
         *,
@@ -306,6 +351,49 @@ class AlpacaBrokerAdapter:
             extra=extra or {},
         )
 
+    def build_multileg_order_request(
+        self,
+        *,
+        strategy_name: str,
+        qty: int,
+        legs: list[OrderLeg],
+        order_type: str = "limit",
+        time_in_force: str = "day",
+        limit_price: float | None = None,
+        client_order_id: str | None = None,
+        client_order_key: str | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> OrderRequest:
+        if not legs:
+            raise ValueError("Multi-leg orders require at least one leg.")
+        resolved_client_order_id = client_order_id
+        if resolved_client_order_id is None:
+            leg_key = "|".join(
+                f"{leg.symbol}:{leg.side}:{leg.ratio_qty}:{leg.position_intent or ''}"
+                for leg in legs
+            )
+            request_key = client_order_key or f"{leg_key}|{qty}|{limit_price}"
+            resolved_client_order_id = build_client_order_id(
+                strategy_name=strategy_name,
+                symbol=legs[0].symbol,
+                side="mleg",
+                request_key=request_key,
+            )
+        payload_extra = {"order_class": "mleg"}
+        if extra:
+            payload_extra.update(extra)
+        return OrderRequest(
+            qty=float(qty),
+            order_type=order_type,
+            time_in_force=time_in_force,
+            limit_price=limit_price,
+            client_order_id=resolved_client_order_id,
+            asset_class="option",
+            strategy_name=strategy_name,
+            legs=legs,
+            extra=payload_extra,
+        )
+
     def get_account(self) -> dict[str, Any]:
         payload = self._request_json("GET", "/v2/account", api="trading")
         return payload if isinstance(payload, dict) else {}
@@ -322,6 +410,61 @@ class AlpacaBrokerAdapter:
             params={"status": status, "limit": limit},
         )
         return payload if isinstance(payload, list) else []
+
+    def get_account_activities(
+        self,
+        *,
+        activity_types: list[str] | None = None,
+        category: str | None = None,
+        after: datetime | str | None = None,
+        until: datetime | str | None = None,
+        direction: str = "desc",
+        page_size: int = 100,
+        max_pages: int = 10,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "direction": direction,
+            "page_size": page_size,
+        }
+        if activity_types:
+            params["activity_types"] = ",".join(str(value) for value in activity_types if str(value).strip())
+        if category:
+            params["category"] = category
+        if after is not None:
+            params["after"] = _isoformat(after)
+        if until is not None:
+            params["until"] = _isoformat(until)
+
+        aggregated: list[dict[str, Any]] = []
+        page_token: str | None = None
+        page_index = 0
+        while page_index < max_pages:
+            request_params = dict(params)
+            if page_token:
+                request_params["page_token"] = page_token
+            payload = self._request_json(
+                "GET",
+                "/v2/account/activities",
+                api="trading",
+                params=request_params,
+            )
+            if not isinstance(payload, list) or not payload:
+                break
+            aggregated.extend(item for item in payload if isinstance(item, dict))
+            if len(payload) < page_size:
+                break
+            next_token = str(payload[-1].get("id") or "").strip()
+            if not next_token or next_token == page_token:
+                break
+            page_token = next_token
+            page_index += 1
+        return aggregated
+
+    def get_order_by_client_order_id(self, client_order_id: str) -> dict[str, Any] | None:
+        for order in self.get_orders(status="all", limit=500):
+            if str(order.get("client_order_id") or "") == client_order_id:
+                return order
+        return None
 
     def get_order(self, order_id: str) -> dict[str, Any]:
         payload = self._request_json("GET", f"/v2/orders/{order_id}", api="trading")
@@ -619,6 +762,7 @@ class AlpacaBrokerAdapter:
         dry_run: bool | None = None,
     ) -> dict[str, Any]:
         self.ensure_paper_only(requested_live=order.requested_live)
+        self._validate_order_request(order)
         use_dry_run = self.dry_run if dry_run is None else dry_run
         payload = order.to_payload()
         if use_dry_run:
@@ -632,14 +776,41 @@ class AlpacaBrokerAdapter:
             explicitly_requested=explicitly_requested,
             requested_live=order.requested_live,
         )
-        response = self._request_json(
-            "POST",
-            "/v2/orders",
-            api="trading",
-            json_body=payload,
-            retryable=False,
-        )
+        try:
+            response = self._request_json(
+                "POST",
+                "/v2/orders",
+                api="trading",
+                json_body=payload,
+                retryable=False,
+            )
+        except requests.HTTPError as exc:
+            recovered = self._recover_duplicate_client_order_submission(order, exc)
+            if recovered is None:
+                raise
+            response = recovered
         return response if isinstance(response, dict) else {"status": "unknown"}
+
+    def _recover_duplicate_client_order_submission(
+        self,
+        order: OrderRequest,
+        exc: requests.HTTPError,
+    ) -> dict[str, Any] | None:
+        response = getattr(exc, "response", None)
+        if response is None or response.status_code != 422 or not order.client_order_id:
+            return None
+        if "client_order_id must be unique" not in str(getattr(response, "text", "")).lower():
+            return None
+        existing = self.get_order_by_client_order_id(order.client_order_id)
+        if existing is None:
+            return None
+        self.logger.warning(
+            "recovered duplicate client_order_id=%s existing_order_id=%s status=%s",
+            order.client_order_id,
+            existing.get("id"),
+            existing.get("status"),
+        )
+        return existing
 
     def cancel_order(
         self,

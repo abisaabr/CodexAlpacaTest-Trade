@@ -65,8 +65,8 @@ class ConservativeBreakoutStockStrategy(BaseStrategy):
             & frame["fast_sma"].gt(frame["slow_sma"])
             & frame["rsi"].between(self.min_rsi, self.max_rsi, inclusive="both")
             & frame["volume_ratio"].fillna(0).ge(self.min_volume_ratio)
-        )
-        prior_breakout = breakout.groupby(frame["symbol"]).shift(1).eq(True)
+        ).fillna(False)
+        prior_breakout = breakout.groupby(frame["symbol"]).shift(1).fillna(False).eq(True)
         frame["signal"] = (breakout & ~prior_breakout).astype(int)
         frame["stop_pct"] = self.stop_pct_value
         frame["target_pct"] = self.target_pct_value

@@ -1,0 +1,2474 @@
+version: 1
+description: GitHub-tracked beta promotion retest manifest. Contains the exact live
+  runner strategies plus the broader promoted family/ticker retest scope.
+generated_at_et: '2026-04-29T10:44:13.381264-04:00'
+source_live_manifest_path: C:\Users\rabisaab\OneDrive\CodexAlpaca\downloads_remaining_20260417\folders\codexalpaca_repo\config\strategy_manifests\multi_ticker_portfolio_live.yaml
+source_strategy_family_registry_path: C:\Users\rabisaab\.codex\worktrees\0434\CodexAlpacaTest-TradeMigratyion\docs\strategy_family_registry\strategy_family_registry.json
+source_strategy_family_registry_generated_at: '2026-04-22T15:54:34.769990-04:00'
+summary:
+  exact_live_strategy_count: 94
+  exact_live_underlying_count: 21
+  exact_live_by_underlying_symbol:
+    AMZN: 7
+    ARKK: 4
+    BAC: 2
+    CRM: 5
+    GDX: 5
+    GLD: 3
+    IWM: 6
+    JPM: 6
+    MSFT: 5
+    NKE: 2
+    NVDA: 2
+    ORCL: 4
+    PLTR: 4
+    QQQ: 10
+    SCHW: 2
+    SHOP: 5
+    SLV: 5
+    SPY: 5
+    TSLA: 4
+    XLE: 5
+    XOM: 3
+  exact_live_by_family:
+    Call backspread: 2
+    Iron butterfly: 2
+    Single-leg long call: 48
+    Single-leg long put: 42
+  promoted_family_count: 6
+  families_with_retest_gap_count: 5
+  retest_gap_underlying_count: 29
+  retest_gap_underlying_symbols:
+  - AAPL
+  - ABBV
+  - ADBE
+  - AMD
+  - AMZN
+  - ARM
+  - ASTS
+  - AVGO
+  - BA
+  - BABA
+  - CRWV
+  - DAL
+  - DIS
+  - GME
+  - GOOG
+  - HIMS
+  - IONQ
+  - IREN
+  - IWM
+  - OXY
+  - QCOM
+  - RKLB
+  - SMCI
+  - SNDK
+  - SPY
+  - TTD
+  - UPRO
+  - URA
+  - WULF
+exact_live_strategies:
+- name: qqq__reactive__call_backspread_next_expiry
+  underlying_symbol: QQQ
+  regime: bull
+  family: Call backspread
+  description: QQQ [reactive] Buy a next-expiry call backspread with one short +0.35
+    call against two long +0.55 calls.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: reactive
+  hard_exit_minute: 360
+  risk_fraction: 0.04
+  max_contracts: 4
+  profit_target_multiple: 0.6
+  stop_loss_multiple: 0.28
+  legs:
+  - option_type: call
+    side: short
+    target_delta: 0.35
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__reactive__trend_long_call_next_expiry_d70
+  underlying_symbol: QQQ
+  regime: bull
+  family: Single-leg long call
+  description: QQQ [reactive] Buy the next-expiry call closest to +0.70 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: reactive
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.7
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__reactive__call_backspread_next_expiry_aggressive
+  underlying_symbol: QQQ
+  regime: bull
+  family: Call backspread
+  description: QQQ [reactive] Buy an aggressive next-expiry call backspread with one
+    short +0.25 call against two long +0.50 calls.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: reactive
+  hard_exit_minute: 360
+  risk_fraction: 0.04
+  max_contracts: 4
+  profit_target_multiple: 0.65
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: short
+    target_delta: 0.25
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: call
+    side: long
+    target_delta: 0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: call
+    side: long
+    target_delta: 0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__reactive__trend_long_call_next_expiry
+  underlying_symbol: QQQ
+  regime: bull
+  family: Single-leg long call
+  description: QQQ [reactive] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: reactive
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__base__orb_long_put_next_expiry
+  underlying_symbol: QQQ
+  regime: bear
+  family: Single-leg long put
+  description: QQQ [base] Buy the next-expiry put closest to -0.50 delta on an opening
+    range breakdown.
+  dte_mode: next_expiry
+  signal_name: orb_put
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__slow__orb_long_put_next_expiry
+  underlying_symbol: QQQ
+  regime: bear
+  family: Single-leg long put
+  description: QQQ [slow] Buy the next-expiry put closest to -0.50 delta on an opening
+    range breakdown.
+  dte_mode: next_expiry
+  signal_name: orb_put
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__patient__orb_long_put_next_expiry
+  underlying_symbol: QQQ
+  regime: bear
+  family: Single-leg long put
+  description: QQQ [patient] Buy the next-expiry put closest to -0.50 delta on an
+    opening range breakdown.
+  dte_mode: next_expiry
+  signal_name: orb_put
+  timing_profile: patient
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__patient__orb_long_put_same_day_d60
+  underlying_symbol: QQQ
+  regime: bear
+  family: Single-leg long put
+  description: QQQ [patient] Buy the same-day put closest to -0.60 delta on an opening
+    range breakdown.
+  dte_mode: same_day
+  signal_name: orb_put
+  timing_profile: patient
+  hard_exit_minute: 375
+  risk_fraction: 0.05
+  max_contracts: 8
+  profit_target_multiple: 0.5
+  stop_loss_multiple: 0.35
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__reactive__iron_butterfly_same_day
+  underlying_symbol: QQQ
+  regime: choppy
+  family: Iron butterfly
+  description: QQQ [reactive] Sell a same-day iron butterfly targeting +/-0.50 shorts
+    and +/-0.20 wings.
+  dte_mode: same_day
+  signal_name: iron_condor
+  timing_profile: reactive
+  hard_exit_minute: 360
+  risk_fraction: 0.04
+  max_contracts: 5
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 1.1
+  legs:
+  - option_type: call
+    side: short
+    target_delta: 0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: call
+    side: long
+    target_delta: 0.2
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: put
+    side: short
+    target_delta: -0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: put
+    side: long
+    target_delta: -0.2
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__fast__iron_butterfly_same_day
+  underlying_symbol: QQQ
+  regime: choppy
+  family: Iron butterfly
+  description: QQQ [fast] Sell a same-day iron butterfly targeting +/-0.50 shorts
+    and +/-0.20 wings.
+  dte_mode: same_day
+  signal_name: iron_condor
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.04
+  max_contracts: 5
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 1.1
+  legs:
+  - option_type: call
+    side: short
+    target_delta: 0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: call
+    side: long
+    target_delta: 0.2
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: put
+    side: short
+    target_delta: -0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: put
+    side: long
+    target_delta: -0.2
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: spy__slow__trend_long_call_next_expiry_d70
+  underlying_symbol: SPY
+  regime: bull
+  family: Single-leg long call
+  description: SPY [slow] Buy the next-expiry call closest to +0.70 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.7
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: spy__base__trend_long_call_next_expiry_d70
+  underlying_symbol: SPY
+  regime: bull
+  family: Single-leg long call
+  description: SPY [base] Buy the next-expiry call closest to +0.70 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.7
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: spy__fast__orb_long_put_next_expiry
+  underlying_symbol: SPY
+  regime: bear
+  family: Single-leg long put
+  description: SPY [fast] Buy the next-expiry put closest to -0.50 delta on an opening
+    range breakdown.
+  dte_mode: next_expiry
+  signal_name: orb_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: spy__base__orb_long_put_next_expiry
+  underlying_symbol: SPY
+  regime: bear
+  family: Single-leg long put
+  description: SPY [base] Buy the next-expiry put closest to -0.50 delta on an opening
+    range breakdown.
+  dte_mode: next_expiry
+  signal_name: orb_put
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: spy__slow__trend_long_put_next_expiry_d70
+  underlying_symbol: SPY
+  regime: bear
+  family: Single-leg long put
+  description: SPY [slow] Buy the next-expiry put closest to -0.70 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.7
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: iwm__fast__trend_long_call_next_expiry_d70
+  underlying_symbol: IWM
+  regime: bull
+  family: Single-leg long call
+  description: IWM [fast] Buy the next-expiry call closest to +0.70 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.7
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: iwm__fast__trend_long_call_next_expiry
+  underlying_symbol: IWM
+  regime: bull
+  family: Single-leg long call
+  description: IWM [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: iwm__slow__trend_long_call_next_expiry_d70
+  underlying_symbol: IWM
+  regime: bull
+  family: Single-leg long call
+  description: IWM [slow] Buy the next-expiry call closest to +0.70 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.7
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: iwm__base__orb_long_put_next_expiry
+  underlying_symbol: IWM
+  regime: bear
+  family: Single-leg long put
+  description: IWM [base] Buy the next-expiry put closest to -0.50 delta on an opening
+    range breakdown.
+  dte_mode: next_expiry
+  signal_name: orb_put
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: iwm__fast__orb_long_put_next_expiry
+  underlying_symbol: IWM
+  regime: bear
+  family: Single-leg long put
+  description: IWM [fast] Buy the next-expiry put closest to -0.50 delta on an opening
+    range breakdown.
+  dte_mode: next_expiry
+  signal_name: orb_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: iwm__fast__trend_long_put_next_expiry_d70
+  underlying_symbol: IWM
+  regime: bear
+  family: Single-leg long put
+  description: IWM [fast] Buy the next-expiry put closest to -0.70 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.7
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: nvda__fast__trend_long_call_next_expiry_d70
+  underlying_symbol: NVDA
+  regime: bull
+  family: Single-leg long call
+  description: NVDA [fast] Buy the next-expiry call closest to +0.70 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.7
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: nvda__base__trend_long_put_next_expiry
+  underlying_symbol: NVDA
+  regime: bear
+  family: Single-leg long put
+  description: NVDA [base] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: tsla__base__trend_long_call_next_expiry_d70
+  underlying_symbol: TSLA
+  regime: bull
+  family: Single-leg long call
+  description: TSLA [base] Buy the next-expiry call closest to +0.70 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.7
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: tsla__fast__trend_long_call_next_expiry_d70
+  underlying_symbol: TSLA
+  regime: bull
+  family: Single-leg long call
+  description: TSLA [fast] Buy the next-expiry call closest to +0.70 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.7
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: tsla__base__trend_long_call_next_expiry
+  underlying_symbol: TSLA
+  regime: bull
+  family: Single-leg long call
+  description: TSLA [base] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: tsla__fast__trend_long_put_next_expiry
+  underlying_symbol: TSLA
+  regime: bear
+  family: Single-leg long put
+  description: TSLA [fast] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: msft__fast__trend_long_call_next_expiry
+  underlying_symbol: MSFT
+  regime: bull
+  family: Single-leg long call
+  description: MSFT [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: msft__base__trend_long_call_next_expiry
+  underlying_symbol: MSFT
+  regime: bull
+  family: Single-leg long call
+  description: MSFT [base] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: msft__slow__trend_long_call_next_expiry
+  underlying_symbol: MSFT
+  regime: bull
+  family: Single-leg long call
+  description: MSFT [slow] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: msft__base__trend_long_put_next_expiry
+  underlying_symbol: MSFT
+  regime: bear
+  family: Single-leg long put
+  description: MSFT [base] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: msft__slow__trend_long_put_next_expiry
+  underlying_symbol: MSFT
+  regime: bear
+  family: Single-leg long put
+  description: MSFT [slow] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: bac__fast__trend_long_call_next_expiry
+  underlying_symbol: BAC
+  regime: bull
+  family: Single-leg long call
+  description: BAC [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: bac__fast__trend_long_put_next_expiry
+  underlying_symbol: BAC
+  regime: bear
+  family: Single-leg long put
+  description: BAC [fast] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: pltr__fast__trend_long_call_next_expiry
+  underlying_symbol: PLTR
+  regime: bull
+  family: Single-leg long call
+  description: PLTR [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: pltr__base__trend_long_call_next_expiry
+  underlying_symbol: PLTR
+  regime: bull
+  family: Single-leg long call
+  description: PLTR [base] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: pltr__fast__trend_long_put_next_expiry
+  underlying_symbol: PLTR
+  regime: bear
+  family: Single-leg long put
+  description: PLTR [fast] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: pltr__base__trend_long_put_next_expiry
+  underlying_symbol: PLTR
+  regime: bear
+  family: Single-leg long put
+  description: PLTR [base] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: gld__base__trend_long_call_next_expiry
+  underlying_symbol: GLD
+  regime: bull
+  family: Single-leg long call
+  description: GLD [base] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: gld__slow__trend_long_call_next_expiry
+  underlying_symbol: GLD
+  regime: bull
+  family: Single-leg long call
+  description: GLD [slow] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: gld__base__trend_long_put_next_expiry
+  underlying_symbol: GLD
+  regime: bear
+  family: Single-leg long put
+  description: GLD [base] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: arkk__fast__trend_long_call_next_expiry
+  underlying_symbol: ARKK
+  regime: bull
+  family: Single-leg long call
+  description: ARKK [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: arkk__slow__trend_long_call_next_expiry
+  underlying_symbol: ARKK
+  regime: bull
+  family: Single-leg long call
+  description: ARKK [slow] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: arkk__fast__orb_long_call_same_day
+  underlying_symbol: ARKK
+  regime: bull
+  family: Single-leg long call
+  description: ARKK [fast] Buy the same-day call closest to +0.50 delta on a confirmed
+    opening-range breakout.
+  dte_mode: same_day
+  signal_name: orb_call
+  timing_profile: fast
+  hard_exit_minute: 375
+  risk_fraction: 0.05
+  max_contracts: 8
+  profit_target_multiple: 0.5
+  stop_loss_multiple: 0.35
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: arkk__fast__trend_long_put_next_expiry
+  underlying_symbol: ARKK
+  regime: bear
+  family: Single-leg long put
+  description: ARKK [fast] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: xle__slow__orb_long_call_same_day
+  underlying_symbol: XLE
+  regime: bull
+  family: Single-leg long call
+  description: XLE [slow] Buy the same-day call closest to +0.50 delta on a confirmed
+    opening-range breakout.
+  dte_mode: same_day
+  signal_name: orb_call
+  timing_profile: slow
+  hard_exit_minute: 375
+  risk_fraction: 0.05
+  max_contracts: 8
+  profit_target_multiple: 0.5
+  stop_loss_multiple: 0.35
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: xle__base__orb_long_call_same_day
+  underlying_symbol: XLE
+  regime: bull
+  family: Single-leg long call
+  description: XLE [base] Buy the same-day call closest to +0.50 delta on a confirmed
+    opening-range breakout.
+  dte_mode: same_day
+  signal_name: orb_call
+  timing_profile: base
+  hard_exit_minute: 375
+  risk_fraction: 0.05
+  max_contracts: 8
+  profit_target_multiple: 0.5
+  stop_loss_multiple: 0.35
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: xle__base__trend_long_call_next_expiry
+  underlying_symbol: XLE
+  regime: bull
+  family: Single-leg long call
+  description: XLE [base] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: xle__fast__trend_long_put_next_expiry
+  underlying_symbol: XLE
+  regime: bear
+  family: Single-leg long put
+  description: XLE [fast] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: xle__base__orb_long_call_same_day__choppy
+  underlying_symbol: XLE
+  regime: choppy
+  family: Single-leg long call
+  description: XLE [base] Buy the same-day call closest to +0.50 delta on a confirmed
+    opening-range breakout. [choppy]
+  dte_mode: same_day
+  signal_name: orb_call
+  timing_profile: base
+  hard_exit_minute: 375
+  risk_fraction: 0.05
+  max_contracts: 8
+  profit_target_multiple: 0.5
+  stop_loss_multiple: 0.35
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: gdx__fast__trend_long_call_next_expiry
+  underlying_symbol: GDX
+  regime: bull
+  family: Single-leg long call
+  description: GDX [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: gdx__base__trend_long_call_next_expiry
+  underlying_symbol: GDX
+  regime: bull
+  family: Single-leg long call
+  description: GDX [base] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: gdx__slow__trend_long_put_next_expiry
+  underlying_symbol: GDX
+  regime: bear
+  family: Single-leg long put
+  description: GDX [slow] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: gdx__base__trend_long_put_next_expiry
+  underlying_symbol: GDX
+  regime: bear
+  family: Single-leg long put
+  description: GDX [base] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: gdx__fast__trend_long_put_next_expiry
+  underlying_symbol: GDX
+  regime: bear
+  family: Single-leg long put
+  description: GDX [fast] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: slv__base__trend_long_call_next_expiry
+  underlying_symbol: SLV
+  regime: bull
+  family: Single-leg long call
+  description: SLV [base] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: slv__fast__trend_long_call_next_expiry
+  underlying_symbol: SLV
+  regime: bull
+  family: Single-leg long call
+  description: SLV [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: slv__slow__trend_long_call_next_expiry
+  underlying_symbol: SLV
+  regime: bull
+  family: Single-leg long call
+  description: SLV [slow] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: slv__fast__trend_long_put_next_expiry
+  underlying_symbol: SLV
+  regime: bear
+  family: Single-leg long put
+  description: SLV [fast] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: slv__base__trend_long_put_next_expiry
+  underlying_symbol: SLV
+  regime: bear
+  family: Single-leg long put
+  description: SLV [base] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: amzn__slow__trend_long_call_next_expiry
+  underlying_symbol: AMZN
+  regime: bull
+  family: Single-leg long call
+  description: AMZN [slow] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: amzn__fast__trend_long_call_next_expiry
+  underlying_symbol: AMZN
+  regime: bull
+  family: Single-leg long call
+  description: AMZN [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: amzn__base__trend_long_call_next_expiry
+  underlying_symbol: AMZN
+  regime: bull
+  family: Single-leg long call
+  description: AMZN [base] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: amzn__slow__trend_long_put_next_expiry
+  underlying_symbol: AMZN
+  regime: bear
+  family: Single-leg long put
+  description: AMZN [slow] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: amzn__base__trend_long_put_next_expiry
+  underlying_symbol: AMZN
+  regime: bear
+  family: Single-leg long put
+  description: AMZN [base] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: amzn__fast__trend_long_put_next_expiry
+  underlying_symbol: AMZN
+  regime: bear
+  family: Single-leg long put
+  description: AMZN [fast] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: amzn__slow__orb_long_put_same_day
+  underlying_symbol: AMZN
+  regime: choppy
+  family: Single-leg long put
+  description: AMZN [slow] Buy the same-day put closest to -0.50 delta on a confirmed
+    opening-range breakdown. [choppy]
+  dte_mode: same_day
+  signal_name: orb_put
+  timing_profile: slow
+  hard_exit_minute: 375
+  risk_fraction: 0.05
+  max_contracts: 8
+  profit_target_multiple: 0.5
+  stop_loss_multiple: 0.35
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: jpm__base__trend_long_call_next_expiry
+  underlying_symbol: JPM
+  regime: bull
+  family: Single-leg long call
+  description: JPM [base] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: jpm__slow__trend_long_call_next_expiry
+  underlying_symbol: JPM
+  regime: bull
+  family: Single-leg long call
+  description: JPM [slow] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: jpm__fast__trend_long_call_next_expiry
+  underlying_symbol: JPM
+  regime: bull
+  family: Single-leg long call
+  description: JPM [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: jpm__fast__trend_long_put_next_expiry
+  underlying_symbol: JPM
+  regime: bear
+  family: Single-leg long put
+  description: JPM [fast] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: jpm__base__trend_long_put_next_expiry
+  underlying_symbol: JPM
+  regime: bear
+  family: Single-leg long put
+  description: JPM [base] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: jpm__slow__trend_long_put_next_expiry
+  underlying_symbol: JPM
+  regime: bear
+  family: Single-leg long put
+  description: JPM [slow] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: xom__slow__trend_long_call_next_expiry
+  underlying_symbol: XOM
+  regime: bull
+  family: Single-leg long call
+  description: XOM [slow] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: xom__base__trend_long_call_next_expiry
+  underlying_symbol: XOM
+  regime: bull
+  family: Single-leg long call
+  description: XOM [base] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: xom__fast__trend_long_call_next_expiry
+  underlying_symbol: XOM
+  regime: bull
+  family: Single-leg long call
+  description: XOM [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: orcl__slow__trend_long_call_next_expiry
+  underlying_symbol: ORCL
+  regime: bull
+  family: Single-leg long call
+  description: ORCL [slow] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: orcl__fast__trend_long_call_next_expiry
+  underlying_symbol: ORCL
+  regime: bull
+  family: Single-leg long call
+  description: ORCL [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: orcl__slow__trend_long_put_next_expiry
+  underlying_symbol: ORCL
+  regime: bear
+  family: Single-leg long put
+  description: ORCL [slow] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: orcl__fast__trend_long_put_next_expiry
+  underlying_symbol: ORCL
+  regime: bear
+  family: Single-leg long put
+  description: ORCL [fast] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: shop__slow__trend_long_call_next_expiry
+  underlying_symbol: SHOP
+  regime: bull
+  family: Single-leg long call
+  description: SHOP [slow] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: shop__fast__trend_long_call_next_expiry
+  underlying_symbol: SHOP
+  regime: bull
+  family: Single-leg long call
+  description: SHOP [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: shop__base__trend_long_call_next_expiry
+  underlying_symbol: SHOP
+  regime: bull
+  family: Single-leg long call
+  description: SHOP [base] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: shop__fast__trend_long_put_next_expiry
+  underlying_symbol: SHOP
+  regime: bear
+  family: Single-leg long put
+  description: SHOP [fast] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: shop__slow__trend_long_put_next_expiry
+  underlying_symbol: SHOP
+  regime: bear
+  family: Single-leg long put
+  description: SHOP [slow] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: crm__fast__trend_long_call_next_expiry
+  underlying_symbol: CRM
+  regime: bull
+  family: Single-leg long call
+  description: CRM [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: crm__fast__trend_long_put_next_expiry
+  underlying_symbol: CRM
+  regime: bear
+  family: Single-leg long put
+  description: CRM [fast] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: crm__slow__trend_long_put_next_expiry
+  underlying_symbol: CRM
+  regime: bear
+  family: Single-leg long put
+  description: CRM [slow] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: slow
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: crm__base__trend_long_put_next_expiry
+  underlying_symbol: CRM
+  regime: bear
+  family: Single-leg long put
+  description: CRM [base] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: crm__base__orb_long_put_same_day
+  underlying_symbol: CRM
+  regime: choppy
+  family: Single-leg long put
+  description: CRM [base] Buy the same-day put closest to -0.50 delta on a confirmed
+    opening-range breakdown. [choppy]
+  dte_mode: same_day
+  signal_name: orb_put
+  timing_profile: base
+  hard_exit_minute: 375
+  risk_fraction: 0.05
+  max_contracts: 8
+  profit_target_multiple: 0.5
+  stop_loss_multiple: 0.35
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: schw__fast__trend_long_call_next_expiry
+  underlying_symbol: SCHW
+  regime: bull
+  family: Single-leg long call
+  description: SCHW [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: schw__base__orb_long_put_same_day
+  underlying_symbol: SCHW
+  regime: choppy
+  family: Single-leg long put
+  description: SCHW [base] Buy the same-day put closest to -0.50 delta on a confirmed
+    opening-range breakdown. [choppy]
+  dte_mode: same_day
+  signal_name: orb_put
+  timing_profile: base
+  hard_exit_minute: 375
+  risk_fraction: 0.05
+  max_contracts: 8
+  profit_target_multiple: 0.5
+  stop_loss_multiple: 0.35
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.5
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: nke__fast__trend_long_call_next_expiry
+  underlying_symbol: NKE
+  regime: bull
+  family: Single-leg long call
+  description: NKE [fast] Buy the next-expiry call closest to +0.60 delta on upside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: fast
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: nke__base__trend_long_put_next_expiry
+  underlying_symbol: NKE
+  regime: bear
+  family: Single-leg long put
+  description: NKE [base] Buy the next-expiry put closest to -0.60 delta on downside
+    trend continuation.
+  dte_mode: next_expiry
+  signal_name: trend_put
+  timing_profile: base
+  hard_exit_minute: 360
+  risk_fraction: 0.05
+  max_contracts: 6
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.6
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+beta_retest_families:
+- family: Call backspread
+  priority: live_benchmark
+  steward_action: benchmark_against_current_live_book
+  structure_bucket: backspread
+  directional_bias: bull_convexity
+  strategy_sets:
+  - family_expansion
+  base_strategies:
+  - call_backspread_next_expiry
+  - call_backspread_next_expiry_aggressive
+  selected_base_strategy_count: 2
+  promoted_base_strategy_count: 2
+  exact_promoted_base_strategies_available: true
+  selected_tickers:
+  - QQQ
+  promoted_tickers:
+  - QQQ
+  live_manifest_tickers:
+  - QQQ
+  retest_gap_tickers: []
+  live_manifest_strategy_count: 2
+  note: Call backspread is already live and should be benchmarked for replacement
+    or diversification, not re-added blindly.
+  retest_scope_note: Retest the exact live-manifest strategies for live tickers and
+    reconstruct cleanroom variants for retest_gap_tickers from the listed base_strategies.
+- family: Iron butterfly
+  priority: live_benchmark
+  steward_action: benchmark_against_current_live_book
+  structure_bucket: neutral_premium
+  directional_bias: choppy
+  strategy_sets:
+  - down_choppy_exhaustive
+  - down_choppy_only
+  - family_expansion
+  - opening_window_premium_defense
+  - standard
+  base_strategies:
+  - iron_butterfly_same_day
+  - iron_butterfly_same_day_d40_15
+  - iron_butterfly_same_day_d60_25
+  selected_base_strategy_count: 2
+  promoted_base_strategy_count: 2
+  exact_promoted_base_strategies_available: false
+  selected_tickers:
+  - AAPL
+  - AMZN
+  - IWM
+  - QQQ
+  - SPY
+  promoted_tickers:
+  - AAPL
+  - AMZN
+  - IWM
+  - QQQ
+  - SPY
+  live_manifest_tickers:
+  - QQQ
+  retest_gap_tickers:
+  - AAPL
+  - AMZN
+  - IWM
+  - SPY
+  live_manifest_strategy_count: 2
+  note: Iron butterfly is already live and should be benchmarked for replacement or
+    diversification, not re-added blindly.
+  retest_scope_note: The registry snapshot preserved promoted counts but not the exact
+    promoted base-strategy subset. Use the listed base_strategies as the governed
+    retest superset for the promoted_tickers scope.
+- family: Long straddle
+  priority: promotion_follow_up
+  steward_action: review_for_live_manifest_addition
+  structure_bucket: long_vol
+  directional_bias: choppy_or_expansion
+  strategy_sets:
+  - down_choppy_exhaustive
+  - down_choppy_only
+  - family_expansion
+  - standard
+  base_strategies:
+  - long_straddle_next_expiry
+  - long_straddle_next_expiry_d45
+  - long_straddle_same_day
+  - long_straddle_same_day_d45
+  - long_straddle_same_day_d55
+  selected_base_strategy_count: 4
+  promoted_base_strategy_count: 2
+  exact_promoted_base_strategies_available: false
+  selected_tickers:
+  - AAPL
+  - ADBE
+  - AMD
+  - AMZN
+  - ARM
+  - ORCL
+  - QCOM
+  promoted_tickers:
+  - AAPL
+  live_manifest_tickers: []
+  retest_gap_tickers:
+  - AAPL
+  live_manifest_strategy_count: 0
+  note: Long straddle is cataloged and should be monitored as more out-of-sample evidence
+    lands.
+  retest_scope_note: The registry snapshot preserved promoted counts but not the exact
+    promoted base-strategy subset. Use the listed base_strategies as the governed
+    retest superset for the promoted_tickers scope.
+- family: Put backspread
+  priority: promotion_follow_up
+  steward_action: review_for_live_manifest_addition
+  structure_bucket: backspread
+  directional_bias: bear_convexity
+  strategy_sets:
+  - down_choppy_exhaustive
+  - down_choppy_only
+  - family_expansion
+  base_strategies:
+  - put_backspread_next_expiry
+  - put_backspread_next_expiry_aggressive
+  - put_backspread_next_expiry_d20_45
+  - put_backspread_next_expiry_d30_55
+  - put_backspread_next_expiry_d40_65
+  selected_base_strategy_count: 4
+  promoted_base_strategy_count: 4
+  exact_promoted_base_strategies_available: false
+  selected_tickers:
+  - AAPL
+  - ABBV
+  - ADBE
+  - AMD
+  - AMZN
+  - ARM
+  promoted_tickers:
+  - AAPL
+  - ABBV
+  - ADBE
+  - AMD
+  - AMZN
+  - ARM
+  live_manifest_tickers: []
+  retest_gap_tickers:
+  - AAPL
+  - ABBV
+  - ADBE
+  - AMD
+  - AMZN
+  - ARM
+  live_manifest_strategy_count: 0
+  note: Put backspread is cataloged and should be monitored as more out-of-sample
+    evidence lands.
+  retest_scope_note: The registry snapshot preserved promoted counts but not the exact
+    promoted base-strategy subset. Use the listed base_strategies as the governed
+    retest superset for the promoted_tickers scope.
+- family: Single-leg long call
+  priority: live_benchmark
+  steward_action: benchmark_against_current_live_book
+  structure_bucket: single_leg
+  directional_bias: bull
+  strategy_sets:
+  - family_expansion
+  - standard
+  base_strategies:
+  - orb_long_call_next_expiry
+  - orb_long_call_same_day
+  - orb_long_call_same_day_d40
+  - orb_long_call_same_day_d60
+  - trend_long_call_next_expiry
+  - trend_long_call_next_expiry_d50
+  - trend_long_call_next_expiry_d70
+  selected_base_strategy_count: 5
+  promoted_base_strategy_count: 4
+  exact_promoted_base_strategies_available: false
+  selected_tickers:
+  - AMZN
+  - ARKK
+  - ARM
+  - ASTS
+  - BAC
+  - CRM
+  - CRWV
+  - DAL
+  - DIS
+  - GDX
+  - GLD
+  - GME
+  - GOOG
+  - HIMS
+  - IONQ
+  - IREN
+  - IWM
+  - JPM
+  - MSFT
+  - NKE
+  - NVDA
+  - ORCL
+  - OXY
+  - PLTR
+  - QCOM
+  - QQQ
+  - RKLB
+  - SCHW
+  - SHOP
+  - SLV
+  - SMCI
+  - SNDK
+  - SPY
+  - TSLA
+  - TTD
+  - UPRO
+  - URA
+  - XLE
+  - XOM
+  promoted_tickers:
+  - AMZN
+  - ARKK
+  - ARM
+  - ASTS
+  - BAC
+  - CRM
+  - CRWV
+  - DAL
+  - DIS
+  - GDX
+  - GLD
+  - GME
+  - GOOG
+  - HIMS
+  - IONQ
+  - IREN
+  - IWM
+  - JPM
+  - MSFT
+  - NKE
+  - NVDA
+  - ORCL
+  - PLTR
+  - QCOM
+  - QQQ
+  - RKLB
+  - SCHW
+  - SHOP
+  - SLV
+  - SMCI
+  - SNDK
+  - SPY
+  - TSLA
+  - TTD
+  - UPRO
+  - URA
+  - XLE
+  - XOM
+  live_manifest_tickers:
+  - AMZN
+  - ARKK
+  - BAC
+  - CRM
+  - GDX
+  - GLD
+  - IWM
+  - JPM
+  - MSFT
+  - NKE
+  - NVDA
+  - ORCL
+  - PLTR
+  - QQQ
+  - SCHW
+  - SHOP
+  - SLV
+  - SPY
+  - TSLA
+  - XLE
+  - XOM
+  retest_gap_tickers:
+  - ARM
+  - ASTS
+  - CRWV
+  - DAL
+  - DIS
+  - GME
+  - GOOG
+  - HIMS
+  - IONQ
+  - IREN
+  - QCOM
+  - RKLB
+  - SMCI
+  - SNDK
+  - TTD
+  - UPRO
+  - URA
+  live_manifest_strategy_count: 48
+  note: Single-leg long call is already live and should be benchmarked for replacement
+    or diversification, not re-added blindly.
+  retest_scope_note: The registry snapshot preserved promoted counts but not the exact
+    promoted base-strategy subset. Use the listed base_strategies as the governed
+    retest superset for the promoted_tickers scope.
+- family: Single-leg long put
+  priority: live_benchmark
+  steward_action: benchmark_against_current_live_book
+  structure_bucket: single_leg
+  directional_bias: bear
+  strategy_sets:
+  - down_choppy_exhaustive
+  - down_choppy_only
+  - family_expansion
+  - standard
+  base_strategies:
+  - orb_long_put_next_expiry
+  - orb_long_put_next_expiry_d40
+  - orb_long_put_next_expiry_d60
+  - orb_long_put_same_day
+  - orb_long_put_same_day_d35
+  - orb_long_put_same_day_d40
+  - orb_long_put_same_day_d45
+  - orb_long_put_same_day_d55
+  - orb_long_put_same_day_d60
+  - orb_long_put_same_day_d65
+  - trend_long_put_next_expiry
+  - trend_long_put_next_expiry_d45
+  - trend_long_put_next_expiry_d50
+  - trend_long_put_next_expiry_d55
+  - trend_long_put_next_expiry_d65
+  - trend_long_put_next_expiry_d70
+  - trend_long_put_next_expiry_d75
+  selected_base_strategy_count: 13
+  promoted_base_strategy_count: 11
+  exact_promoted_base_strategies_available: false
+  selected_tickers:
+  - AAPL
+  - ABBV
+  - ADBE
+  - AMD
+  - AMZN
+  - ARKK
+  - ARM
+  - ASTS
+  - AVGO
+  - BA
+  - BABA
+  - BAC
+  - CRM
+  - CRWV
+  - DAL
+  - DIS
+  - GDX
+  - GLD
+  - GME
+  - GOOG
+  - HIMS
+  - IONQ
+  - IREN
+  - IWM
+  - JPM
+  - MSFT
+  - NKE
+  - NVDA
+  - ORCL
+  - OXY
+  - PLTR
+  - QCOM
+  - QQQ
+  - RKLB
+  - SCHW
+  - SHOP
+  - SLV
+  - SMCI
+  - SNDK
+  - SPY
+  - TSLA
+  - TTD
+  - UPRO
+  - URA
+  - WULF
+  - XLE
+  - XOM
+  promoted_tickers:
+  - AAPL
+  - ABBV
+  - ADBE
+  - AMD
+  - AMZN
+  - ARKK
+  - ARM
+  - ASTS
+  - AVGO
+  - BA
+  - BABA
+  - BAC
+  - CRM
+  - CRWV
+  - DAL
+  - DIS
+  - GDX
+  - GLD
+  - GME
+  - GOOG
+  - HIMS
+  - IONQ
+  - IREN
+  - IWM
+  - JPM
+  - MSFT
+  - NKE
+  - NVDA
+  - ORCL
+  - OXY
+  - PLTR
+  - QQQ
+  - RKLB
+  - SCHW
+  - SHOP
+  - SLV
+  - SMCI
+  - SPY
+  - TSLA
+  - TTD
+  - UPRO
+  - URA
+  - WULF
+  - XLE
+  live_manifest_tickers:
+  - AMZN
+  - ARKK
+  - BAC
+  - CRM
+  - GDX
+  - GLD
+  - IWM
+  - JPM
+  - MSFT
+  - NKE
+  - NVDA
+  - ORCL
+  - PLTR
+  - QQQ
+  - SCHW
+  - SHOP
+  - SLV
+  - SPY
+  - TSLA
+  - XLE
+  retest_gap_tickers:
+  - AAPL
+  - ABBV
+  - ADBE
+  - AMD
+  - ARM
+  - ASTS
+  - AVGO
+  - BA
+  - BABA
+  - CRWV
+  - DAL
+  - DIS
+  - GME
+  - GOOG
+  - HIMS
+  - IONQ
+  - IREN
+  - OXY
+  - RKLB
+  - SMCI
+  - TTD
+  - UPRO
+  - URA
+  - WULF
+  live_manifest_strategy_count: 42
+  note: Single-leg long put is already live and should be benchmarked for replacement
+    or diversification, not re-added blindly.
+  retest_scope_note: The registry snapshot preserved promoted counts but not the exact
+    promoted base-strategy subset. Use the listed base_strategies as the governed
+    retest superset for the promoted_tickers scope.

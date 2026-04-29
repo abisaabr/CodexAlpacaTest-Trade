@@ -1,5 +1,14 @@
 # Machine Setup
 
+## Recommended For Any Machine
+
+If your goal is simple portability across Windows, macOS, and Linux, prefer the Docker path in [PORTABLE_DEPLOYMENT.md](PORTABLE_DEPLOYMENT.md):
+
+- Windows:
+  `powershell -ExecutionPolicy Bypass -File .\scripts\setup_new_machine.ps1 -Mode docker`
+- macOS / Linux:
+  `bash ./scripts/setup_new_machine.sh --mode docker`
+
 ## Windows
 
 1. Install Python 3.11 or newer.
@@ -28,3 +37,5 @@
 
 - This repo is public. Never paste secrets into code, docs, issues, or workflows.
 - All runtime outputs stay in local `data/` and `reports/`, which are ignored by git.
+- The QQQ paper portfolio expects a repo-local virtualenv at `.venv\Scripts\python.exe` on Windows. `scripts\bootstrap_windows.ps1` creates it.
+- To enable the daily automated QQQ session on Windows, install the scheduled task with `powershell -ExecutionPolicy Bypass -File .\scripts\install_qqq_paper_task.ps1 -TaskName "QQQ Portfolio Paper Trader" -StartTime "09:20"`.

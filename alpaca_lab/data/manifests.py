@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +32,7 @@ class BuildManifestStore:
         if not self.path.exists():
             self._write(
                 {
-                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "created_at": datetime.now(UTC).isoformat(),
                     "request": request_payload,
                     "datasets": {},
                     "summaries": {},
@@ -68,7 +68,7 @@ class BuildManifestStore:
             "status": "running",
             "attempts": attempts,
             "metadata": metadata,
-            "started_at": datetime.now(timezone.utc).isoformat(),
+            "started_at": datetime.now(UTC).isoformat(),
             "error": None,
         }
         self._write(payload)
@@ -89,7 +89,7 @@ class BuildManifestStore:
         record.update(
             {
                 "status": "completed",
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
                 "row_count": row_count,
                 "artifacts": {name: str(path) for name, path in artifacts.items()},
                 "quality": quality or [],
@@ -106,7 +106,7 @@ class BuildManifestStore:
         record.update(
             {
                 "status": "failed",
-                "failed_at": datetime.now(timezone.utc).isoformat(),
+                "failed_at": datetime.now(UTC).isoformat(),
                 "error": error,
             }
         )

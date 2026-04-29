@@ -1,0 +1,94 @@
+services:
+  portfolio-trader:
+    build:
+      context: .
+    image: codex-alpaca-test-trade:latest
+    init: true
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+    command:
+      - python
+      - scripts/run_multi_ticker_portable_daemon.py
+      - --portfolio-config
+      - config/multi_ticker_paper_portfolio.yaml
+      - --submit-paper-orders
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - scripts/run_multi_ticker_watchdog.py
+        - --portfolio-config
+        - config/multi_ticker_paper_portfolio.yaml
+        - --stale-seconds
+        - "900"
+        - --check-only
+      interval: 15m
+      timeout: 30s
+      retries: 2
+      start_period: 20m
+
+  portfolio-watchdog:
+    build:
+      context: .
+    image: codex-alpaca-test-trade:latest
+    init: true
+    depends_on:
+      portfolio-trader:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-America/New_York}
+      WATCHDOG_INTERVAL_SECONDS: ${WATCHDOG_INTERVAL_SECONDS:-3600}
+      WATCHDOG_STALE_SECONDS: ${WATCHDOG_STALE_SECONDS:-900}
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+    command:
+      - python
+      - scripts/run_multi_ticker_watchdog.py
+      - --portfolio-config
+      - config/multi_ticker_paper_portfolio.yaml
+      - --stale-seconds
+      - ${WATCHDOG_STALE_SECONDS:-900}
+      - --interval-seconds
+      - ${WATCHDOG_INTERVAL_SECONDS:-3600}
+      - --loop
+      - --notify
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+  portfolio-close-guard:
+    build:
+      context: .
+    image: codex-alpaca-test-trade:latest
+    init: true
+    depends_on:
+      portfolio-trader:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-America/New_York}
+      EOD_CLOSE_GUARD_IDLE_SECONDS: ${EOD_CLOSE_GUARD_IDLE_SECONDS:-60}
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+    command:
+      - python
+      - scripts/run_multi_ticker_eod_close_guard.py
+      - --portfolio-config
+      - config/multi_ticker_paper_portfolio.yaml
+      - --submit-paper-orders
+      - --loop-daily
+      - --idle-seconds
+      - ${EOD_CLOSE_GUARD_IDLE_SECONDS:-60}
+    restart: unless-stopped
+    stop_grace_period: 30s

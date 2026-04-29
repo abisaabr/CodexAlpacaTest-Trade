@@ -31,6 +31,22 @@ tests/               config, safeguards, ingestion, backtest, selector, reportin
 
 ## New Machine Setup
 
+### Easiest Portable Path
+
+If the goal is to run the paper trader on any machine with the fewest moving parts, use Docker:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_new_machine.ps1 -Mode docker
+docker compose up -d portfolio-trader portfolio-watchdog
+```
+
+```bash
+bash ./scripts/setup_new_machine.sh --mode docker
+docker compose up -d portfolio-trader portfolio-watchdog
+```
+
+This keeps local secrets in `.env`, persists state in `data/` and `reports/`, and avoids machine-specific scheduler differences. See [docs/PORTABLE_DEPLOYMENT.md](docs/PORTABLE_DEPLOYMENT.md) for the full portable deployment flow.
+
 ### Windows
 
 ```powershell
@@ -115,6 +131,38 @@ Paper options dry-run:
 python scripts/run_paper_options.py --board-path config\sample_options_board.json
 ```
 
+QQQ portfolio paper trader, one diagnostic cycle:
+
+```powershell
+python scripts/run_qqq_portfolio_paper_trader.py --portfolio-config config\qqq_paper_portfolio.yaml --run-once
+```
+
+QQQ portfolio paper trader, full live paper session:
+
+```powershell
+python scripts/run_qqq_portfolio_paper_trader.py --portfolio-config config\qqq_paper_portfolio.yaml --submit-paper-orders
+```
+
+Install the weekday scheduler on Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install_qqq_paper_task.ps1 -TaskName "QQQ Portfolio Paper Trader" -StartTime "09:20"
+```
+
+Multi-ticker paper trader, one diagnostic cycle:
+
+```powershell
+python scripts/run_multi_ticker_portfolio_paper_trader.py --portfolio-config config\multi_ticker_paper_portfolio.yaml --run-once
+```
+
+Portable daemon, cross-machine runtime:
+
+```powershell
+python scripts/run_multi_ticker_portable_daemon.py --portfolio-config config\multi_ticker_paper_portfolio.yaml --submit-paper-orders
+```
+
+See `docs/MULTI_TICKER_PAPER_PORTFOLIO.md` for the current promoted multi-ticker book, scheduler install, morning self-check behavior, and notifications. See `docs/PORTABLE_DEPLOYMENT.md` for the Docker-based “run it on any machine” path.
+
 ## What Is Not Committed
 
 - `.env` and any secrets
@@ -128,4 +176,7 @@ python scripts/run_paper_options.py --board-path config\sample_options_board.jso
 - The sample promotion boards are placeholders. Replace their symbols before any intentional paper submission.
 - Paper submission, when explicitly enabled, still routes only to Alpaca paper trading. Live trading is intentionally impossible in this repo.
 - Historical options quotes are not assumed to exist in Alpaca's current public data surface for this repo.
+- The QQQ portfolio runner uses a local virtual sleeve starting at `$25,000` inside the larger paper account, persists daily state under `reports/qqq_portfolio/`, and keeps every strategy flat by the end of the session.
+- The multi-ticker portfolio runner uses the current promoted shared-account book defined in `config/multi_ticker_paper_portfolio.yaml`, persists state under `reports/multi_ticker_portfolio/`, and performs a morning self-check before trading.
+- Multi-leg spreads and condors route through Alpaca `mleg` paper orders. TLS trust is hardened with `truststore` so scheduled runs also work on Windows machines that rely on the OS certificate store.
 - The repo is intentionally structured so code from older local repos can be migrated into `alpaca_lab/` with minimal reshuffling later.

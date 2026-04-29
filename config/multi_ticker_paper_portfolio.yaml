@@ -1,0 +1,45 @@
+name: multi_ticker_portfolio_paper_trader
+description: Shared-account intraday options paper portfolio using the checked-in
+  live strategy manifest.
+risk_controls_path: risk_controls/multi_ticker_portfolio.yaml
+strategy_manifest_path: strategy_manifests/multi_ticker_portfolio_live.yaml
+ownership:
+  enabled: true
+  lease_path: reports/multi_ticker_portfolio/state/ownership_lease.json
+  lease_ttl_seconds: 180
+execution:
+  underlying_symbols:
+  - QQQ
+  - SPY
+  - IWM
+  - NVDA
+  - TSLA
+  - MSFT
+  - BAC
+  - PLTR
+  - GLD
+  - ARKK
+  - XLE
+  - GDX
+  - SLV
+  - AMZN
+  - JPM
+  - XOM
+  - ORCL
+  - SHOP
+  - CRM
+  - SCHW
+  - NKE
+  option_feed: indicative
+  stock_feed: iex
+  submit_paper_orders: true
+  poll_interval_seconds: 20
+  order_status_poll_seconds: 10
+  order_fill_timeout_seconds: 45
+  contract_refresh_minutes: 15
+  max_dte_days: 7
+  state_root: reports/multi_ticker_portfolio/state
+  run_root: reports/multi_ticker_portfolio/runs
+  task_name: Multi-Ticker Portfolio Paper Trader
+  startup_lead_minutes: 10
+  midday_report_minute: 180
