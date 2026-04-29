@@ -149,10 +149,12 @@ def _load_option_inputs(
     return contracts, option_bars, option_trades
 
 
-def _load_stock_bars(path: Path) -> pd.DataFrame:
+def _load_stock_bars(path: Path, symbol_filter: set[str] | None = None) -> pd.DataFrame:
     bars = _load_parquet_tree(path)
     if bars.empty:
         return bars
+    if "symbol" not in bars.columns and symbol_filter and len(symbol_filter) == 1:
+        bars["symbol"] = next(iter(symbol_filter))
     bars["timestamp"] = _coerce_timestamp(bars["timestamp"])
     return bars
 
@@ -687,7 +689,7 @@ def build_option_aware_backtest(
 ) -> dict[str, Any]:
     queue = _load_json(queue_json)
     variants = _variant_map(variants_jsonl)
-    stock_bars = _load_stock_bars(stock_bars_path)
+    stock_bars = _load_stock_bars(stock_bars_path, symbol_filter=symbol_filter)
     contracts, option_bars, option_trades = _load_option_inputs(
         queue=queue,
         selected_contracts_root=selected_contracts_root,
