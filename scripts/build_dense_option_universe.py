@@ -37,6 +37,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-dte", type=int, default=7)
     parser.add_argument("--strike-steps", type=int, default=5)
     parser.add_argument(
+        "--expiration-selection",
+        choices=["all_in_dte_window", "next_after_trade_date"],
+        default="all_in_dte_window",
+        help=(
+            "Select all expirations in the DTE window, or only the nearest listed "
+            "expiration after each trade date."
+        ),
+    )
+    parser.add_argument(
         "--reference-bar",
         choices=["first", "middle", "last"],
         default="first",
@@ -157,6 +166,7 @@ def select_dense_option_universe(
     min_dte: int = 0,
     max_dte: int = 7,
     strike_steps: int = 5,
+    expiration_selection: str = "all_in_dte_window",
     reference_bar: str = "first",
 ) -> pd.DataFrame:
     if min_dte < 0:
@@ -165,6 +175,8 @@ def select_dense_option_universe(
         raise ValueError("max_dte must be greater than or equal to min_dte.")
     if strike_steps < 0:
         raise ValueError("strike_steps must be non-negative.")
+    if expiration_selection not in {"all_in_dte_window", "next_after_trade_date"}:
+        raise ValueError("Unsupported expiration_selection.")
 
     inventory = _normalize_contracts(contracts)
     references = _stock_reference_rows(
@@ -190,6 +202,17 @@ def select_dense_option_universe(
         symbol_contracts = symbol_contracts[
             (symbol_contracts["dte"] >= min_dte) & (symbol_contracts["dte"] <= max_dte)
         ]
+        if expiration_selection == "next_after_trade_date" and not symbol_contracts.empty:
+            future_expirations = symbol_contracts.loc[
+                symbol_contracts["expiration_date"] > trade_date,
+                "expiration_date",
+            ]
+            if future_expirations.empty:
+                continue
+            next_expiration = future_expirations.min()
+            symbol_contracts = symbol_contracts[
+                symbol_contracts["expiration_date"] == next_expiration
+            ]
         if symbol_contracts.empty:
             continue
         for (expiration_date, option_type), group in symbol_contracts.groupby(
@@ -213,6 +236,7 @@ def select_dense_option_universe(
                 f" min_dte={min_dte};"
                 f" max_dte={max_dte};"
                 f" strike_steps={strike_steps};"
+                f" expiration_selection={expiration_selection};"
                 " research_only=true"
             )
             rows.append(
@@ -381,6 +405,7 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         f"- Min DTE: `{packet['min_dte']}`",
         f"- Max DTE: `{packet['max_dte']}`",
         f"- Strike steps: `{packet['strike_steps']}`",
+        f"- Expiration selection: `{packet['expiration_selection']}`",
         f"- Reference bar: `{packet['reference_bar']}`",
         f"- Coverage status: `{packet['coverage_diagnostics']['status']}`",
         "",
@@ -417,6 +442,7 @@ def build_dense_option_universe_packet(
     min_dte: int,
     max_dte: int,
     strike_steps: int,
+    expiration_selection: str,
     reference_bar: str,
 ) -> dict[str, Any]:
     stock_bars = _load_stock_bars(stock_bars_path)
@@ -432,6 +458,7 @@ def build_dense_option_universe_packet(
         min_dte=min_dte,
         max_dte=max_dte,
         strike_steps=strike_steps,
+        expiration_selection=expiration_selection,
         reference_bar=reference_bar,
     )
     partition_count = _write_partitioned(selected_root, selected)
@@ -473,6 +500,7 @@ def build_dense_option_universe_packet(
         "min_dte": min_dte,
         "max_dte": max_dte,
         "strike_steps": strike_steps,
+        "expiration_selection": expiration_selection,
         "reference_bar": reference_bar,
         "selected_contract_count": int(len(selected)),
         "selected_contract_partitions": partition_count,
@@ -504,6 +532,7 @@ def main() -> None:
         min_dte=args.min_dte,
         max_dte=args.max_dte,
         strike_steps=args.strike_steps,
+        expiration_selection=args.expiration_selection,
         reference_bar=args.reference_bar,
     )
     print(json.dumps(packet, indent=2, default=str))

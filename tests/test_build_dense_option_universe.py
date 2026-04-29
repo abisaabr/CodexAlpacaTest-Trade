@@ -51,6 +51,7 @@ def test_dense_option_universe_selects_daily_atm_neighbor_contracts() -> None:
         min_dte=0,
         max_dte=7,
         strike_steps=1,
+        expiration_selection="all_in_dte_window",
         reference_bar="first",
     )
 
@@ -59,6 +60,62 @@ def test_dense_option_universe_selects_daily_atm_neighbor_contracts() -> None:
     assert set(selected["relative_strike_step"].astype(int)) == {-1, 0, 1}
     assert selected["reference_price"].unique().tolist() == [99.4]
     assert all("reference=dense_daily_first_bar" in value for value in selected["selection_reason"])
+
+
+def test_dense_option_universe_can_select_next_expiration_after_trade_date() -> None:
+    contracts = pd.DataFrame(
+        {
+            "symbol": [
+                "QQQ260403C00600000",
+                "QQQ260403P00600000",
+                "QQQ260406C00590000",
+                "QQQ260406C00600000",
+                "QQQ260406C00610000",
+                "QQQ260406P00590000",
+                "QQQ260406P00600000",
+                "QQQ260406P00610000",
+                "QQQ260407C00600000",
+                "QQQ260407P00600000",
+            ],
+            "underlying_symbol": ["QQQ"] * 10,
+            "expiration_date": ["2026-04-03"] * 2 + ["2026-04-06"] * 6 + ["2026-04-07"] * 2,
+            "option_type": ["call", "put", "call", "call", "call", "put", "put", "put", "call", "put"],
+            "strike_price": [600.0, 600.0, 590.0, 600.0, 610.0, 590.0, 600.0, 610.0, 600.0, 600.0],
+            "inventory_status": ["inactive"] * 10,
+        }
+    )
+    stock_bars = pd.DataFrame(
+        {
+            "symbol": ["QQQ"],
+            "timestamp": pd.to_datetime(["2026-04-03T13:30:00Z"], utc=True),
+            "open": [600.1],
+            "high": [600.2],
+            "low": [600.0],
+            "close": [600.1],
+            "volume": [1000],
+        }
+    )
+
+    selected = select_dense_option_universe(
+        contracts=contracts,
+        stock_bars=stock_bars,
+        symbol_filter={"QQQ"},
+        start_date=date(2026, 4, 3),
+        end_date=date(2026, 4, 3),
+        min_dte=1,
+        max_dte=7,
+        strike_steps=1,
+        expiration_selection="next_after_trade_date",
+        reference_bar="first",
+    )
+
+    assert len(selected) == 6
+    assert set(pd.to_datetime(selected["expiration_date"]).dt.date) == {date(2026, 4, 6)}
+    assert set(selected["relative_strike_step"].astype(int)) == {-1, 0, 1}
+    assert all(
+        "expiration_selection=next_after_trade_date" in value
+        for value in selected["selection_reason"]
+    )
 
 
 def test_dense_option_universe_packet_writes_partitioned_selected_contracts(tmp_path: Path) -> None:
@@ -97,6 +154,7 @@ def test_dense_option_universe_packet_writes_partitioned_selected_contracts(tmp_
         min_dte=0,
         max_dte=7,
         strike_steps=0,
+        expiration_selection="all_in_dte_window",
         reference_bar="first",
     )
 
@@ -153,6 +211,7 @@ def test_dense_option_universe_packet_flags_reference_date_coverage_gap(
         min_dte=0,
         max_dte=7,
         strike_steps=0,
+        expiration_selection="all_in_dte_window",
         reference_bar="first",
     )
 
