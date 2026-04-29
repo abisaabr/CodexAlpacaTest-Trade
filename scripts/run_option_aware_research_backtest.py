@@ -151,10 +151,10 @@ def _load_option_inputs(
 
 def _load_stock_bars(path: Path, symbol_filter: set[str] | None = None) -> pd.DataFrame:
     bars = _load_parquet_tree(path)
-    if bars.empty:
-        return bars
     if "symbol" not in bars.columns and symbol_filter and len(symbol_filter) == 1:
         bars["symbol"] = next(iter(symbol_filter))
+    if bars.empty:
+        return bars
     bars["timestamp"] = _coerce_timestamp(bars["timestamp"])
     return bars
 
@@ -401,7 +401,13 @@ def _stock_trades_for_variant(
     allocation_fraction: float,
 ) -> pd.DataFrame:
     symbol = str(variant.get("symbol") or "").upper()
-    symbol_bars = stock_bars[stock_bars["symbol"].astype(str).str.upper() == symbol].copy()
+    if stock_bars.empty:
+        return pd.DataFrame()
+    if "symbol" in stock_bars.columns:
+        symbol_bars = stock_bars[stock_bars["symbol"].astype(str).str.upper() == symbol].copy()
+    else:
+        symbol_bars = stock_bars.copy()
+        symbol_bars["symbol"] = symbol
     if symbol_bars.empty:
         return pd.DataFrame()
     result = run_backtest(
