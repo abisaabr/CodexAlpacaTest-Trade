@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import subprocess
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -49,16 +50,39 @@ def load_gcs_packets(root: str) -> list[dict[str, Any]]:
     try:
         from google.cloud import storage
     except ImportError as exc:  # pragma: no cover - exercised only when dependency missing.
-        raise SystemExit("google-cloud-storage is required for --gcs-control-root") from exc
+        return load_gcs_packets_with_cli(root)
 
     bucket_name, prefix = split_gcs_uri(root.rstrip("/") + "/")
-    client = storage.Client()
-    bucket = client.bucket(bucket_name)
+    try:
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        packets = []
+        for blob in client.list_blobs(bucket, prefix=prefix):
+            if not blob.name.endswith("/fill_ladder_status.json"):
+                continue
+            packets.append(json.loads(blob.download_as_text(encoding="utf-8")))
+        return packets
+    except Exception:
+        return load_gcs_packets_with_cli(root)
+
+
+def load_gcs_packets_with_cli(root: str) -> list[dict[str, Any]]:
+    list_uri = root.rstrip("/") + "/**/fill_ladder_status.json"
+    listed = subprocess.run(
+        ["gcloud", "storage", "ls", list_uri],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
     packets = []
-    for blob in client.list_blobs(bucket, prefix=prefix):
-        if not blob.name.endswith("/fill_ladder_status.json"):
-            continue
-        packets.append(json.loads(blob.download_as_text(encoding="utf-8")))
+    for uri in [line.strip() for line in listed.stdout.splitlines() if line.strip()]:
+        packet = subprocess.run(
+            ["gcloud", "storage", "cat", uri],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        packets.append(json.loads(packet.stdout))
     return packets
 
 
@@ -66,10 +90,14 @@ def upload_file(path: Path, destination: str) -> None:
     try:
         from google.cloud import storage
     except ImportError as exc:  # pragma: no cover - exercised only when dependency missing.
-        raise SystemExit("google-cloud-storage is required for --upload-gcs") from exc
+        subprocess.run(["gcloud", "storage", "cp", str(path), destination], check=True)
+        return
 
     bucket_name, blob_name = split_gcs_uri(destination)
-    storage.Client().bucket(bucket_name).blob(blob_name).upload_from_filename(str(path))
+    try:
+        storage.Client().bucket(bucket_name).blob(blob_name).upload_from_filename(str(path))
+    except Exception:
+        subprocess.run(["gcloud", "storage", "cp", str(path), destination], check=True)
 
 
 def packet_row(packet: dict[str, Any], fill_gate: float) -> dict[str, Any]:
