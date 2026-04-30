@@ -19,6 +19,7 @@ def test_qqq_option_native_templates_cover_target_regimes_and_multileg() -> None
     assert any(template.family == "iron_butterfly" and template.is_multi_leg for template in templates)
     assert any(template.family == "call_backspread" for template in templates)
     assert any(template.family == "put_backspread" for template in templates)
+    assert any(template.family == "call_credit_spread" for template in templates)
     assert all(template.leg_count >= 1 for template in templates)
 
 
@@ -35,7 +36,7 @@ def test_build_template_registry_writes_research_only_packet(tmp_path: Path) -> 
     assert packet["broker_facing"] is False
     assert packet["live_manifest_effect"] == "none"
     assert packet["risk_policy_effect"] == "none"
-    assert packet["regime_counts"] == {"bear": 3, "bull": 3, "choppy": 4}
-    assert packet["template_count"] == 10
+    assert packet["regime_counts"] == {"bear": 5, "bull": 3, "choppy": 4}
+    assert packet["template_count"] == 12
     assert (tmp_path / "out" / "qqq_option_template_registry.json").exists()
     assert (tmp_path / "out" / "qqq_option_template_registry.md").exists()

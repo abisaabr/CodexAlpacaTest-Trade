@@ -142,6 +142,7 @@ def summarize_candidates(
             or _first_text(first, "source_strategy_id"),
             "source_strategy_id": str(first.get("source_strategy_id")),
             "family": _first_text(first, "family"),
+            "intended_regime": _first_text(first, "intended_regime"),
             "parameter_set": _first_text(first, "parameter_set"),
             "directional_option_type": str(first.get("directional_option_type")),
             "profile_count": int(group["profile"].nunique()),
@@ -185,7 +186,7 @@ def summarize_candidates(
                 else int(_float(group["missing_option_price_count"].max()))
             ),
             "fill_coverage_unit": _first_text(first, "fill_coverage_unit")
-            or "filled_single_contract_option_orders_per_source_stock_trade",
+            or "filled_multi_leg_strategy_orders_per_intended_signal",
             "min_option_trade_count": min_trades,
             "max_missing_option_price_count": int(
                 _float(group["missing_option_price_count"].max())
@@ -337,6 +338,7 @@ def build_capital_plan(
                 "strategy_id": row.get("strategy_id"),
                 "source_strategy_id": row["source_strategy_id"],
                 "family": row.get("family"),
+                "intended_regime": row.get("intended_regime"),
                 "parameter_set": row.get("parameter_set"),
                 "directional_option_type": row["directional_option_type"],
                 "research_only_weight": weight,
@@ -409,6 +411,7 @@ def _data_repair_candidates(
         "strategy_id",
         "source_strategy_id",
         "family",
+        "intended_regime",
         "parameter_set",
         "directional_option_type",
         "min_net_pnl",
@@ -454,6 +457,7 @@ def _strategy_redesign_candidates(
         "strategy_id",
         "source_strategy_id",
         "family",
+        "intended_regime",
         "parameter_set",
         "directional_option_type",
         "min_net_pnl",
@@ -506,6 +510,7 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
             f"`{row['symbol']}` `{row['candidate_variant_id']}` weight "
             f"`{row['research_only_weight']:.2%}` dollars `${row['research_only_dollars']}` "
             f"family `{row.get('family') or 'unknown'}` "
+            f"regime `{row.get('intended_regime') or 'unknown'}` "
             f"min_net `{row['min_net_pnl']}` min_test `{row['min_test_net_pnl']}` "
             f"strategy_fill `{row['min_fill_coverage']}` "
             f"data_foundation `{row.get('min_data_foundation_coverage')}` "
@@ -518,6 +523,7 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
             "- "
             f"`{row['symbol']}` `{row['candidate_variant_id']}` score `{row['research_score']}` "
             f"family `{row.get('family') or 'unknown'}` "
+            f"regime `{row.get('intended_regime') or 'unknown'}` "
             f"min_net `{row['min_net_pnl']}` min_test `{row['min_test_net_pnl']}` "
             f"strategy_fill `{row['min_fill_coverage']}-{row['max_fill_coverage']}` "
             f"data_foundation `{row.get('min_data_foundation_coverage')}` "
@@ -584,6 +590,14 @@ def build_research_portfolio_report(
     eligible_count = sum(
         1 for row in candidate_rows if row["promotion_status"] == "eligible_for_promotion_review"
     )
+    fill_coverage_unit = next(
+        (
+            row.get("fill_coverage_unit")
+            for row in candidate_rows
+            if row.get("fill_coverage_unit")
+        ),
+        "filled_multi_leg_strategy_orders_per_intended_signal",
+    )
     packet = {
         "generated_at": datetime.now(UTC).isoformat(),
         "status": "research_portfolio_report_complete",
@@ -596,7 +610,7 @@ def build_research_portfolio_report(
         "eligible_for_promotion_review_count": eligible_count,
         "fill_coverage_gate": fill_coverage_gate,
         "strategy_fill_coverage_gate": fill_coverage_gate,
-        "fill_coverage_unit": "filled_single_contract_option_orders_per_source_stock_trade",
+        "fill_coverage_unit": fill_coverage_unit,
         "fill_coverage_semantics": (
             "fill_coverage is an alias for strategy_fill_coverage. "
             "min_data_foundation_coverage separates selected-contract availability from "

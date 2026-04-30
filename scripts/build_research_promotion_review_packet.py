@@ -46,6 +46,7 @@ def _candidate_summary(row: dict[str, Any]) -> dict[str, Any]:
         "strategy_id": row.get("strategy_id") or row.get("source_strategy_id"),
         "source_strategy_id": row.get("source_strategy_id"),
         "family": row.get("family"),
+        "intended_regime": row.get("intended_regime"),
         "parameter_set": row.get("parameter_set"),
         "directional_option_type": row.get("directional_option_type"),
         "research_score": row.get("research_score"),
@@ -172,6 +173,7 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
             "- "
             f"`{row['symbol']}` `{row['candidate_variant_id']}` "
             f"family `{row.get('family') or 'unknown'}` "
+            f"regime `{row.get('intended_regime') or 'unknown'}` "
             f"min_net `{row['min_net_pnl']}` min_test `{row['min_test_net_pnl']}` "
             f"strategy_fill `{row['min_fill_coverage']}` "
             f"data_foundation `{row.get('min_data_foundation_coverage')}` "
@@ -201,6 +203,7 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
             "- "
             f"`{row['symbol']}` `{row['candidate_variant_id']}` "
             f"family `{row.get('family') or 'unknown'}` "
+            f"regime `{row.get('intended_regime') or 'unknown'}` "
             f"score `{row['research_score']}` blockers `{blockers}`"
         )
     lines.extend(["", "## Strategy Redesign Targets", ""])
@@ -212,6 +215,7 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
             "- "
             f"`{row['symbol']}` `{row['candidate_variant_id']}` "
             f"family `{row.get('family') or 'unknown'}` "
+            f"regime `{row.get('intended_regime') or 'unknown'}` "
             f"strategy_fill `{row.get('min_strategy_fill_coverage')}` "
             f"data_foundation `{row.get('min_data_foundation_coverage')}` "
             f"blockers `{blockers}`"

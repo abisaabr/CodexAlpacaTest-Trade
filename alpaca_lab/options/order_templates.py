@@ -171,6 +171,26 @@ def qqq_option_native_templates() -> tuple[OptionStrategyTemplate, ...]:
             ),
         ),
         OptionStrategyTemplate(
+            template_id="qqq_bear_call_credit_spread",
+            family="call_credit_spread",
+            intended_regime="bear",
+            thesis="Defined-risk premium collection when bearish regimes cap upside follow-through.",
+            legs=(
+                OptionLegTemplate("short_call", "call", "sell", relative_strike_step=2),
+                OptionLegTemplate("long_call_wing", "call", "buy", relative_strike_step=4),
+            ),
+        ),
+        OptionStrategyTemplate(
+            template_id="qqq_bear_atm_call_credit_spread",
+            family="call_credit_spread",
+            intended_regime="bear",
+            thesis="Higher-credit defined-risk bearish call spread for stronger downside regimes.",
+            legs=(
+                OptionLegTemplate("short_call", "call", "sell", relative_strike_step=0),
+                OptionLegTemplate("long_call_wing", "call", "buy", relative_strike_step=2),
+            ),
+        ),
+        OptionStrategyTemplate(
             template_id="qqq_choppy_iron_butterfly",
             family="iron_butterfly",
             intended_regime="choppy",
