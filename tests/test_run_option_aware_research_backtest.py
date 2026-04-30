@@ -46,6 +46,7 @@ def test_option_aware_backtest_prices_stock_signal_windows_against_options(
                     "candidate_variant_id": variant_id,
                     "symbol": "GLD",
                     "directional_option_type": "put",
+                    "family": "Single-leg long put",
                     "source_strategy_id": "gld__base__trend_long_put_next_expiry",
                 }
             ],
@@ -59,6 +60,7 @@ def test_option_aware_backtest_prices_stock_signal_windows_against_options(
                 "queue_id": "RQ-002-single-leg-repair-and-loss-filter",
                 "symbol": "GLD",
                 "variant_type": "single_leg_repair",
+                "family": "Single-leg long put",
                 "source_strategy_id": "gld__base__trend_long_put_next_expiry",
                 "parameters": {
                     "hard_exit_minute": 5,
@@ -165,6 +167,10 @@ def test_option_aware_backtest_prices_stock_signal_windows_against_options(
     assert payload["candidate_count"] == 1
     assert payload["option_trade_count"] > 0
     summary = payload["candidate_summaries"][0]
+    assert summary["strategy_id"] == "gld__base__trend_long_put_next_expiry"
+    assert summary["family"] == "Single-leg long put"
+    assert '"hard_exit_minute":5' in summary["parameter_set"]
+    assert payload["trade_rows"][0]["family"] == "Single-leg long put"
     assert summary["fill_coverage"] == 1.0
     assert summary["fill_failure_reason"] == "fill_gate_clear"
     assert summary["net_pnl"] > 0

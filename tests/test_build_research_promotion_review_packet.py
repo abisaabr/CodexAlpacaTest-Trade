@@ -37,7 +37,10 @@ def test_promotion_review_packet_marks_eligible_research_candidates(
                 {
                     "candidate_variant_id": "amd_a",
                     "symbol": "AMD",
+                    "strategy_id": "amd_strategy",
                     "source_strategy_id": "amd_strategy",
+                    "family": "Single-leg long call",
+                    "parameter_set": '{"hard_exit_minute":210}',
                     "directional_option_type": "call",
                     "research_only_weight": 0.25,
                     "research_only_dollars": 6_250.0,
@@ -75,7 +78,10 @@ def test_promotion_review_packet_marks_eligible_research_candidates(
                 {
                     "candidate_variant_id": "amd_a",
                     "symbol": "AMD",
+                    "strategy_id": "amd_strategy",
                     "source_strategy_id": "amd_strategy",
+                    "family": "Single-leg long call",
+                    "parameter_set": '{"hard_exit_minute":210}',
                     "directional_option_type": "call",
                     "research_score": 10_000.0,
                     "min_net_pnl": 1_000.0,
@@ -133,6 +139,8 @@ def test_promotion_review_packet_marks_eligible_research_candidates(
     assert packet["risk_policy_effect"] == "none"
     assert packet["promotion_scope"] == "research_governed_validation_review_only"
     assert len(packet["review_candidates"]) == 2
+    assert packet["review_candidates"][0]["family"] == "Single-leg long call"
+    assert packet["review_candidates"][0]["parameter_set"] == '{"hard_exit_minute":210}'
     assert packet["blocker_counts"] == {"fill_coverage_below_0.90": 1}
     assert packet["symbol_exposure"][0]["symbol"] == "AMD"
     assert packet["symbol_exposure"][0]["strategy_count"] == 2
@@ -156,6 +164,10 @@ def test_promotion_review_packet_blocks_when_no_candidate_is_eligible(
                 {
                     "candidate_variant_id": "amd_blocked",
                     "symbol": "AMD",
+                    "strategy_id": "amd_strategy",
+                    "source_strategy_id": "amd_strategy",
+                    "family": "Single-leg long call",
+                    "parameter_set": '{"hard_exit_minute":210}',
                     "research_score": 1_000.0,
                     "min_net_pnl": 500.0,
                     "min_test_net_pnl": 50.0,
@@ -183,3 +195,4 @@ def test_promotion_review_packet_blocks_when_no_candidate_is_eligible(
         "option_trades_below_20": 1,
     }
     assert packet["data_repair_targets"][0]["candidate_variant_id"] == "amd_blocked"
+    assert packet["data_repair_targets"][0]["family"] == "Single-leg long call"

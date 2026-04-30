@@ -19,7 +19,10 @@ def test_research_portfolio_report_blocks_low_fill_but_builds_interim_plan(tmp_p
         {
             "candidate_variant_id": "amd_candidate",
             "symbol": "AMD",
+            "strategy_id": "amd_strategy",
             "source_strategy_id": "amd_strategy",
+            "family": "Single-leg long call",
+            "parameter_set": '{"hard_exit_minute":210}',
             "directional_option_type": "call",
             "net_pnl": 5000.0,
             "test_net_pnl": 300.0,
@@ -36,7 +39,10 @@ def test_research_portfolio_report_blocks_low_fill_but_builds_interim_plan(tmp_p
         {
             "candidate_variant_id": "orcl_candidate",
             "symbol": "ORCL",
+            "strategy_id": "orcl_strategy",
             "source_strategy_id": "orcl_strategy",
+            "family": "Single-leg long call",
+            "parameter_set": '{"hard_exit_minute":300}',
             "directional_option_type": "call",
             "net_pnl": 3000.0,
             "test_net_pnl": 100.0,
@@ -88,6 +94,18 @@ def test_research_portfolio_report_blocks_low_fill_but_builds_interim_plan(tmp_p
     assert packet["eligible_for_promotion_review_count"] == 0
     assert len(packet["capital_plan"]) == 2
     assert {row["symbol"] for row in packet["capital_plan"]} == {"AMD", "ORCL"}
+    amd_candidate = next(
+        row for row in packet["top_candidates"] if row["candidate_variant_id"] == "amd_candidate"
+    )
+    assert amd_candidate["family"] == "Single-leg long call"
+    assert amd_candidate["parameter_set"]
+    assert packet["capital_plan"][0]["strategy_id"]
+    amd_repair = next(
+        row
+        for row in packet["data_repair_priority_candidates"]
+        if row["candidate_variant_id"] == "amd_candidate"
+    )
+    assert amd_repair["family"] == "Single-leg long call"
     assert sum(row["research_only_weight"] for row in packet["capital_plan"]) == 1.0
     assert packet["capital_plan"][0]["research_only_dollars"] == 12_500.0
     assert "fill_coverage_below_0.90" in packet["top_candidates"][0]["promotion_blockers"]

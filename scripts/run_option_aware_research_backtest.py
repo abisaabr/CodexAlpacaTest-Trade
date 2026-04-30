@@ -167,6 +167,35 @@ def _variant_map(variants_jsonl: Path) -> dict[str, dict[str, Any]]:
     }
 
 
+def _metadata_json(value: Any) -> str:
+    if value in (None, ""):
+        return ""
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
+def _candidate_identity(queue_item: dict[str, Any], variant: dict[str, Any]) -> dict[str, str]:
+    parameters = (
+        queue_item.get("parameter_set")
+        or variant.get("parameter_set")
+        or variant.get("parameters")
+        or {}
+    )
+    strategy_id = (
+        queue_item.get("strategy_id")
+        or variant.get("strategy_id")
+        or queue_item.get("source_strategy_id")
+        or variant.get("source_strategy_id")
+        or ""
+    )
+    return {
+        "strategy_id": str(strategy_id),
+        "family": str(queue_item.get("family") or variant.get("family") or ""),
+        "parameter_set": _metadata_json(parameters),
+    }
+
+
 def _build_option_research_index(
     *,
     contracts: pd.DataFrame,
@@ -469,7 +498,7 @@ def _summarize_trade_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
 def _recommendation(summary: dict[str, Any]) -> str:
     source_trades = int(summary["source_stock_trade_count"])
     filled = int(summary["option_trade_count"])
-    fill_coverage = float(summary["fill_coverage"])
+    fill_coverage = float(summary.get("strategy_fill_coverage") or summary["fill_coverage"])
     train_pnl = float(summary["train_net_pnl"])
     test_pnl = float(summary["test_net_pnl"])
     net_pnl = float(summary["net_pnl"])
@@ -492,7 +521,9 @@ def _fill_failure_reason(summary: dict[str, Any]) -> str:
     filled = int(summary.get("option_trade_count") or 0)
     if source_trades == 0:
         return "no_source_stock_trades"
-    fill_coverage = float(summary.get("fill_coverage") or 0.0)
+    fill_coverage = float(
+        summary.get("strategy_fill_coverage") or summary.get("fill_coverage") or 0.0
+    )
     if fill_coverage >= 0.90:
         return "fill_gate_clear"
     missing = {
@@ -542,6 +573,7 @@ def _option_rows_for_candidate(
     }
     option_type = str(queue_item.get("directional_option_type") or "").lower()
     symbol = str(queue_item.get("symbol") or "").upper()
+    identity = _candidate_identity(queue_item, variant)
     for trade in source_trades.to_dict("records"):
         entry_time = pd.Timestamp(trade["entry_time"])
         exit_time = pd.Timestamp(trade["exit_time"])
@@ -609,6 +641,7 @@ def _option_rows_for_candidate(
         option_rows.append(
             {
                 "candidate_variant_id": queue_item.get("candidate_variant_id"),
+                **identity,
                 "source_strategy_id": queue_item.get("source_strategy_id"),
                 "symbol": symbol,
                 "option_type": option_type,
@@ -749,12 +782,31 @@ def build_option_aware_backtest(
             contract_selection_method=contract_selection_method,
         )
         missing_price_count = sum(int(value) for value in missing_counts.values())
+        selected_count = max(
+            source_trade_count - int(missing_counts.get("no_selected_contract", 0)),
+            0,
+        )
+        entry_fill_count = max(selected_count - int(missing_counts.get("no_entry_bar", 0)), 0)
+        filled_order_count = len(rows)
+        strategy_fill_coverage = (
+            round(filled_order_count / source_trade_count, 4) if source_trade_count else 0.0
+        )
+        data_foundation_coverage = (
+            round(selected_count / source_trade_count, 4) if source_trade_count else 0.0
+        )
+        entry_bar_coverage = (
+            round(entry_fill_count / selected_count, 4) if selected_count else 0.0
+        )
+        exit_bar_coverage = (
+            round(filled_order_count / entry_fill_count, 4) if entry_fill_count else 0.0
+        )
         all_trade_rows.extend(rows)
         economics = _summarize_trade_rows(rows)
         split = _split_summary(rows, test_date_count=test_date_count)
         summary = {
             "candidate_variant_id": variant_id,
             "symbol": queue_item.get("symbol"),
+            **_candidate_identity(queue_item, variant),
             "source_strategy_id": queue_item.get("source_strategy_id"),
             "directional_option_type": queue_item.get("directional_option_type"),
             "source_stock_trade_count": source_trade_count,
@@ -763,8 +815,20 @@ def build_option_aware_backtest(
             "missing_no_entry_bar": int(missing_counts.get("no_entry_bar", 0)),
             "missing_no_exit_bar": int(missing_counts.get("no_exit_bar", 0)),
             "missing_too_expensive": int(missing_counts.get("too_expensive", 0)),
-            "fill_coverage": (
-                round(len(rows) / source_trade_count, 4) if source_trade_count else 0.0
+            "intended_order_count": source_trade_count,
+            "filled_order_count": filled_order_count,
+            "skipped_order_count": missing_price_count,
+            "fill_coverage": strategy_fill_coverage,
+            "strategy_fill_coverage": strategy_fill_coverage,
+            "data_foundation_coverage": data_foundation_coverage,
+            "entry_bar_coverage": entry_bar_coverage,
+            "exit_bar_coverage": exit_bar_coverage,
+            "fill_coverage_numerator": filled_order_count,
+            "fill_coverage_denominator": source_trade_count,
+            "fill_coverage_unit": "filled_single_contract_option_orders_per_source_stock_trade",
+            "fill_coverage_semantics": (
+                "Strategy-level fill coverage, not raw option data coverage. "
+                "Current engine models one directional option contract per source stock trade."
             ),
             **economics,
             **split,
@@ -812,6 +876,12 @@ def build_option_aware_backtest(
         "test_date_count": int(test_date_count),
         "contract_selection_method": contract_selection_method,
         "option_lookup_mode": "indexed_by_contract_and_symbol",
+        "fill_coverage_unit": "filled_single_contract_option_orders_per_source_stock_trade",
+        "fill_coverage_semantics": (
+            "fill_coverage is an alias for strategy_fill_coverage. "
+            "data_foundation_coverage measures selected-contract availability for source trades; "
+            "entry_bar_coverage and exit_bar_coverage isolate timing/execution gaps."
+        ),
         "option_index_counts": {
             "contract_keys": len(option_index.contracts_by_key),
             "bar_symbols": len(option_index.bars_by_symbol),
@@ -870,6 +940,8 @@ def write_markdown(path: Path, payload: dict[str, Any]) -> None:
         f"- Broker facing: `{payload['broker_facing']}`",
         f"- Contract selection method: `{payload.get('contract_selection_method')}`",
         f"- Contract selection lookahead: `{payload.get('contract_selection_lookahead')}`",
+        f"- Fill coverage unit: `{payload.get('fill_coverage_unit')}`",
+        f"- Fill coverage semantics: {payload.get('fill_coverage_semantics')}",
         "",
         "## Recommendation Counts",
         "",
@@ -886,7 +958,8 @@ def write_markdown(path: Path, payload: dict[str, Any]) -> None:
             f"`{row.get('candidate_variant_id')}` "
             f"expectancy `{row.get('expectancy')}` "
             f"net_pnl `{row.get('net_pnl')}` "
-            f"fill `{row.get('fill_coverage')}` "
+            f"strategy_fill `{row.get('strategy_fill_coverage', row.get('fill_coverage'))}` "
+            f"data_foundation `{row.get('data_foundation_coverage')}` "
             f"recommendation `{row.get('recommendation')}`"
         )
     lines.extend(["", "## Next Step Contract", ""])

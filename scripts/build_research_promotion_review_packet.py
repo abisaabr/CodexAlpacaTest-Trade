@@ -43,13 +43,26 @@ def _candidate_summary(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "candidate_variant_id": row.get("candidate_variant_id"),
         "symbol": row.get("symbol"),
+        "strategy_id": row.get("strategy_id") or row.get("source_strategy_id"),
         "source_strategy_id": row.get("source_strategy_id"),
+        "family": row.get("family"),
+        "parameter_set": row.get("parameter_set"),
         "directional_option_type": row.get("directional_option_type"),
         "research_score": row.get("research_score"),
         "min_net_pnl": row.get("min_net_pnl"),
         "min_test_net_pnl": row.get("min_test_net_pnl"),
         "min_fill_coverage": row.get("min_fill_coverage"),
         "max_fill_coverage": row.get("max_fill_coverage"),
+        "min_strategy_fill_coverage": row.get(
+            "min_strategy_fill_coverage", row.get("min_fill_coverage")
+        ),
+        "max_strategy_fill_coverage": row.get(
+            "max_strategy_fill_coverage", row.get("max_fill_coverage")
+        ),
+        "min_data_foundation_coverage": row.get("min_data_foundation_coverage"),
+        "min_entry_bar_coverage": row.get("min_entry_bar_coverage"),
+        "min_exit_bar_coverage": row.get("min_exit_bar_coverage"),
+        "fill_coverage_unit": row.get("fill_coverage_unit"),
         "min_option_trade_count": row.get("min_option_trade_count"),
         "worst_drawdown": row.get("worst_drawdown"),
         "promotion_status": row.get("promotion_status"),
@@ -126,8 +139,9 @@ def _next_actions(packet: dict[str, Any]) -> list[str]:
             "Do not modify live manifests, strategy selection, or risk policy from this packet alone.",
         ]
     return [
-        "Repair the highest-scoring blocked candidates by filling option coverage gaps first.",
-        "Rerun option-aware stress replay after data repair.",
+        "Separate raw data repair from strategy/replay redesign before rerunning blocked candidates.",
+        "For strong data-foundation but low strategy-fill candidates, redesign entry timing, exit timing, and option structure rather than downloading more raw bars first.",
+        "Rerun option-aware stress replay after the targeted repair or redesign.",
         "Keep all candidates research-only until promotion-review gates pass.",
     ]
 
@@ -142,6 +156,8 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         f"- Broker facing: `{packet['broker_facing']}`",
         f"- Candidate count: `{packet['gate_summary']['candidate_count']}`",
         f"- Eligible count: `{packet['gate_summary']['eligible_for_promotion_review_count']}`",
+        f"- Fill coverage unit: `{packet['gate_summary'].get('fill_coverage_unit')}`",
+        f"- Fill coverage semantics: {packet['gate_summary'].get('fill_coverage_semantics')}",
         f"- Capital allocated weight: `{packet['gate_summary']['capital_plan_allocated_weight']}`",
         f"- Capital unallocated dollars: `${packet['gate_summary']['capital_plan_unallocated_dollars']}`",
         "",
@@ -155,8 +171,11 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         lines.append(
             "- "
             f"`{row['symbol']}` `{row['candidate_variant_id']}` "
+            f"family `{row.get('family') or 'unknown'}` "
             f"min_net `{row['min_net_pnl']}` min_test `{row['min_test_net_pnl']}` "
-            f"fill `{row['min_fill_coverage']}` blockers `{blockers}`"
+            f"strategy_fill `{row['min_fill_coverage']}` "
+            f"data_foundation `{row.get('min_data_foundation_coverage')}` "
+            f"blockers `{blockers}`"
         )
     lines.extend(["", "## Symbol Exposure", ""])
     if not packet["symbol_exposure"]:
@@ -181,7 +200,21 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         lines.append(
             "- "
             f"`{row['symbol']}` `{row['candidate_variant_id']}` "
+            f"family `{row.get('family') or 'unknown'}` "
             f"score `{row['research_score']}` blockers `{blockers}`"
+        )
+    lines.extend(["", "## Strategy Redesign Targets", ""])
+    if not packet.get("strategy_redesign_targets"):
+        lines.append("- No strategy redesign targets selected.")
+    for row in packet.get("strategy_redesign_targets", []):
+        blockers = ", ".join(row.get("promotion_blockers", [])) or "none"
+        lines.append(
+            "- "
+            f"`{row['symbol']}` `{row['candidate_variant_id']}` "
+            f"family `{row.get('family') or 'unknown'}` "
+            f"strategy_fill `{row.get('min_strategy_fill_coverage')}` "
+            f"data_foundation `{row.get('min_data_foundation_coverage')}` "
+            f"blockers `{blockers}`"
         )
     lines.extend(["", "## Next Actions", ""])
     for item in packet["next_actions"]:
@@ -201,6 +234,17 @@ def build_research_promotion_review_packet(
         item for item in source.get("top_candidates", []) if isinstance(item, dict)
     ]
     capital_plan = [item for item in source.get("capital_plan", []) if isinstance(item, dict)]
+    source_data_repair_targets = [
+        _candidate_summary(item)
+        for item in source.get("data_repair_priority_candidates", [])
+        if isinstance(item, dict)
+    ]
+    source_has_data_repair_targets = "data_repair_priority_candidates" in source
+    source_strategy_redesign_targets = [
+        _candidate_summary(item)
+        for item in source.get("strategy_redesign_candidates", [])
+        if isinstance(item, dict)
+    ]
     review_candidates = [
         _candidate_summary(row)
         for row in top_candidates
@@ -227,6 +271,11 @@ def build_research_promotion_review_packet(
             "candidate_count": int(source.get("candidate_count") or len(top_candidates)),
             "eligible_for_promotion_review_count": eligible_count,
             "fill_coverage_gate": source.get("fill_coverage_gate"),
+            "strategy_fill_coverage_gate": source.get(
+                "strategy_fill_coverage_gate", source.get("fill_coverage_gate")
+            ),
+            "fill_coverage_unit": source.get("fill_coverage_unit"),
+            "fill_coverage_semantics": source.get("fill_coverage_semantics"),
             "min_option_trades": source.get("min_option_trades"),
             "min_test_net_pnl": source.get("min_test_net_pnl"),
             "capital_plan_allocated_weight": source.get("capital_plan_allocated_weight"),
@@ -245,10 +294,12 @@ def build_research_promotion_review_packet(
         "capital_plan": capital_plan,
         "symbol_exposure": _symbol_exposure(capital_plan),
         "blocker_counts": _blocker_counts(top_candidates),
-        "data_repair_targets": _repair_targets(
-            top_candidates,
-            max_targets=max_review_candidates,
+        "data_repair_targets": (
+            source_data_repair_targets
+            if source_has_data_repair_targets
+            else _repair_targets(top_candidates, max_targets=max_review_candidates)
         ),
+        "strategy_redesign_targets": source_strategy_redesign_targets,
         "hard_rules": [
             "This packet is not broker-facing.",
             "This packet does not authorize live manifest changes.",

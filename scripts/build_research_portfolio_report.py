@@ -53,6 +53,13 @@ def _float(value: object, default: float = 0.0) -> float:
     return default if pd.isna(parsed) else float(parsed)
 
 
+def _first_text(row: pd.Series, key: str) -> str:
+    value = row.get(key)
+    if pd.isna(value):
+        return ""
+    return str(value)
+
+
 def _candidate_score(row: dict[str, Any]) -> float:
     drawdown_penalty = abs(min(_float(row["worst_drawdown"]), 0.0))
     fill_bonus = 1_000.0 * _float(row["min_fill_coverage"])
@@ -95,6 +102,13 @@ def summarize_candidates(
         "net_pnl",
         "test_net_pnl",
         "fill_coverage",
+        "strategy_fill_coverage",
+        "data_foundation_coverage",
+        "entry_bar_coverage",
+        "exit_bar_coverage",
+        "intended_order_count",
+        "filled_order_count",
+        "skipped_order_count",
         "option_trade_count",
         "max_drawdown",
         "win_rate",
@@ -112,13 +126,23 @@ def summarize_candidates(
     rows: list[dict[str, Any]] = []
     for candidate_id, group in frame.groupby("candidate_variant_id", sort=False):
         first = group.iloc[0]
-        min_fill = _float(group["fill_coverage"].min())
+        fill_column = "strategy_fill_coverage" if "strategy_fill_coverage" in group else "fill_coverage"
+        min_fill = _float(group[fill_column].min())
         min_trades = int(_float(group["option_trade_count"].min()))
         min_test = _float(group["test_net_pnl"].min())
+        min_data_foundation = (
+            _float(group["data_foundation_coverage"].min())
+            if "data_foundation_coverage" in group
+            else None
+        )
         row = {
             "candidate_variant_id": candidate_id,
             "symbol": str(first.get("symbol")),
+            "strategy_id": _first_text(first, "strategy_id")
+            or _first_text(first, "source_strategy_id"),
             "source_strategy_id": str(first.get("source_strategy_id")),
+            "family": _first_text(first, "family"),
+            "parameter_set": _first_text(first, "parameter_set"),
             "directional_option_type": str(first.get("directional_option_type")),
             "profile_count": int(group["profile"].nunique()),
             "profiles": sorted(str(value) for value in group["profile"].dropna().unique()),
@@ -127,7 +151,41 @@ def summarize_candidates(
             "min_test_net_pnl": min_test,
             "median_test_net_pnl": _float(group["test_net_pnl"].median()),
             "min_fill_coverage": min_fill,
-            "max_fill_coverage": _float(group["fill_coverage"].max()),
+            "max_fill_coverage": _float(group[fill_column].max()),
+            "min_strategy_fill_coverage": min_fill,
+            "max_strategy_fill_coverage": _float(group[fill_column].max()),
+            "min_data_foundation_coverage": min_data_foundation,
+            "min_entry_bar_coverage": (
+                _float(group["entry_bar_coverage"].min())
+                if "entry_bar_coverage" in group
+                else None
+            ),
+            "min_exit_bar_coverage": (
+                _float(group["exit_bar_coverage"].min())
+                if "exit_bar_coverage" in group
+                else None
+            ),
+            "min_intended_order_count": (
+                int(_float(group["intended_order_count"].min()))
+                if "intended_order_count" in group
+                else (
+                    int(_float(group["source_stock_trade_count"].min()))
+                    if "source_stock_trade_count" in group
+                    else min_trades + int(_float(group["missing_option_price_count"].max()))
+                )
+            ),
+            "min_filled_order_count": (
+                int(_float(group["filled_order_count"].min()))
+                if "filled_order_count" in group
+                else min_trades
+            ),
+            "max_skipped_order_count": (
+                int(_float(group["skipped_order_count"].max()))
+                if "skipped_order_count" in group
+                else int(_float(group["missing_option_price_count"].max()))
+            ),
+            "fill_coverage_unit": _first_text(first, "fill_coverage_unit")
+            or "filled_single_contract_option_orders_per_source_stock_trade",
             "min_option_trade_count": min_trades,
             "max_missing_option_price_count": int(
                 _float(group["missing_option_price_count"].max())
@@ -276,13 +334,18 @@ def build_capital_plan(
             {
                 "candidate_variant_id": row["candidate_variant_id"],
                 "symbol": row["symbol"],
+                "strategy_id": row.get("strategy_id"),
                 "source_strategy_id": row["source_strategy_id"],
+                "family": row.get("family"),
+                "parameter_set": row.get("parameter_set"),
                 "directional_option_type": row["directional_option_type"],
                 "research_only_weight": weight,
                 "research_only_dollars": round(weight * initial_cash, 2),
                 "min_net_pnl": row["min_net_pnl"],
                 "min_test_net_pnl": row["min_test_net_pnl"],
                 "min_fill_coverage": row["min_fill_coverage"],
+                "min_strategy_fill_coverage": row.get("min_strategy_fill_coverage"),
+                "min_data_foundation_coverage": row.get("min_data_foundation_coverage"),
                 "min_option_trade_count": row["min_option_trade_count"],
                 "worst_drawdown": row["worst_drawdown"],
                 "promotion_status": row["promotion_status"],
@@ -306,20 +369,36 @@ def _fill_failure_counts(candidate_rows: list[dict[str, Any]]) -> dict[str, int]
     return dict(sorted(counts.items()))
 
 
-def _data_repair_candidates(
-    candidate_rows: list[dict[str, Any]], max_items: int = 12
-) -> list[dict[str, Any]]:
-    repair_reasons = {
-        "selected_contract_universe_gap",
+def _has_strong_data_foundation(row: dict[str, Any]) -> bool:
+    value = row.get("min_data_foundation_coverage")
+    if value in (None, "", "nan"):
+        return False
+    return _float(value) >= 0.90
+
+
+def _is_data_repair_candidate(row: dict[str, Any]) -> bool:
+    reason = str(row.get("fill_failure_reason") or "")
+    if reason == "selected_contract_universe_gap":
+        return True
+    if reason in {
         "entry_bar_gap_or_entry_timing_mismatch",
         "exit_bar_gap_or_exit_policy_mismatch",
         "mixed_low_fill_gap",
-    }
+    }:
+        # If selected-contract coverage is already strong, timing misses are a strategy/replay
+        # design problem rather than a raw-data repair target.
+        return not _has_strong_data_foundation(row)
+    return False
+
+
+def _data_repair_candidates(
+    candidate_rows: list[dict[str, Any]], max_items: int = 12
+) -> list[dict[str, Any]]:
     rows = [
         row
         for row in candidate_rows
         if row.get("promotion_status") != "eligible_for_promotion_review"
-        and row.get("fill_failure_reason") in repair_reasons
+        and _is_data_repair_candidate(row)
         and _float(row.get("min_net_pnl")) > 0
         and _float(row.get("min_test_net_pnl")) > 0
     ]
@@ -327,11 +406,24 @@ def _data_repair_candidates(
     keys = [
         "candidate_variant_id",
         "symbol",
+        "strategy_id",
         "source_strategy_id",
+        "family",
+        "parameter_set",
+        "directional_option_type",
         "min_net_pnl",
         "min_test_net_pnl",
         "min_fill_coverage",
         "max_fill_coverage",
+        "min_strategy_fill_coverage",
+        "max_strategy_fill_coverage",
+        "min_data_foundation_coverage",
+        "min_entry_bar_coverage",
+        "min_exit_bar_coverage",
+        "min_option_trade_count",
+        "worst_drawdown",
+        "promotion_status",
+        "fill_coverage_unit",
         "fill_failure_reason",
         "promotion_blockers",
         "research_score",
@@ -346,16 +438,37 @@ def _strategy_redesign_candidates(
         row
         for row in candidate_rows
         if row.get("promotion_status") != "eligible_for_promotion_review"
-        and (_float(row.get("min_net_pnl")) <= 0 or _float(row.get("min_test_net_pnl")) <= 0)
+        and (
+            _float(row.get("min_net_pnl")) <= 0
+            or _float(row.get("min_test_net_pnl")) <= 0
+            or (
+                _has_strong_data_foundation(row)
+                and _float(row.get("min_fill_coverage")) < 0.90
+            )
+        )
     ]
     rows = sorted(rows, key=lambda item: item["research_score"], reverse=True)
     keys = [
         "candidate_variant_id",
         "symbol",
+        "strategy_id",
         "source_strategy_id",
+        "family",
+        "parameter_set",
+        "directional_option_type",
         "min_net_pnl",
         "min_test_net_pnl",
         "min_fill_coverage",
+        "max_fill_coverage",
+        "min_strategy_fill_coverage",
+        "max_strategy_fill_coverage",
+        "min_data_foundation_coverage",
+        "min_entry_bar_coverage",
+        "min_exit_bar_coverage",
+        "min_option_trade_count",
+        "worst_drawdown",
+        "promotion_status",
+        "fill_coverage_unit",
         "fill_failure_reason",
         "promotion_blockers",
         "research_score",
@@ -372,6 +485,8 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         f"- Promotion allowed: `{packet['promotion_allowed']}`",
         f"- Broker facing: `{packet['broker_facing']}`",
         f"- Fill coverage gate: `{packet['fill_coverage_gate']}`",
+        f"- Fill coverage unit: `{packet.get('fill_coverage_unit')}`",
+        f"- Fill coverage semantics: {packet.get('fill_coverage_semantics')}",
         f"- Minimum option trades: `{packet['min_option_trades']}`",
         f"- Maximum strategies per symbol: `{packet['max_strategies_per_symbol']}`",
         f"- Maximum symbol weight: `{packet['max_symbol_weight']}`",
@@ -390,8 +505,11 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
             "- "
             f"`{row['symbol']}` `{row['candidate_variant_id']}` weight "
             f"`{row['research_only_weight']:.2%}` dollars `${row['research_only_dollars']}` "
+            f"family `{row.get('family') or 'unknown'}` "
             f"min_net `{row['min_net_pnl']}` min_test `{row['min_test_net_pnl']}` "
-            f"fill `{row['min_fill_coverage']}` status `{row['promotion_status']}`"
+            f"strategy_fill `{row['min_fill_coverage']}` "
+            f"data_foundation `{row.get('min_data_foundation_coverage')}` "
+            f"status `{row['promotion_status']}`"
         )
     lines.extend(["", "## Top Candidates", ""])
     for row in packet["top_candidates"][:20]:
@@ -399,8 +517,10 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         lines.append(
             "- "
             f"`{row['symbol']}` `{row['candidate_variant_id']}` score `{row['research_score']}` "
+            f"family `{row.get('family') or 'unknown'}` "
             f"min_net `{row['min_net_pnl']}` min_test `{row['min_test_net_pnl']}` "
-            f"fill `{row['min_fill_coverage']}-{row['max_fill_coverage']}` "
+            f"strategy_fill `{row['min_fill_coverage']}-{row['max_fill_coverage']}` "
+            f"data_foundation `{row.get('min_data_foundation_coverage')}` "
             f"trades `{row['min_option_trade_count']}` blockers `{blockers}`"
         )
     lines.extend(["", "## Fill Failure Counts", ""])
@@ -475,6 +595,13 @@ def build_research_portfolio_report(
         "candidate_count": len(candidate_rows),
         "eligible_for_promotion_review_count": eligible_count,
         "fill_coverage_gate": fill_coverage_gate,
+        "strategy_fill_coverage_gate": fill_coverage_gate,
+        "fill_coverage_unit": "filled_single_contract_option_orders_per_source_stock_trade",
+        "fill_coverage_semantics": (
+            "fill_coverage is an alias for strategy_fill_coverage. "
+            "min_data_foundation_coverage separates selected-contract availability from "
+            "entry/exit timing and strategy execution misses."
+        ),
         "min_option_trades": min_option_trades,
         "min_test_net_pnl": min_test_net_pnl,
         "max_positions": max_positions,
@@ -495,7 +622,8 @@ def build_research_portfolio_report(
         "next_step_contract": [
             "Treat the capital plan as research-only until fill coverage reaches the configured gate.",
             "Use dense daily option-universe builds when selected-contract gaps dominate otherwise positive candidates.",
-            "Use event-driven selected-contract repairs only for isolated missing entry/exit bars.",
+            "Use strategy redesign when data foundation is strong but entry/exit bar timing still blocks fills.",
+            "Use event-driven selected-contract repairs only for isolated missing entry/exit bars with weak data foundation.",
             "Redesign or quarantine candidates whose economics fail after fill repair.",
             "Do not modify live manifests, strategy selection, or risk policy from this report.",
         ],
