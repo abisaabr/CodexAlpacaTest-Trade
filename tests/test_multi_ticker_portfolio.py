@@ -277,6 +277,150 @@ def test_multileg_order_requests_use_combo_order_path(monkeypatch) -> None:
     assert exit_requests[0].limit_price < 0
 
 
+def test_governed_candidate_identity_survives_trade_event_base() -> None:
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trade = OpenTrade(
+        **_sample_open_trade(
+            strategy_name="qqq__governed__long_call",
+            underlying_symbol="QQQ",
+        )
+    )
+    trade.candidate_variant_id = "qqq_bull_long_call_atm__first_common_within_cutoff"
+    trade.source_strategy_id = "qqq_bull_long_call_atm"
+    trade.promotion_manifest_path = "config/promotion_manifests/qqq_option_native_governed_validation_20260430.yaml"
+    trade.governed_validation_packet_uri = "gs://codexalpaca-control-us/research_results/qqq_option_native_governed_validation_20260430/"
+    trade.research_profile = "first_common_within_cutoff_e330_x390_lag15_15"
+
+    event = trader._event_base_for_trade(trade, phase="entry")
+
+    assert event["candidate_variant_id"] == trade.candidate_variant_id
+    assert event["source_strategy_id"] == trade.source_strategy_id
+    assert event["promotion_manifest_path"] == trade.promotion_manifest_path
+    assert event["governed_validation_packet_uri"] == trade.governed_validation_packet_uri
+    assert event["research_profile"] == trade.research_profile
+
+
+def test_governed_qqq_candidate_order_shapes_are_broker_safe(monkeypatch) -> None:
+    class _BrokerStub:
+        def build_order_request(self, **kwargs) -> OrderRequest:
+            kwargs["client_order_id"] = str(kwargs.pop("client_order_key", "")) or None
+            return OrderRequest(**kwargs)
+
+        def build_multileg_order_request(self, **kwargs) -> OrderRequest:
+            kwargs["client_order_id"] = str(kwargs.pop("client_order_key", "")) or None
+            extra = dict(kwargs.pop("extra", {}) or {})
+            extra.setdefault("order_class", "mleg")
+            kwargs["extra"] = extra
+            return OrderRequest(**kwargs)
+
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.broker = _BrokerStub()
+    monkeypatch.setattr(
+        "alpaca_lab.multi_ticker_portfolio.trader._now_et",
+        lambda: datetime(2026, 4, 16, 10, 17, 30, 123456, tzinfo=ZoneInfo("America/New_York")),
+    )
+
+    long_call = OpenTrade(
+        **_sample_open_trade(
+            strategy_name="qqq_bull_long_call_atm",
+            underlying_symbol="QQQ",
+        )
+    )
+    long_call_entry = trader._entry_order_requests(long_call)[0]
+    long_call_exit = trader._exit_order_requests(
+        long_call,
+        {str(long_call.legs[0]["symbol"]): 3.25},
+        market_fallback=True,
+    )[0]
+    assert long_call_entry.extra["position_intent"] == "buy_to_open"
+    assert long_call_exit.extra["position_intent"] == "sell_to_close"
+
+    call_credit_spread = OpenTrade(
+        **_sample_multileg_open_trade(
+            strategy_name="qqq_bear_call_credit_spread",
+            underlying_symbol="QQQ",
+            regime="bear",
+        )
+    )
+    call_credit_spread.legs[0]["side"] = "short"
+    call_credit_spread.legs[1]["side"] = "long"
+    call_credit_spread.entry_debit = -0.80
+    call_credit_spread.entry_fill_price = -0.80
+    credit_entry = trader._entry_order_requests(call_credit_spread)[0]
+    credit_exit = trader._exit_order_requests(
+        call_credit_spread,
+        {
+            str(call_credit_spread.legs[0]["symbol"]): 2.10,
+            str(call_credit_spread.legs[1]["symbol"]): 1.40,
+        },
+        market_fallback=True,
+    )[0]
+    assert credit_entry.extra["order_class"] == "mleg"
+    assert [leg.position_intent for leg in credit_entry.legs] == ["sell_to_open", "buy_to_open"]
+    assert credit_entry.limit_price is not None
+    assert credit_entry.limit_price < 0
+    assert [leg.position_intent for leg in credit_exit.legs] == ["buy_to_close", "sell_to_close"]
+
+    iron_condor = OpenTrade(
+        **_sample_multileg_open_trade(
+            strategy_name="qqq_choppy_iron_condor",
+            underlying_symbol="QQQ",
+            regime="choppy",
+        )
+    )
+    iron_condor.legs = [
+        {
+            **iron_condor.legs[0],
+            "symbol": "QQQ260417P00490000",
+            "option_type": "put",
+            "side": "long",
+            "strike_price": 490.0,
+        },
+        {
+            **iron_condor.legs[0],
+            "symbol": "QQQ260417P00500000",
+            "option_type": "put",
+            "side": "short",
+            "strike_price": 500.0,
+        },
+        {
+            **iron_condor.legs[1],
+            "symbol": "QQQ260417C00510000",
+            "option_type": "call",
+            "side": "short",
+            "strike_price": 510.0,
+        },
+        {
+            **iron_condor.legs[1],
+            "symbol": "QQQ260417C00520000",
+            "option_type": "call",
+            "side": "long",
+            "strike_price": 520.0,
+        },
+    ]
+    iron_condor.entry_debit = -1.05
+    iron_condor.entry_fill_price = -1.05
+    condor_entry = trader._entry_order_requests(iron_condor)[0]
+    condor_exit = trader._exit_order_requests(
+        iron_condor,
+        {str(leg["symbol"]): float(leg["mark"]) for leg in iron_condor.legs},
+        market_fallback=True,
+    )[0]
+    assert condor_entry.extra["order_class"] == "mleg"
+    assert [leg.position_intent for leg in condor_entry.legs] == [
+        "buy_to_open",
+        "sell_to_open",
+        "sell_to_open",
+        "buy_to_open",
+    ]
+    assert [leg.position_intent for leg in condor_exit.legs] == [
+        "sell_to_close",
+        "buy_to_close",
+        "buy_to_close",
+        "sell_to_close",
+    ]
+
+
 def test_alpaca_option_fee_breakdown_matches_current_schedule() -> None:
     long_trade = OpenTrade(
         **_sample_open_trade(

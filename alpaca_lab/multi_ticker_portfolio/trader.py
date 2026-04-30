@@ -183,6 +183,11 @@ class OpenTrade:
     entry_fill_price: float
     legs: list[dict[str, Any]]
     entry_attempt_id: str | None = None
+    candidate_variant_id: str | None = None
+    source_strategy_id: str | None = None
+    promotion_manifest_path: str | None = None
+    governed_validation_packet_uri: str | None = None
+    research_profile: str | None = None
     notes: list[str] = field(default_factory=list)
 
 
@@ -210,6 +215,11 @@ class CompletedTrade:
     vega_dollars_1pct_at_entry: float
     legs: list[dict[str, Any]]
     entry_attempt_id: str | None = None
+    candidate_variant_id: str | None = None
+    source_strategy_id: str | None = None
+    promotion_manifest_path: str | None = None
+    governed_validation_packet_uri: str | None = None
+    research_profile: str | None = None
     entry_total_fees: float = 0.0
     exit_total_fees: float = 0.0
     entry_regulatory_fees: float = 0.0
@@ -668,6 +678,8 @@ class MultiTickerPortfolioPaperTrader:
                     "cleanup_qty": abs(cleanup_signed_qty),
                     "order_side": "sell" if cleanup_signed_qty > 0 else "buy",
                     "position_intent": "sell_to_close" if cleanup_signed_qty > 0 else "buy_to_close",
+                    "mark": leg.get("mark"),
+                    "entry_fill_price": leg.get("entry_fill_price"),
                     "used_broker_positions": authoritative_actuals,
                 }
             )
@@ -747,6 +759,11 @@ class MultiTickerPortfolioPaperTrader:
             "phase": phase,
             "entry_minute": int(trade.entry_minute),
             "quantity": int(trade.quantity),
+            "candidate_variant_id": trade.candidate_variant_id,
+            "source_strategy_id": trade.source_strategy_id,
+            "promotion_manifest_path": trade.promotion_manifest_path,
+            "governed_validation_packet_uri": trade.governed_validation_packet_uri,
+            "research_profile": trade.research_profile,
         }
 
     def _notify_lines(self, *lines: object) -> bool:
@@ -1464,6 +1481,11 @@ class MultiTickerPortfolioPaperTrader:
             "strategy_name": strategy.name,
             "underlying_symbol": strategy.underlying_symbol,
             "regime": strategy.regime,
+            "candidate_variant_id": strategy.candidate_variant_id,
+            "source_strategy_id": strategy.source_strategy_id,
+            "promotion_manifest_path": strategy.promotion_manifest_path,
+            "governed_validation_packet_uri": strategy.governed_validation_packet_uri,
+            "research_profile": strategy.research_profile,
             "signal_name": strategy.signal_name,
             "timing_profile": strategy.timing_profile,
             "current_minute": int(current_minute),
@@ -1668,6 +1690,11 @@ class MultiTickerPortfolioPaperTrader:
             entry_fill_price=entry_debit,
             legs=leg_payloads,
             entry_attempt_id=attempt_id,
+            candidate_variant_id=strategy.candidate_variant_id,
+            source_strategy_id=strategy.source_strategy_id,
+            promotion_manifest_path=strategy.promotion_manifest_path,
+            governed_validation_packet_uri=strategy.governed_validation_packet_uri,
+            research_profile=strategy.research_profile,
         )
         delta_shares, vega_dollars = self._expected_entry_greeks(open_trade)
         portfolio_delta_shares, portfolio_vega_dollars = self._current_portfolio_expected_greeks(session)
@@ -2332,6 +2359,11 @@ class MultiTickerPortfolioPaperTrader:
             vega_dollars_1pct_at_entry=round(vega_dollars, 4),
             legs=list(trade.legs),
             entry_attempt_id=trade.entry_attempt_id,
+            candidate_variant_id=trade.candidate_variant_id,
+            source_strategy_id=trade.source_strategy_id,
+            promotion_manifest_path=trade.promotion_manifest_path,
+            governed_validation_packet_uri=trade.governed_validation_packet_uri,
+            research_profile=trade.research_profile,
             entry_total_fees=round(entry_fee_breakdown.total_fees, 4),
             exit_total_fees=round(exit_fee_breakdown.total_fees, 4),
             entry_regulatory_fees=round(entry_fee_breakdown.regulatory_fees, 4),
@@ -2591,7 +2623,7 @@ class MultiTickerPortfolioPaperTrader:
             fill_price = (
                 float(raw_fill_price)
                 if raw_fill_price is not None
-                else float(leg.get("mark") or leg.get("entry_fill_price") or 0.0)
+                else float(cleanup_plan.get("mark") or cleanup_plan.get("entry_fill_price") or 0.0)
             )
             fill_prices.append(fill_price)
             if result.get("order_id"):
@@ -2641,6 +2673,11 @@ class MultiTickerPortfolioPaperTrader:
             vega_dollars_1pct_at_entry=round(vega_dollars, 4),
             legs=list(trade.legs),
             entry_attempt_id=trade.entry_attempt_id,
+            candidate_variant_id=trade.candidate_variant_id,
+            source_strategy_id=trade.source_strategy_id,
+            promotion_manifest_path=trade.promotion_manifest_path,
+            governed_validation_packet_uri=trade.governed_validation_packet_uri,
+            research_profile=trade.research_profile,
             entry_total_fees=round(entry_fee_breakdown.total_fees, 4),
             exit_total_fees=round(exit_fee_breakdown.total_fees, 4),
             entry_regulatory_fees=round(entry_fee_breakdown.regulatory_fees, 4),
@@ -3531,25 +3568,6 @@ class MultiTickerPortfolioPaperTrader:
                 ),
             }
 
-        event_order_ids = (
-            {
-                str(value).strip()
-                for value in events_df.get("order_id", pd.Series(dtype="object")).dropna().astype(str).tolist()
-                if str(value).strip()
-            }
-            if not events_df.empty
-            else set()
-        )
-        event_client_order_ids = (
-            {
-                str(value).strip()
-                for value in events_df.get("client_order_id", pd.Series(dtype="object")).dropna().astype(str).tolist()
-                if str(value).strip()
-            }
-            if not events_df.empty
-            else set()
-        )
-
         event_lookup: dict[tuple[str, str], pd.DataFrame] = {}
         if not events_df.empty:
             if "order_id" in events_df.columns:
@@ -3907,6 +3925,11 @@ class MultiTickerPortfolioPaperTrader:
                     "strategy_name": signal_row.get("strategy_name"),
                     "underlying_symbol": signal_row.get("underlying_symbol"),
                     "regime": signal_row.get("regime"),
+                    "candidate_variant_id": signal_row.get("candidate_variant_id"),
+                    "source_strategy_id": signal_row.get("source_strategy_id"),
+                    "promotion_manifest_path": signal_row.get("promotion_manifest_path"),
+                    "governed_validation_packet_uri": signal_row.get("governed_validation_packet_uri"),
+                    "research_profile": signal_row.get("research_profile"),
                     "signal_name": signal_row.get("signal_name"),
                     "timing_profile": signal_row.get("timing_profile"),
                     "signal_time_et": signal_row.get("timestamp_et"),
@@ -4360,6 +4383,11 @@ class MultiTickerPortfolioPaperTrader:
                     "strategy_name": trade.strategy_name,
                     "underlying_symbol": trade.underlying_symbol,
                     "regime": trade.regime,
+                    "candidate_variant_id": trade.candidate_variant_id,
+                    "source_strategy_id": trade.source_strategy_id,
+                    "promotion_manifest_path": trade.promotion_manifest_path,
+                    "governed_validation_packet_uri": trade.governed_validation_packet_uri,
+                    "research_profile": trade.research_profile,
                     "signal_name": "recovered_open_trade",
                     "timing_profile": "recovered",
                     "current_minute": int(trade.entry_minute),

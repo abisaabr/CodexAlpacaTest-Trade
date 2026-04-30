@@ -46,6 +46,11 @@ class StrategyConfig(BaseModel):
     profit_target_multiple: float
     stop_loss_multiple: float
     legs: tuple[StrategyLegConfig, ...]
+    candidate_variant_id: str | None = None
+    source_strategy_id: str | None = None
+    promotion_manifest_path: str | None = None
+    governed_validation_packet_uri: str | None = None
+    research_profile: str | None = None
 
     @field_validator("underlying_symbol", mode="before")
     @classmethod
