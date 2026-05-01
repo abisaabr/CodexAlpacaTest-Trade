@@ -1,6 +1,6 @@
 # Paper Trader Readiness Watch - 2026-05-01
 
-Status updated UTC: `2026-05-01T03:41:24Z`
+Status updated UTC: `2026-05-01T03:48:00Z`
 
 ## Current Decision
 
@@ -8,7 +8,7 @@ Decision: `blocked_waiting_for_evidence`
 
 The paper VM is running and the startup-preflight command is available, but the final overnight portfolio aggregate promotion packet has not landed yet. The correct action is to keep monitoring and not arm paper orders or change manifests until the generated final promotion packet exists, has eligible candidates, and remains research-only with no manifest or risk-policy effect.
 
-At `2026-05-01T03:41:24Z`, the readiness monitor reports `decision=blocked_waiting_for_evidence`, `running_wave_vm_count=10`, and `aggregate_artifact_count=0`.
+At `2026-05-01T03:46:25Z`, the readiness monitor reports `decision=blocked_waiting_for_evidence`, `running_wave_vm_count=10`, `aggregate_artifact_count=0`, and `fastlane_aggregate_artifact_count=0`.
 
 The monitor also sees the corrected profile-isolated partial aggregate. That packet has 8 eligible profile-level candidates and 4 unique eligible base candidates, but it is evidence-only and explicitly does not unblock the final aggregate requirement.
 
@@ -54,6 +54,8 @@ Workers:
 - `fastlane-top40-agg-1040z`: wakes around `2026-05-01T10:40:00Z` and writes `aggregate_fastlane_top40_20260501/`
 
 This path uses `top_n=40`, `test_date_count=20`, both `nearest_contract` and `entry_liquidity_first_research_only`, and the same `fill_coverage >= 0.90`, `min_option_trades >= 20`, `min_test_net_pnl >= 0`, and `min_net_pnl >= 0` gates.
+
+The fastlane workers have started their first symbol replays and are CPU-active. The fastlane-aware monitor code is committed and running locally as PID `32812`; the portfolio wave monitor is PID `38352`.
 
 ## Profile-Isolated Partial Aggregate
 

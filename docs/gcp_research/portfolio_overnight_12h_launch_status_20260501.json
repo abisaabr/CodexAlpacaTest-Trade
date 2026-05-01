@@ -1,8 +1,8 @@
 {
   "wave_id": "portfolio_overnight_12h_20260501",
-  "status_updated_utc": "2026-05-01T03:41:24Z",
+  "status_updated_utc": "2026-05-01T03:48:00Z",
   "status": "running",
-  "branch_head_at_monitor_smoke": "78e248b527c6a447c7d1e73a3d5e250c57e2cc5f",
+  "branch_head_at_monitor_smoke": "b894ff34cf4670f61f9f8002104f017d5bd89a33",
   "branch": "codex/phase2-fill-semantics-20260430",
   "github_pr": "https://github.com/abisaabr/CodexAlpacaTest-Trade/pull/2",
   "gcs_prefix": "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/",
@@ -28,8 +28,8 @@
   },
   "latest_update": {
     "readiness_decision": "blocked_waiting_for_evidence",
-    "readiness_monitor_pid": 50596,
-    "portfolio_monitor_pid": 47024,
+    "readiness_monitor_pid": 32812,
+    "portfolio_monitor_pid": 38352,
     "running_wave_vm_count": 10,
     "worker_artifact_count": 458,
     "aggregate_artifact_count": 0,
@@ -51,7 +51,15 @@
       "portfolio-overnight-12h-20260501-fastlane-top40-agg-1040z"
     ],
     "fastlane_aggregate_output_subdir": "aggregate_fastlane_top40_20260501",
-    "fastlane_aggregate_expected_wake_utc": "2026-05-01T10:40:00Z"
+    "fastlane_aggregate_expected_wake_utc": "2026-05-01T10:40:00Z",
+    "fastlane_aggregate_artifact_count": 0,
+    "fastlane_first_run_markers": {
+      "fastlane_top40_a": "fastlane_top40_a_aapl_nearest_contract started 2026-05-01T03:39:17Z",
+      "fastlane_top40_b": "fastlane_top40_b_meta_nearest_contract started 2026-05-01T03:39:30Z",
+      "fastlane_top40_c": "fastlane_top40_c_avgo_nearest_contract started 2026-05-01T03:39:31Z",
+      "fastlane_top40_d": "fastlane_top40_d_pltr_nearest_contract started 2026-05-01T03:41:01Z"
+    },
+    "fastlane_monitor_commit": "b894ff34cf4670f61f9f8002104f017d5bd89a33"
   },
   "fleet": [
     {
