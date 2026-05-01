@@ -197,6 +197,7 @@ def _script_header(worker: dict[str, Any], config: dict[str, Any]) -> list[str]:
         "gcloud storage cp ${INPUT_QUEUE_URI} inputs/portfolio_overnight_option_queue.json",
         "git rev-parse HEAD > ${WORKROOT}/source_commit.txt 2>/dev/null || echo archive > ${WORKROOT}/source_commit.txt",
         ": > ${WORKROOT}/command.txt",
+        "export PYTHONUNBUFFERED=1",
     ]
 
 
@@ -234,15 +235,25 @@ def _stage_symbol_lines(config: dict[str, Any], symbol: str) -> list[str]:
 
 def _option_aware_worker_lines(worker: dict[str, Any], config: dict[str, Any]) -> list[str]:
     worker_id = str(worker["worker_id"])
+    selectors = [str(item) for item in worker.get("selectors", [])]
+    if not selectors:
+        selectors = ["nearest_contract", "entry_liquidity_first_research_only"]
+    top_n = int(worker.get("top_n", 250))
+    test_date_count = int(worker.get("test_date_count", 20))
+    max_entry_lag = float(worker.get("max_entry_lag_minutes", 10))
+    max_exit_lag = float(worker.get("max_exit_lag_minutes", 10))
+    allocation_fraction = float(worker.get("allocation_fraction", 0.05))
+    slippage_bps = float(worker.get("slippage_bps", 10))
+    fee_per_contract = float(worker.get("fee_per_contract", 0.65))
     lines: list[str] = []
     for symbol in [str(item).upper() for item in worker.get("symbols", [])]:
         symbol_slug = _slug(symbol)
         lines.extend(_stage_symbol_lines(config, symbol))
-        for selector in ["nearest_contract", "entry_liquidity_first_research_only"]:
+        for selector in selectors:
             run_id = f"{worker_id}_{symbol.lower()}_{selector}"
             output_dir = f"reports/research_wave/{run_id}"
             command = (
-                "python scripts/run_option_aware_research_backtest.py "
+                "python -u scripts/run_option_aware_research_backtest.py "
                 "--queue-json inputs/portfolio_overnight_option_queue.json "
                 "--variants-jsonl inputs/portfolio_overnight_variants.jsonl "
                 f"--stock-bars-path ${{DATA_DIR}}/{symbol_slug}/stock "
@@ -250,13 +261,17 @@ def _option_aware_worker_lines(worker: dict[str, Any], config: dict[str, Any]) -
                 f"--option-bars-root ${{DATA_DIR}}/{symbol_slug}/option_bars "
                 "--option-trades-root ${EMPTY_OPTION_TRADES} "
                 f"--symbol-filter {symbol} "
-                "--top-n 250 --test-date-count 20 --initial-cash 25000 "
-                "--allocation-fraction 0.05 --slippage-bps 10 --fee-per-contract 0.65 "
+                f"--top-n {top_n} --test-date-count {test_date_count} --initial-cash 25000 "
+                f"--allocation-fraction {allocation_fraction} "
+                f"--slippage-bps {slippage_bps} --fee-per-contract {fee_per_contract} "
+                f"--max-entry-lag-minutes {max_entry_lag} --max-exit-lag-minutes {max_exit_lag} "
                 f"--contract-selection-method {selector} "
                 f"--output-dir {output_dir} --run-id {run_id}"
             )
             lines.append(f"echo {_shell_quote(command)} >> ${{WORKROOT}}/command.txt")
+            lines.append(f"date -u '+run_started_utc={run_id}:%Y-%m-%dT%H:%M:%SZ'")
             lines.append(command)
+            lines.append(f"date -u '+run_completed_utc={run_id}:%Y-%m-%dT%H:%M:%SZ'")
             lines.append(f"echo completed_run_id={run_id}")
             lines.append(
                 f"gcloud storage cp --recursive {output_dir} "
