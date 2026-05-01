@@ -103,6 +103,15 @@ workers:
     test_date_count: 20
     max_entry_lag_minutes: 10
     max_exit_lag_minutes: 10
+  - worker_id: fastlane_top40_agg_1040z
+    role: aggregate_and_promote
+    machine_type: e2-standard-2
+    boot_disk_size_gb: 20
+    zone: us-east1-b
+    spot: false
+    start_after_seconds: 25200
+    aggregate_output_subdir: aggregate_fastlane_top40_20260501
+    candidate_identity_mode: variant_profile
 logging_contract:
   worker_prefix_template: gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/workers/{worker_id}/
   aggregate_prefix: gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate/

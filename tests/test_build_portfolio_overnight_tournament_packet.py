@@ -107,11 +107,12 @@ def test_fastlane_packet_uses_bounded_top_n_and_standard_vms(tmp_path: Path) -> 
     assert packet["scope"] == "research_only_portfolio_fastlane_top40_recovery"
     assert packet["broker_facing"] is False
     assert packet["paper_orders"] is False
-    assert packet["worker_count"] == 4
-    assert all(worker["role"] == "option_aware_tournament" for worker in packet["workers"])
+    assert packet["worker_count"] == 5
     assert all("--provisioning-model STANDARD" in worker["create_vm_command"] for worker in packet["workers"])
     assert all("--machine-type e2-standard-2" in worker["create_vm_command"] for worker in packet["workers"])
-    for worker in packet["workers"]:
+    option_workers = [worker for worker in packet["workers"] if worker["role"] == "option_aware_tournament"]
+    assert len(option_workers) == 4
+    for worker in option_workers:
         startup_script = Path(worker["startup_script_path"]).read_text(encoding="utf-8")
         assert "export PYTHONUNBUFFERED=1" in startup_script
         assert "python -u scripts/run_option_aware_research_backtest.py" in startup_script
@@ -120,3 +121,8 @@ def test_fastlane_packet_uses_bounded_top_n_and_standard_vms(tmp_path: Path) -> 
         assert "run_started_utc=" in startup_script
         assert "run_completed_utc=" in startup_script
         assert "entry_liquidity_first_research_only" in startup_script
+    aggregate_worker = next(worker for worker in packet["workers"] if worker["role"] == "aggregate_and_promote")
+    aggregate_script = Path(aggregate_worker["startup_script_path"]).read_text(encoding="utf-8")
+    assert "aggregate_wait_seconds=25200" in aggregate_script
+    assert "aggregate_fastlane_top40_20260501" in aggregate_script
+    assert "--candidate-identity-mode variant_profile" in aggregate_script
