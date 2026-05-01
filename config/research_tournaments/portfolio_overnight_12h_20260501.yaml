@@ -43,12 +43,14 @@ datasets:
     symbols: [AAPL, AMD, AMZN, INTC, IWM, META, MSFT, NVDA, SPY, TSLA]
     stock_root: gs://codexalpaca-data-us/research_stock_data/option_fill_ladder_20260429/
     option_root: gs://codexalpaca-data-us/research_option_data/option_fill_ladder_20260429/
+    selected_contracts_root_template: gs://codexalpaca-control-us/research_results/option_fill_ladder_20260429/{symbol}/{stage}/research_wave/dense_universe/selected_option_contracts/
     priority: 2
     stages: [365d_5x5, 30d_5x5, 30d_atm, 7d_atm]
   next10_ladder:
     symbols: [AVGO, GOOGL, MU, NFLX, ORCL, PLTR, QQQ, TSM, XLE, XOM]
     stock_root: gs://codexalpaca-data-us/research_stock_data/option_fill_ladder_next10_20260429/
     option_root: gs://codexalpaca-data-us/research_option_data/option_fill_ladder_next10_20260429/
+    selected_contracts_root_template: gs://codexalpaca-control-us/research_results/option_fill_ladder_next10_20260429/{symbol}/{stage}/research_wave/dense_universe/selected_option_contracts/
     priority: 2
     stages: [365d_5x5, 30d_5x5, 30d_atm, 7d_atm]
   curated_preferred_20260421_20260423:

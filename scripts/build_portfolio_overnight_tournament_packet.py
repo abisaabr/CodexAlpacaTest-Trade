@@ -113,10 +113,15 @@ def _symbol_stage_uris(
             "contracts": f"{selected_root}/",
             "bars": f"{option_root}/option_bars_silver/option_bars/underlying={symbol}/",
         }
+    selected_template = dataset.get("selected_contracts_root_template")
+    if selected_template:
+        contracts = str(selected_template).format(symbol=symbol, stage=stage).rstrip("/") + "/"
+    else:
+        contracts = f"{option_root}/{symbol}/{stage}/contract_inventory_silver/option_contract_inventory/"
     return {
         "dataset_id": dataset_id,
         "stock": f"{stock_root}/{symbol}/{stage}/stock_ref_silver/stock_bars/",
-        "contracts": f"{option_root}/{symbol}/{stage}/contract_inventory_silver/option_contract_inventory/",
+        "contracts": contracts,
         "bars": f"{option_root}/{symbol}/{stage}/option_bars_silver/option_bars/",
     }
 
