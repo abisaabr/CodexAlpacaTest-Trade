@@ -79,6 +79,9 @@ GCS monitor prefix: `gs://codexalpaca-control-us/research_results/portfolio_over
 - Final aggregator serial output shows `aggregate_wait_seconds=34627`, `aggregate_output_subdir=aggregate`, and `candidate_identity_mode=variant_profile`; no terminal error is visible.
 - The canonical final aggregate has landed at `gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate/`. The packet is research-only, non-broker-facing, and reports 364 candidates, 8 profile-level eligible candidates, and 4 unique eligible base candidates.
 - Final eligible candidates are QQQ bull/choppy only. No QQQ bear strategy passed the final overnight packet, so any bear exposure should remain limited to the separate QQQ governed shadow-validation evidence path until a final-packet bear candidate qualifies.
+- The 20-ticker tournament is not complete. The final aggregate is a cutoff snapshot from available worker outputs. Summary evidence observed so far covers AAPL, AVGO, GOOGL, META, MSFT, PLTR, and QQQ-specialized lanes; active workers are still progressing on additional symbols.
+- QQQ governed shadow-validation no-order run passed with `status=ran_once`, `startup_check_status=passed`, open trades `0`, completed trades `0`, and `submit_paper_orders=false`.
+- Detailed scope/coverage checkpoint: `docs/gcp_research/portfolio_overnight_12h_scope_coverage_20260501.md`.
 
 ## Monitor Commands
 

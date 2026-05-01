@@ -162,7 +162,9 @@
     "The paper readiness monitor was corrected to read nested aggregate output folders; this is observability only and does not alter promotion gates or execution behavior.",
     "Duplicate stale monitor processes were stopped and exactly one portfolio monitor plus one paper-readiness monitor were restarted on a 15-minute cadence.",
     "QQQ governed shadow-validation no-order preflight reached ownership and broker checks, then passed with submit_paper_orders=false.",
-    "The canonical final aggregate landed under aggregate/ and reports 8 profile-level eligible candidates, 4 unique eligible base candidates, all QQQ bull/choppy. No QQQ bear strategy passed the final overnight packet."
+    "The canonical final aggregate landed under aggregate/ and reports 8 profile-level eligible candidates, 4 unique eligible base candidates, all QQQ bull/choppy. No QQQ bear strategy passed the final overnight packet.",
+    "The 20-ticker tournament is still in progress. The final aggregate is a cutoff snapshot from available outputs, not a complete all-ticker result.",
+    "QQQ governed shadow-validation run-once passed in no-order mode with open_trades=0 and completed_trades=0."
   ],
   "next_monitor_commands": [
     "python scripts\\monitor_portfolio_overnight_wave.py --once --gcloud-bin <path-to-gcloud>",

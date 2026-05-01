@@ -109,6 +109,16 @@ Available no-order QQQ shadow strategies:
 - `qqq__governed_shadow__bear_call_credit_spread`
 - `qqq__governed_shadow__choppy_iron_condor`
 
+Single-cycle no-order shadow run:
+
+- Status: `ran_once`
+- Startup check status: `passed`
+- Open trades: `0`
+- Completed trades: `0`
+- Submit paper orders: `false`
+
+This confirms the no-order runner mechanics only. It does not authorize broker-facing paper order submission.
+
 ## Commands
 
 Preflight only, no orders:
