@@ -1,0 +1,43 @@
+{
+  "aggregate_output_subdir": "aggregate_post_completion_20260501T161922Z",
+  "broker_facing": false,
+  "check_interval_seconds": 900,
+  "current_decision": "waiting_for_more_all_ticker_worker_outputs",
+  "gcs_prefix": "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501",
+  "hard_rules": [
+    "Do not start trading.",
+    "Do not submit paper orders.",
+    "Do not modify live manifests.",
+    "Do not change risk policy.",
+    "Do not lower fill_coverage >= 0.90.",
+    "Promotion means governed validation review only."
+  ],
+  "initial_standard_summary_count": 11,
+  "initial_standard_unique_symbol_count": 6,
+  "initial_running_all_ticker_worker_count": 6,
+  "instance": "portfolio-12h-postagg-watch-20260501-1619z",
+  "live_manifest_effect": "none",
+  "max_wait_seconds": 21600,
+  "paper_orders": false,
+  "promotion_gates": {
+    "candidate_identity_mode": "variant_profile",
+    "fill_coverage_gate": 0.9,
+    "initial_cash": 25000,
+    "max_positions": 8,
+    "max_strategies_per_symbol": 2,
+    "max_symbol_weight": 0.2,
+    "min_option_trades": 20,
+    "min_test_net_pnl": 0
+  },
+  "risk_policy_effect": "none",
+  "service_account": "ramzi-service-account@codexalpaca.iam.gserviceaccount.com",
+  "startup_script": "scripts/gcp_post_completion_aggregate_watch.sh",
+  "trigger_conditions": {
+    "all_all_ticker_workers_finished": true,
+    "additional_standard_summary_files": 4,
+    "additional_standard_unique_symbols": 2,
+    "max_wait_snapshot": true
+  },
+  "wave_id": "portfolio_overnight_12h_20260501",
+  "zone": "us-central1-a"
+}
