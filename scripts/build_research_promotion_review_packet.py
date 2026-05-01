@@ -74,6 +74,26 @@ def _candidate_summary(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _base_candidate_id(row: dict[str, Any]) -> str:
+    return str(row.get("base_candidate_variant_id") or row.get("candidate_variant_id") or "")
+
+
+def _dedupe_review_candidates(rows: list[dict[str, Any]], max_items: int) -> list[dict[str, Any]]:
+    review_candidates: list[dict[str, Any]] = []
+    seen_base_ids: set[str] = set()
+    for row in rows:
+        if row.get("promotion_status") != "eligible_for_promotion_review":
+            continue
+        base_id = _base_candidate_id(row)
+        if base_id in seen_base_ids:
+            continue
+        seen_base_ids.add(base_id)
+        review_candidates.append(_candidate_summary(row))
+        if len(review_candidates) >= max_items:
+            break
+    return review_candidates
+
+
 def _blocker_counts(candidates: list[dict[str, Any]]) -> dict[str, int]:
     counts: Counter[str] = Counter()
     for row in candidates:
@@ -252,15 +272,18 @@ def build_research_promotion_review_packet(
         for item in source.get("strategy_redesign_candidates", [])
         if isinstance(item, dict)
     ]
-    review_candidates = [
-        _candidate_summary(row)
-        for row in top_candidates
-        if row.get("promotion_status") == "eligible_for_promotion_review"
-    ][:max_review_candidates]
+    review_candidates = _dedupe_review_candidates(top_candidates, max_review_candidates)
     eligible_count = int(source.get("eligible_for_promotion_review_count") or 0)
+    unique_eligible_base_count = len(
+        {
+            _base_candidate_id(row)
+            for row in top_candidates
+            if row.get("promotion_status") == "eligible_for_promotion_review"
+        }
+    )
     decision = (
         "ready_for_governed_validation_review"
-        if eligible_count > 0 and review_candidates
+        if unique_eligible_base_count > 0 and review_candidates
         else "research_only_blocked"
     )
     packet = {
@@ -277,6 +300,7 @@ def build_research_promotion_review_packet(
             "promotion_allowed_from_source_report": bool(source.get("promotion_allowed")),
             "candidate_count": int(source.get("candidate_count") or len(top_candidates)),
             "eligible_for_promotion_review_count": eligible_count,
+            "unique_eligible_base_candidate_count": unique_eligible_base_count,
             "fill_coverage_gate": source.get("fill_coverage_gate"),
             "strategy_fill_coverage_gate": source.get(
                 "strategy_fill_coverage_gate", source.get("fill_coverage_gate")

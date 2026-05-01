@@ -78,6 +78,9 @@ def test_promotion_review_packet_marks_eligible_research_candidates(
             "top_candidates": [
                 {
                     "candidate_variant_id": "amd_a",
+                    "base_candidate_variant_id": "amd_base",
+                    "candidate_identity_mode": "variant_profile",
+                    "aggregate_profile": "profile_a",
                     "symbol": "AMD",
                     "strategy_id": "amd_strategy",
                     "source_strategy_id": "amd_strategy",
@@ -92,6 +95,28 @@ def test_promotion_review_packet_marks_eligible_research_candidates(
                     "max_fill_coverage": 0.95,
                     "min_option_trade_count": 30,
                     "worst_drawdown": -200.0,
+                    "promotion_status": "eligible_for_promotion_review",
+                    "promotion_blockers": [],
+                },
+                {
+                    "candidate_variant_id": "amd_a_duplicate_profile",
+                    "base_candidate_variant_id": "amd_base",
+                    "candidate_identity_mode": "variant_profile",
+                    "aggregate_profile": "profile_b",
+                    "symbol": "AMD",
+                    "strategy_id": "amd_strategy",
+                    "source_strategy_id": "amd_strategy",
+                    "family": "Single-leg long call",
+                    "intended_regime": "bull",
+                    "parameter_set": '{"hard_exit_minute":210}',
+                    "directional_option_type": "call",
+                    "research_score": 9_500.0,
+                    "min_net_pnl": 950.0,
+                    "min_test_net_pnl": 95.0,
+                    "min_fill_coverage": 0.91,
+                    "max_fill_coverage": 0.94,
+                    "min_option_trade_count": 28,
+                    "worst_drawdown": -220.0,
                     "promotion_status": "eligible_for_promotion_review",
                     "promotion_blockers": [],
                 },
@@ -141,6 +166,12 @@ def test_promotion_review_packet_marks_eligible_research_candidates(
     assert packet["risk_policy_effect"] == "none"
     assert packet["promotion_scope"] == "research_governed_validation_review_only"
     assert len(packet["review_candidates"]) == 2
+    assert packet["gate_summary"]["unique_eligible_base_candidate_count"] == 2
+    assert packet["review_candidates"][0]["base_candidate_variant_id"] == "amd_base"
+    assert packet["review_candidates"][0]["aggregate_profile"] == "profile_a"
+    assert "amd_a_duplicate_profile" not in {
+        row["candidate_variant_id"] for row in packet["review_candidates"]
+    }
     assert packet["review_candidates"][0]["family"] == "Single-leg long call"
     assert packet["review_candidates"][0]["intended_regime"] == "bull"
     assert packet["review_candidates"][0]["parameter_set"] == '{"hard_exit_minute":210}'
