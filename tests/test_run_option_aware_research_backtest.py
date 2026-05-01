@@ -8,6 +8,7 @@ import pandas as pd
 
 from scripts.run_option_aware_research_backtest import (
     CONTRACT_SELECTION_LIQUIDITY_FIRST,
+    _path_matches_symbol_filter,
     build_option_aware_backtest,
 )
 
@@ -327,3 +328,22 @@ def test_liquidity_first_selector_uses_entry_window_without_future_bars(
     assert summary["missing_no_selected_contract"] == 0
     assert summary["fill_failure_reason"] == "fill_gate_clear"
     assert summary["contract_selection_method"] == CONTRACT_SELECTION_LIQUIDITY_FIRST
+
+
+def test_option_aware_parquet_path_pruning_skips_other_symbol_partitions() -> None:
+    assert _path_matches_symbol_filter(
+        Path("underlying=QQQ") / "trade_date=2026-04-21" / "part.parquet",
+        {"QQQ"},
+    )
+    assert not _path_matches_symbol_filter(
+        Path("underlying=AAPL") / "trade_date=2026-04-21" / "part.parquet",
+        {"QQQ"},
+    )
+    assert _path_matches_symbol_filter(
+        Path("QQQ") / "365d_5x5" / "option_bars_silver" / "part.parquet",
+        {"QQQ"},
+    )
+    assert not _path_matches_symbol_filter(
+        Path("AAPL") / "365d_5x5" / "option_bars_silver" / "part.parquet",
+        {"QQQ"},
+    )

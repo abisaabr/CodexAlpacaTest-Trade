@@ -102,11 +102,36 @@ def _load_json(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _load_parquet_tree(path: Path) -> pd.DataFrame:
+def _path_matches_symbol_filter(path: Path, symbol_filter: set[str] | None) -> bool:
+    if not symbol_filter:
+        return True
+    symbols = {symbol.upper() for symbol in symbol_filter}
+    for part in path.parts:
+        normalized = part.strip().upper()
+        if normalized in symbols:
+            return True
+        if "=" in normalized:
+            key, value = normalized.split("=", 1)
+            if key in {"UNDERLYING", "UNDERLYING_SYMBOL", "SYMBOL"} and value in symbols:
+                return True
+            if key in {"UNDERLYING", "UNDERLYING_SYMBOL", "SYMBOL"} and value not in symbols:
+                return False
+        if normalized.isalpha() and 1 <= len(normalized) <= 6:
+            return False
+    return not any(
+        part.strip().upper().startswith(("UNDERLYING=", "UNDERLYING_SYMBOL=", "SYMBOL="))
+        or part.strip().upper() in symbols
+        for part in path.parts
+    )
+
+
+def _load_parquet_tree(path: Path, symbol_filter: set[str] | None = None) -> pd.DataFrame:
     if path.is_file():
         return pd.read_parquet(path)
     frames = []
     for item in sorted(path.rglob("*.parquet")):
+        if not _path_matches_symbol_filter(item.relative_to(path), symbol_filter):
+            continue
         frame = pd.read_parquet(item)
         for part in item.relative_to(path).parts[:-1]:
             if "=" not in part:
@@ -130,13 +155,14 @@ def _load_option_inputs(
     selected_contracts_root: Path | None,
     option_bars_root: Path | None,
     option_trades_root: Path | None,
+    symbol_filter: set[str] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     selected_root = selected_contracts_root or Path(str(queue.get("selected_contracts_root")))
     bars_root = option_bars_root or Path(str(queue.get("option_bars_root")))
     trades_root = option_trades_root or Path(str(queue.get("option_trades_root")))
-    contracts = _load_parquet_tree(selected_root)
-    option_bars = _load_parquet_tree(bars_root)
-    option_trades = _load_parquet_tree(trades_root)
+    contracts = _load_parquet_tree(selected_root, symbol_filter=symbol_filter)
+    option_bars = _load_parquet_tree(bars_root, symbol_filter=symbol_filter)
+    option_trades = _load_parquet_tree(trades_root, symbol_filter=symbol_filter)
     for frame in [contracts, option_bars, option_trades]:
         if not frame.empty and "timestamp" in frame.columns:
             frame["timestamp"] = _coerce_timestamp(frame["timestamp"])
@@ -150,7 +176,7 @@ def _load_option_inputs(
 
 
 def _load_stock_bars(path: Path, symbol_filter: set[str] | None = None) -> pd.DataFrame:
-    bars = _load_parquet_tree(path)
+    bars = _load_parquet_tree(path, symbol_filter=symbol_filter)
     if "symbol" not in bars.columns and symbol_filter and len(symbol_filter) == 1:
         bars["symbol"] = next(iter(symbol_filter))
     if bars.empty:
@@ -734,6 +760,7 @@ def build_option_aware_backtest(
         selected_contracts_root=selected_contracts_root,
         option_bars_root=option_bars_root,
         option_trades_root=option_trades_root,
+        symbol_filter=symbol_filter,
     )
     option_index = _build_option_research_index(
         contracts=contracts,
