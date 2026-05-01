@@ -20,6 +20,7 @@ This watcher does not start trading, submit paper orders, edit live manifests, e
 - Monitor prefix: `gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate_post_completion_20260501T161922Z/monitor/`
 - Portfolio report prefix: `gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate_post_completion_20260501T161922Z/portfolio_report/`
 - Promotion packet prefix: `gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate_post_completion_20260501T161922Z/promotion_packet/`
+- Growth projection prefix: `gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate_post_completion_20260501T161922Z/growth_projection/`
 
 ## Baseline At Watch Start
 
@@ -51,6 +52,8 @@ The watcher checks every `900` seconds and triggers the aggregate when one of th
 ## Handoff Notes
 
 The existing all-ticker workers should not be stopped for this watcher. The current final aggregate remains a partial cutoff snapshot until this post-completion aggregate lands.
+
+The post-completion aggregate now also emits `portfolio_growth_projection.json`, `portfolio_growth_projection.md`, `portfolio_growth_equity_curve.csv`, and `portfolio_growth_scaled_trades.csv` when `scripts/build_portfolio_growth_projection.py` is present in the source archive. This projection is research-only and must be treated as directional unless the evidence grade clears without warnings.
 
 The other machine can monitor progress with:
 

@@ -198,8 +198,24 @@ python scripts/build_research_promotion_review_packet.py \
   --portfolio-report-json reports/research_wave/portfolio_overnight_12h_aggregate/research_portfolio_report.json \
   --output-dir reports/research_wave/portfolio_overnight_12h_promotion_packet
 
+if [[ -f scripts/build_portfolio_growth_projection.py ]]; then
+  python scripts/build_portfolio_growth_projection.py \
+    --portfolio-report-json reports/research_wave/portfolio_overnight_12h_aggregate/research_portfolio_report.json \
+    --replay-root "${WORKER_OUTPUTS}" \
+    --output-dir reports/research_wave/portfolio_overnight_12h_growth_projection \
+    --initial-cash "${INITIAL_CASH}" \
+    --target-equity 300000 \
+    --backtest-allocation-fraction 0.05 \
+    --bootstrap-runs 2000
+else
+  echo "growth_projection_skipped=missing_build_portfolio_growth_projection_py"
+fi
+
 gcloud storage cp --recursive reports/research_wave/portfolio_overnight_12h_aggregate "${GCS_PREFIX}/${AGG_SUBDIR}/portfolio_report/"
 gcloud storage cp --recursive reports/research_wave/portfolio_overnight_12h_promotion_packet "${GCS_PREFIX}/${AGG_SUBDIR}/promotion_packet/"
+if [[ -d reports/research_wave/portfolio_overnight_12h_growth_projection ]]; then
+  gcloud storage cp --recursive reports/research_wave/portfolio_overnight_12h_growth_projection "${GCS_PREFIX}/${AGG_SUBDIR}/growth_projection/"
+fi
 gcloud storage cp "${WORKROOT}/startup.log" "${GCS_PREFIX}/${AGG_SUBDIR}/monitor/startup.log" || true
 
 write_state "aggregate_completed" "${trigger_reason}" "${current_summary_count}" "${current_symbol_count}" "${running_count}" "${elapsed}"

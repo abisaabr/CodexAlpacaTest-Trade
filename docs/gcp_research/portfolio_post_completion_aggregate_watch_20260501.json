@@ -19,6 +19,14 @@
   "live_manifest_effect": "none",
   "max_wait_seconds": 21600,
   "paper_orders": false,
+  "post_aggregate_outputs": [
+    "research_portfolio_report.json",
+    "research_promotion_review_packet.json",
+    "portfolio_growth_projection.json",
+    "portfolio_growth_projection.md",
+    "portfolio_growth_equity_curve.csv",
+    "portfolio_growth_scaled_trades.csv"
+  ],
   "promotion_gates": {
     "candidate_identity_mode": "variant_profile",
     "fill_coverage_gate": 0.9,
