@@ -1,6 +1,6 @@
 # Portfolio Overnight 12h Launch Status - 2026-05-01
 
-Status updated UTC: `2026-05-01T03:48:00Z`
+Status updated UTC: `2026-05-01T11:03:54Z`
 
 ## Current State
 
@@ -8,7 +8,7 @@ The `portfolio_overnight_12h_20260501` research fleet is running in Google Cloud
 
 Canonical runner branch: `codex/phase2-fill-semantics-20260430`
 
-Branch head after fastlane-aware monitors: `b894ff34cf4670f61f9f8002104f017d5bd89a33`
+Branch head after fastlane-aware monitors: `a169a77bb441e2d811eaea71a65bfbd218c21cb5`
 
 GitHub PR: `https://github.com/abisaabr/CodexAlpacaTest-Trade/pull/2`
 
@@ -21,6 +21,7 @@ GCS monitor prefix: `gs://codexalpaca-control-us/research_results/portfolio_over
 - Focused tests: `5 passed`
 - Focused ruff: clean
 - Monitor script smoke: `python scripts\monitor_portfolio_overnight_wave.py --once ...` wrote `portfolio_overnight_monitor_latest.json` to GCS.
+- Paper readiness smoke after the fastlane path correction: `decision=blocked_waiting_for_evidence`, `fastlane_top40_unique_eligible_base_count=4`, `running_wave_vm_count=8`.
 - Test command: `python -m pytest -q tests\test_build_portfolio_overnight_tournament_packet.py tests\test_build_portfolio_overnight_research_inputs.py tests\test_run_option_aware_research_backtest.py`
 - Ruff command: `python -m ruff check scripts\build_portfolio_overnight_tournament_packet.py tests\test_build_portfolio_overnight_tournament_packet.py`
 
@@ -31,15 +32,15 @@ GCS monitor prefix: `gs://codexalpaca-control-us/research_results/portfolio_over
 | `portfolio-overnight-12h-20260501-data-coverage-top10` | data coverage | DELETED AFTER COMPLETION | Completed at `2026-05-01T02:01:39Z`; startup, command, source commit, and artifacts manifest uploaded. |
 | `portfolio-overnight-12h-20260501-data-coverage-next10` | data coverage | DELETED AFTER COMPLETION | Completed at `2026-05-01T02:02:25Z`; startup, command, source commit, and artifacts manifest uploaded. |
 | `portfolio-overnight-12h-20260501-qqq-deep-regime-grid` | QQQ deep grid | DELETED AFTER COMPLETION | Completed at `2026-05-01T01:57:32Z`; three `option_aware_candidate_summary.csv` files uploaded. |
-| `portfolio-overnight-12h-20260501-option-aware-core-a` | option-aware tournament | RUNNING | Symbols: `AAPL AMD AMZN INTC IWM`; long replay stage, no terminal serial error observed. |
-| `portfolio-overnight-12h-20260501-option-aware-core-b` | option-aware tournament | RUNNING | Symbols: `META MSFT NVDA SPY TSLA`; long replay stage, no terminal serial error observed. |
+| `portfolio-overnight-12h-20260501-option-aware-core-a` | option-aware tournament | TERMINATED | Spot worker terminated before a worker output prefix was found. |
+| `portfolio-overnight-12h-20260501-option-aware-core-b` | option-aware tournament | TERMINATED | Spot worker terminated before a worker output prefix was found. |
 | `portfolio-overnight-12h-20260501-option-aware-core-c` | option-aware tournament | RUNNING | Symbols: `AVGO GOOGL MU NFLX ORCL`; recreated as STANDARD after Spot termination, no terminal serial error observed. |
 | `portfolio-overnight-12h-20260501-option-aware-core-d` | option-aware tournament | RUNNING | Symbols: `PLTR QQQ TSM XLE XOM`; recreated as STANDARD after Spot termination and observed staging PLTR option bars at `2026-05-01T03:21:15Z`. |
 | `portfolio-overnight-12h-20260501-fastlane-top40-a` | option-aware fastlane | RUNNING | STANDARD top-40 shard for `AAPL AMD AMZN INTC IWM`; first run `AAPL nearest_contract` started at `2026-05-01T03:39:17Z`; CPU near one full core. |
 | `portfolio-overnight-12h-20260501-fastlane-top40-b` | option-aware fastlane | RUNNING | STANDARD top-40 shard for `META MSFT NVDA SPY TSLA`; first run `META nearest_contract` started at `2026-05-01T03:39:30Z`; CPU near one full core. |
 | `portfolio-overnight-12h-20260501-fastlane-top40-c` | option-aware fastlane | RUNNING | STANDARD top-40 shard for `AVGO GOOGL MU NFLX ORCL`; first run `AVGO nearest_contract` started at `2026-05-01T03:39:31Z`; CPU near one full core. |
 | `portfolio-overnight-12h-20260501-fastlane-top40-d` | option-aware fastlane | RUNNING | STANDARD top-40 shard for `PLTR QQQ TSM XLE XOM`; first run `PLTR nearest_contract` started at `2026-05-01T03:41:01Z`; launched in `us-east1-b` after `us-central1` external-address quota was exhausted. |
-| `portfolio-overnight-12h-20260501-fastlane-top40-agg-1040z` | aggregate and promote | RUNNING | STANDARD delayed fastlane aggregator in `us-east1-b`; wakes after 25,200 seconds, about `2026-05-01T10:40:00Z`, and writes to `aggregate_fastlane_top40_20260501/`. |
+| `portfolio-overnight-12h-20260501-fastlane-top40-agg-1040z` | aggregate and promote | RUNNING | STANDARD delayed fastlane aggregator in `us-east1-b`; woke before RTH and wrote the fastlane aggregate packet to `aggregate_fastlane_top40_20260501/`. |
 | `portfolio-overnight-12h-20260501-finalagg2-1255z` | aggregate and promote | RUNNING | STANDARD delayed final aggregator; sleeps until about `2026-05-01T12:55:00Z`, then writes to `aggregate/` using `candidate_identity_mode=variant_profile`. |
 
 ## Fixes Applied During Launch
@@ -69,7 +70,10 @@ GCS monitor prefix: `gs://codexalpaca-control-us/research_results/portfolio_over
 - Direct and IAP SSH from this machine failed with network connection abort/closed errors, so monitoring currently relies on GCS artifacts, serial logs, and GitHub/PR logging.
 - CPU telemetry showed the original option-aware workers running at roughly one fully used core each on `e2-standard-4`; a STANDARD `top_n=40` fastlane was launched as an additive recovery path instead of interrupting the exhaustive lane.
 - Fastlane packet and source are mirrored under `gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/inputs/fastlane_top40_packet_v2/` and `gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/inputs/source/codexalpaca_repo_source_fastlane_top40_20260501.tar.gz`.
-- The active 15-minute monitors were restarted with fastlane-aware code as local PIDs `38352` for portfolio wave status and `32812` for paper readiness.
+- The active 15-minute monitors are running locally as PID `38352` for portfolio wave status and PID `18824` for paper readiness after the fastlane aggregate path correction.
+- The fastlane aggregate has now landed at `gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate_fastlane_top40_20260501/`. The packet is research-only and reports 8 eligible profile-level candidates, 4 unique eligible base candidates, and no broker-facing/live-manifest/risk-policy effect.
+- Eligible fastlane candidates are currently QQQ bull/choppy only: three QQQ bull structures and one QQQ choppy iron-condor structure. No QQQ bear strategy is eligible yet; bear candidates remain blocked mainly by fill coverage and option-trade count.
+- The paper-readiness monitor path was corrected for nested aggregate output folders. This is observability only; it does not alter promotion gates or execution behavior.
 
 ## Monitor Commands
 

@@ -1,8 +1,8 @@
 {
   "wave_id": "portfolio_overnight_12h_20260501",
-  "status_updated_utc": "2026-05-01T03:48:00Z",
+  "status_updated_utc": "2026-05-01T11:03:54Z",
   "status": "running",
-  "branch_head_at_monitor_smoke": "b894ff34cf4670f61f9f8002104f017d5bd89a33",
+  "branch_head_at_monitor_smoke": "a169a77bb441e2d811eaea71a65bfbd218c21cb5",
   "branch": "codex/phase2-fill-semantics-20260430",
   "github_pr": "https://github.com/abisaabr/CodexAlpacaTest-Trade/pull/2",
   "gcs_prefix": "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/",
@@ -18,6 +18,7 @@
   "validation": {
     "focused_pytest": "5 passed",
     "focused_ruff": "clean",
+    "paper_readiness_smoke_after_fastlane_path_fix": "decision=blocked_waiting_for_evidence; fastlane_top40_unique_eligible_base_count=4; running_wave_vm_count=8",
     "latest_test_command": "python -m pytest -q tests\\test_build_portfolio_overnight_tournament_packet.py tests\\test_build_portfolio_overnight_research_inputs.py tests\\test_run_option_aware_research_backtest.py",
     "latest_ruff_command": "python -m ruff check scripts\\build_portfolio_overnight_tournament_packet.py tests\\test_build_portfolio_overnight_tournament_packet.py"
   },
@@ -28,10 +29,10 @@
   },
   "latest_update": {
     "readiness_decision": "blocked_waiting_for_evidence",
-    "readiness_monitor_pid": 32812,
+    "readiness_monitor_pid": 18824,
     "portfolio_monitor_pid": 38352,
-    "running_wave_vm_count": 10,
-    "worker_artifact_count": 458,
+    "running_wave_vm_count": 8,
+    "worker_artifact_count": 527,
     "aggregate_artifact_count": 0,
     "final_aggregator": "portfolio-overnight-12h-20260501-finalagg2-1255z",
     "final_aggregator_expected_wake_utc": "2026-05-01T12:55:00Z",
@@ -52,7 +53,10 @@
     ],
     "fastlane_aggregate_output_subdir": "aggregate_fastlane_top40_20260501",
     "fastlane_aggregate_expected_wake_utc": "2026-05-01T10:40:00Z",
-    "fastlane_aggregate_artifact_count": 0,
+    "fastlane_aggregate_artifact_count": 9,
+    "fastlane_top40_unique_eligible_base_count": 4,
+    "fastlane_top40_profile_level_eligible_count": 8,
+    "fastlane_launch_gate_effect": "evidence_only_does_not_unblock_final_aggregate_requirement",
     "fastlane_first_run_markers": {
       "fastlane_top40_a": "fastlane_top40_a_aapl_nearest_contract started 2026-05-01T03:39:17Z",
       "fastlane_top40_b": "fastlane_top40_b_meta_nearest_contract started 2026-05-01T03:39:30Z",
@@ -90,19 +94,19 @@
       "name": "portfolio-overnight-12h-20260501-option-aware-core-a",
       "role": "option_aware_tournament",
       "machine_type": "e2-standard-4",
-      "status": "RUNNING",
+      "status": "TERMINATED",
       "last_start": "2026-04-30T19:03:57.469-07:00",
       "symbols": ["AAPL", "AMD", "AMZN", "INTC", "IWM"],
-      "artifact_status": "long replay stage; no terminal error observed in serial log as of status time"
+      "artifact_status": "Spot worker terminated before a worker output prefix was found"
     },
     {
       "name": "portfolio-overnight-12h-20260501-option-aware-core-b",
       "role": "option_aware_tournament",
       "machine_type": "e2-standard-4",
-      "status": "RUNNING",
+      "status": "TERMINATED",
       "last_start": "2026-04-30T19:04:11.235-07:00",
       "symbols": ["META", "MSFT", "NVDA", "SPY", "TSLA"],
-      "artifact_status": "long replay stage; no terminal error observed in serial log as of status time"
+      "artifact_status": "Spot worker terminated before a worker output prefix was found"
     },
     {
       "name": "portfolio-overnight-12h-20260501-option-aware-core-c",
@@ -147,7 +151,9 @@
     "The first option-aware worker launch used raw contract inventory for ladder datasets and failed on missing relative_strike_step; fixed by routing workers to selected_option_contracts.",
     "option-aware-core-c restarted on a reused disk and hit a corrupted pip resolver import; fixed by idempotent startup plus clean recreate.",
     "Completed data coverage workers and the completed QQQ deep grid worker were deleted after artifact upload to reduce idle compute cost.",
-    "option-aware-core-c was later recreated as a standard on-demand e2-standard-4 worker after another Spot termination, preserving the AVGO/GOOGL/MU/NFLX/ORCL lane."
+    "option-aware-core-c was later recreated as a standard on-demand e2-standard-4 worker after another Spot termination, preserving the AVGO/GOOGL/MU/NFLX/ORCL lane.",
+    "The fastlane aggregate landed at aggregate_fastlane_top40_20260501 and reports 8 eligible profile-level candidates, 4 unique eligible base candidates, research-only scope, no broker-facing effect, no live-manifest effect, and no risk-policy effect.",
+    "The paper readiness monitor was corrected to read nested aggregate output folders; this is observability only and does not alter promotion gates or execution behavior."
   ],
   "next_monitor_commands": [
     "python scripts\\monitor_portfolio_overnight_wave.py --once --gcloud-bin <path-to-gcloud>",

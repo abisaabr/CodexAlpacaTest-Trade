@@ -34,11 +34,13 @@ DEFAULT_PARTIAL_AGGREGATE_PORTFOLIO_REPORT_URI = (
 )
 DEFAULT_FASTLANE_AGGREGATE_PROMOTION_PACKET_URI = (
     "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/"
-    "aggregate_fastlane_top40_20260501/promotion_packet/research_promotion_review_packet.json"
+    "aggregate_fastlane_top40_20260501/promotion_packet/"
+    "portfolio_overnight_12h_promotion_packet/research_promotion_review_packet.json"
 )
 DEFAULT_FASTLANE_AGGREGATE_PORTFOLIO_REPORT_URI = (
     "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/"
-    "aggregate_fastlane_top40_20260501/portfolio_report/research_portfolio_report.json"
+    "aggregate_fastlane_top40_20260501/portfolio_report/"
+    "portfolio_overnight_12h_aggregate/research_portfolio_report.json"
 )
 DEFAULT_LIVE_MANIFEST = "config/strategy_manifests/multi_ticker_portfolio_live.yaml"
 DEFAULT_PAPER_CONFIG = "config/multi_ticker_paper_portfolio.yaml"
@@ -247,8 +249,14 @@ def build_readiness_snapshot(
 ) -> dict[str, Any]:
     gcs_prefix = gcs_prefix.rstrip("/")
     now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    promotion_uri = f"{gcs_prefix}/aggregate/promotion_packet/research_promotion_review_packet.json"
-    portfolio_report_uri = f"{gcs_prefix}/aggregate/portfolio_report/research_portfolio_report.json"
+    promotion_uri = (
+        f"{gcs_prefix}/aggregate/promotion_packet/"
+        "portfolio_overnight_12h_promotion_packet/research_promotion_review_packet.json"
+    )
+    portfolio_report_uri = (
+        f"{gcs_prefix}/aggregate/portfolio_report/"
+        "portfolio_overnight_12h_aggregate/research_portfolio_report.json"
+    )
     promotion_packet, promotion_command = _json_gcs(gcloud_bin=gcloud_bin, uri=promotion_uri)
     portfolio_report, portfolio_command = _json_gcs(gcloud_bin=gcloud_bin, uri=portfolio_report_uri)
     early_qqq_packet, early_qqq_command = _json_gcs(

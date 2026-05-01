@@ -1,18 +1,18 @@
 # Paper Trader Readiness Watch - 2026-05-01
 
-Status updated UTC: `2026-05-01T03:48:00Z`
+Status updated UTC: `2026-05-01T11:03:54Z`
 
 ## Current Decision
 
 Decision: `blocked_waiting_for_evidence`
 
-The paper VM is running and the startup-preflight command is available, but the final overnight portfolio aggregate promotion packet has not landed yet. The correct action is to keep monitoring and not arm paper orders or change manifests until the generated final promotion packet exists, has eligible candidates, and remains research-only with no manifest or risk-policy effect.
+The paper VM is running and the startup-preflight command is available, but the canonical final overnight portfolio aggregate promotion packet has not landed yet. The correct action is to keep monitoring and not arm paper orders or change manifests until the generated final promotion packet exists, has eligible candidates, and remains research-only with no manifest or risk-policy effect.
 
-At `2026-05-01T03:46:25Z`, the readiness monitor reports `decision=blocked_waiting_for_evidence`, `running_wave_vm_count=10`, `aggregate_artifact_count=0`, and `fastlane_aggregate_artifact_count=0`.
+At `2026-05-01T11:03:54Z`, the readiness monitor reports `decision=blocked_waiting_for_evidence`, `running_wave_vm_count=8`, `eligible_for_promotion_review_count=0`, `fastlane_top40_artifact_count=9`, `fastlane_top40_unique_eligible_base_count=4`, and `partial_aggregate_unique_eligible_base_count=4`.
 
-The monitor also sees the corrected profile-isolated partial aggregate. That packet has 8 eligible profile-level candidates and 4 unique eligible base candidates, but it is evidence-only and explicitly does not unblock the final aggregate requirement.
+The fastlane aggregate has landed and is now visible to the patched readiness monitor. Its promotion packet has 8 profile-level eligible candidates and 4 unique eligible base candidates, but it is evidence-only and explicitly does not unblock the canonical final aggregate requirement.
 
-An additive `top_n=40` fastlane is now running because the original deep option-aware workers are compute-active but single-core/sequential. The fastlane is also research-only and cannot unblock launch by itself; it feeds the same governed-validation promotion gates and writes a separate aggregate packet before RTH.
+The additive `top_n=40` fastlane completed its delayed aggregate path before RTH and wrote a separate research-only packet. It used the same governed-validation promotion gates and remains non-broker-facing.
 
 ## Active Watch
 
@@ -28,10 +28,13 @@ The monitor is read-only. It checks GCP VM state, aggregate artifacts, promotion
 
 - `paper_vm_running`: passed
 - `paper_vm_validation_only_label`: passed
-- `overnight_workers_active_or_complete`: passed, four option-aware workers plus aggregator are running
+- `overnight_workers_active_or_complete`: warning, core A/B Spot workers terminated while core C/D, fastlane workers, the fastlane aggregator, and final aggregator remain running
 - `overnight_promotion_packet_present`: failed, waiting for aggregate output
 - `overnight_packet_has_eligible_candidates`: failed, waiting for aggregate output
 - `overnight_packet_safety_scope`: failed, waiting for aggregate output
+- `fastlane_top40_aggregate_present`: passed as warning/evidence only
+- `fastlane_top40_aggregate_has_candidates`: passed as warning/evidence only, 4 unique base candidates
+- `fastlane_top40_aggregate_safety_scope`: passed as warning/evidence only
 - `profile_isolated_partial_aggregate_present`: passed as warning/evidence only
 - `profile_isolated_partial_aggregate_has_candidates`: passed as warning/evidence only, 4 unique base candidates
 - `profile_isolated_partial_aggregate_safety_scope`: passed as warning/evidence only
@@ -51,11 +54,17 @@ Workers:
 - `fastlane-top40-b`: `META MSFT NVDA SPY TSLA`
 - `fastlane-top40-c`: `AVGO GOOGL MU NFLX ORCL`
 - `fastlane-top40-d`: `PLTR QQQ TSM XLE XOM`
-- `fastlane-top40-agg-1040z`: wakes around `2026-05-01T10:40:00Z` and writes `aggregate_fastlane_top40_20260501/`
+- `fastlane-top40-agg-1040z`: woke before RTH and wrote `aggregate_fastlane_top40_20260501/`
 
 This path uses `top_n=40`, `test_date_count=20`, both `nearest_contract` and `entry_liquidity_first_research_only`, and the same `fill_coverage >= 0.90`, `min_option_trades >= 20`, `min_test_net_pnl >= 0`, and `min_net_pnl >= 0` gates.
 
-The fastlane workers have started their first symbol replays and are CPU-active. The fastlane-aware monitor code is committed and running locally as PID `32812`; the portfolio wave monitor is PID `38352`.
+The fastlane aggregate promotion packet is:
+
+`gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate_fastlane_top40_20260501/promotion_packet/portfolio_overnight_12h_promotion_packet/research_promotion_review_packet.json`
+
+It reports 8 eligible profile-level candidates and 4 unique eligible base candidates. All eligible candidates are QQQ bull/choppy research candidates; no QQQ bear candidate is eligible yet.
+
+The fastlane-aware monitor path bug was corrected so the readiness monitor now reads the nested promotion packet and portfolio report paths. The monitor patch is validation-only and does not change strategy gates, risk, manifests, or execution behavior.
 
 ## Profile-Isolated Partial Aggregate
 
