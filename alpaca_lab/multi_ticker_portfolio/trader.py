@@ -188,6 +188,10 @@ class OpenTrade:
     promotion_manifest_path: str | None = None
     governed_validation_packet_uri: str | None = None
     research_profile: str | None = None
+    research_entry_timing_mode: str | None = None
+    research_entry_offset_minutes: int | None = None
+    research_exit_offset_minutes: int | None = None
+    runner_semantics_status: str | None = None
     notes: list[str] = field(default_factory=list)
 
 
@@ -220,6 +224,10 @@ class CompletedTrade:
     promotion_manifest_path: str | None = None
     governed_validation_packet_uri: str | None = None
     research_profile: str | None = None
+    research_entry_timing_mode: str | None = None
+    research_entry_offset_minutes: int | None = None
+    research_exit_offset_minutes: int | None = None
+    runner_semantics_status: str | None = None
     entry_total_fees: float = 0.0
     exit_total_fees: float = 0.0
     entry_regulatory_fees: float = 0.0
@@ -764,6 +772,10 @@ class MultiTickerPortfolioPaperTrader:
             "promotion_manifest_path": trade.promotion_manifest_path,
             "governed_validation_packet_uri": trade.governed_validation_packet_uri,
             "research_profile": trade.research_profile,
+            "research_entry_timing_mode": trade.research_entry_timing_mode,
+            "research_entry_offset_minutes": trade.research_entry_offset_minutes,
+            "research_exit_offset_minutes": trade.research_exit_offset_minutes,
+            "runner_semantics_status": trade.runner_semantics_status,
         }
 
     def _notify_lines(self, *lines: object) -> bool:
@@ -1486,6 +1498,10 @@ class MultiTickerPortfolioPaperTrader:
             "promotion_manifest_path": strategy.promotion_manifest_path,
             "governed_validation_packet_uri": strategy.governed_validation_packet_uri,
             "research_profile": strategy.research_profile,
+            "research_entry_timing_mode": strategy.research_entry_timing_mode,
+            "research_entry_offset_minutes": strategy.research_entry_offset_minutes,
+            "research_exit_offset_minutes": strategy.research_exit_offset_minutes,
+            "runner_semantics_status": strategy.runner_semantics_status,
             "signal_name": strategy.signal_name,
             "timing_profile": strategy.timing_profile,
             "current_minute": int(current_minute),
@@ -1695,6 +1711,10 @@ class MultiTickerPortfolioPaperTrader:
             promotion_manifest_path=strategy.promotion_manifest_path,
             governed_validation_packet_uri=strategy.governed_validation_packet_uri,
             research_profile=strategy.research_profile,
+            research_entry_timing_mode=strategy.research_entry_timing_mode,
+            research_entry_offset_minutes=strategy.research_entry_offset_minutes,
+            research_exit_offset_minutes=strategy.research_exit_offset_minutes,
+            runner_semantics_status=strategy.runner_semantics_status,
         )
         delta_shares, vega_dollars = self._expected_entry_greeks(open_trade)
         portfolio_delta_shares, portfolio_vega_dollars = self._current_portfolio_expected_greeks(session)
@@ -2364,6 +2384,10 @@ class MultiTickerPortfolioPaperTrader:
             promotion_manifest_path=trade.promotion_manifest_path,
             governed_validation_packet_uri=trade.governed_validation_packet_uri,
             research_profile=trade.research_profile,
+            research_entry_timing_mode=trade.research_entry_timing_mode,
+            research_entry_offset_minutes=trade.research_entry_offset_minutes,
+            research_exit_offset_minutes=trade.research_exit_offset_minutes,
+            runner_semantics_status=trade.runner_semantics_status,
             entry_total_fees=round(entry_fee_breakdown.total_fees, 4),
             exit_total_fees=round(exit_fee_breakdown.total_fees, 4),
             entry_regulatory_fees=round(entry_fee_breakdown.regulatory_fees, 4),
@@ -2678,6 +2702,10 @@ class MultiTickerPortfolioPaperTrader:
             promotion_manifest_path=trade.promotion_manifest_path,
             governed_validation_packet_uri=trade.governed_validation_packet_uri,
             research_profile=trade.research_profile,
+            research_entry_timing_mode=trade.research_entry_timing_mode,
+            research_entry_offset_minutes=trade.research_entry_offset_minutes,
+            research_exit_offset_minutes=trade.research_exit_offset_minutes,
+            runner_semantics_status=trade.runner_semantics_status,
             entry_total_fees=round(entry_fee_breakdown.total_fees, 4),
             exit_total_fees=round(exit_fee_breakdown.total_fees, 4),
             entry_regulatory_fees=round(entry_fee_breakdown.regulatory_fees, 4),
@@ -3930,6 +3958,10 @@ class MultiTickerPortfolioPaperTrader:
                     "promotion_manifest_path": signal_row.get("promotion_manifest_path"),
                     "governed_validation_packet_uri": signal_row.get("governed_validation_packet_uri"),
                     "research_profile": signal_row.get("research_profile"),
+                    "research_entry_timing_mode": signal_row.get("research_entry_timing_mode"),
+                    "research_entry_offset_minutes": signal_row.get("research_entry_offset_minutes"),
+                    "research_exit_offset_minutes": signal_row.get("research_exit_offset_minutes"),
+                    "runner_semantics_status": signal_row.get("runner_semantics_status"),
                     "signal_name": signal_row.get("signal_name"),
                     "timing_profile": signal_row.get("timing_profile"),
                     "signal_time_et": signal_row.get("timestamp_et"),
@@ -4388,6 +4420,10 @@ class MultiTickerPortfolioPaperTrader:
                     "promotion_manifest_path": trade.promotion_manifest_path,
                     "governed_validation_packet_uri": trade.governed_validation_packet_uri,
                     "research_profile": trade.research_profile,
+                    "research_entry_timing_mode": trade.research_entry_timing_mode,
+                    "research_entry_offset_minutes": trade.research_entry_offset_minutes,
+                    "research_exit_offset_minutes": trade.research_exit_offset_minutes,
+                    "runner_semantics_status": trade.runner_semantics_status,
                     "signal_name": "recovered_open_trade",
                     "timing_profile": "recovered",
                     "current_minute": int(trade.entry_minute),

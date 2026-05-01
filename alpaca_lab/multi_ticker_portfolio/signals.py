@@ -62,6 +62,14 @@ TIMING_PROFILES: dict[str, TimingProfile] = {
         straddle_minute=25,
         condor_minute=60,
     ),
+    "governed_late": TimingProfile(
+        name="governed_late",
+        orb_window=30,
+        trend_start=330,
+        credit_minute=330,
+        straddle_minute=330,
+        condor_minute=330,
+    ),
 }
 
 

@@ -1,0 +1,113 @@
+version: 1
+description: QQQ-only governed shadow-validation strategy manifest. Broker-free by default; not a live paper-runner manifest.
+scope: broker_free_shadow_validation_only
+broker_facing: false
+live_manifest_effect: none
+risk_policy_effect: none
+source_promotion_manifest: config/promotion_manifests/qqq_option_native_governed_validation_20260430.yaml
+strategy_count: 3
+strategies:
+- name: qqq__governed_shadow__bull_long_call_atm
+  underlying_symbol: QQQ
+  regime: bull
+  family: Governed QQQ long call
+  description: Broker-free shadow proxy for the promoted QQQ bull ATM long-call candidate.
+  dte_mode: next_expiry
+  signal_name: trend_call
+  timing_profile: governed_late
+  hard_exit_minute: 390
+  risk_fraction: 0.01
+  max_contracts: 1
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.30
+  candidate_variant_id: qqq_bull_long_call_atm__first_common_within_cutoff_e330_x390_el15_xl15_nearest_contract
+  source_strategy_id: qqq_bull_long_call_atm
+  promotion_manifest_path: config/promotion_manifests/qqq_option_native_governed_validation_20260430.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_option_native_governed_validation_20260430/
+  research_profile: first_common_within_cutoff_e330_x390_lag15_15
+  research_entry_timing_mode: first_common_within_cutoff
+  research_entry_offset_minutes: 330
+  research_exit_offset_minutes: 390
+  runner_semantics_status: proxy_shadow_not_promotion_equivalent
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.50
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__governed_shadow__bear_call_credit_spread
+  underlying_symbol: QQQ
+  regime: bear
+  family: Governed QQQ call credit spread
+  description: Broker-free shadow proxy for the promoted QQQ bear call-credit-spread candidate.
+  dte_mode: next_expiry
+  signal_name: credit_bear
+  timing_profile: governed_late
+  hard_exit_minute: 390
+  risk_fraction: 0.01
+  max_contracts: 1
+  profit_target_multiple: 0.40
+  stop_loss_multiple: 1.10
+  candidate_variant_id: qqq_bear_call_credit_spread__first_common_within_cutoff_e330_x390_el15_xl15_nearest_contract
+  source_strategy_id: qqq_bear_call_credit_spread
+  promotion_manifest_path: config/promotion_manifests/qqq_option_native_governed_validation_20260430.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_option_native_governed_validation_20260430/
+  research_profile: first_common_within_cutoff_e330_x390_lag15_15
+  research_entry_timing_mode: first_common_within_cutoff
+  research_entry_offset_minutes: 330
+  research_exit_offset_minutes: 390
+  runner_semantics_status: proxy_shadow_not_promotion_equivalent
+  legs:
+  - option_type: call
+    side: short
+    target_delta: 0.35
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: call
+    side: long
+    target_delta: 0.20
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__governed_shadow__choppy_iron_condor
+  underlying_symbol: QQQ
+  regime: choppy
+  family: Governed QQQ iron condor
+  description: Broker-free shadow proxy for the promoted QQQ choppy iron-condor candidate.
+  dte_mode: next_expiry
+  signal_name: iron_condor
+  timing_profile: governed_late
+  hard_exit_minute: 390
+  risk_fraction: 0.01
+  max_contracts: 1
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 1.10
+  candidate_variant_id: qqq_choppy_iron_condor__first_common_within_cutoff_e330_x390_el15_xl15_nearest_contract
+  source_strategy_id: qqq_choppy_iron_condor
+  promotion_manifest_path: config/promotion_manifests/qqq_option_native_governed_validation_20260430.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_option_native_governed_validation_20260430/
+  research_profile: first_common_within_cutoff_e330_x390_lag15_15
+  research_entry_timing_mode: first_common_within_cutoff
+  research_entry_offset_minutes: 330
+  research_exit_offset_minutes: 390
+  runner_semantics_status: proxy_shadow_not_promotion_equivalent
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.15
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: put
+    side: short
+    target_delta: -0.30
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: call
+    side: short
+    target_delta: 0.30
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  - option_type: call
+    side: long
+    target_delta: 0.15
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95

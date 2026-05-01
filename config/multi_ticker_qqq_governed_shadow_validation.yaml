@@ -1,0 +1,26 @@
+name: qqq_governed_shadow_validation
+description: QQQ-only broker-free governed shadow validation for the option-native bull, bear, and choppy candidates.
+risk_controls_path: risk_controls/multi_ticker_portfolio.yaml
+strategy_manifest_path: strategy_manifests/qqq_option_native_governed_shadow_validation_20260501.yaml
+ownership:
+  enabled: true
+  lease_backend: gcs_generation_match
+  gcs_lease_uri: gs://codexalpaca-control-us/execution_locks/qqq_governed_shadow_validation_20260501/ownership_lease.json
+  lease_ttl_seconds: 180
+  machine_label: qqq-governed-shadow-validation
+execution:
+  underlying_symbols:
+  - QQQ
+  option_feed: indicative
+  stock_feed: iex
+  submit_paper_orders: false
+  poll_interval_seconds: 20
+  order_status_poll_seconds: 10
+  order_fill_timeout_seconds: 45
+  contract_refresh_minutes: 15
+  max_dte_days: 7
+  state_root: reports/multi_ticker_portfolio/qqq_governed_shadow_validation/state
+  run_root: reports/multi_ticker_portfolio/qqq_governed_shadow_validation/runs
+  task_name: QQQ Governed Shadow Validation
+  startup_lead_minutes: 0
+  midday_report_minute: 330

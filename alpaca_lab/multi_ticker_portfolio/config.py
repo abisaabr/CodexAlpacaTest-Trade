@@ -39,7 +39,7 @@ class StrategyConfig(BaseModel):
         "long_straddle",
         "iron_condor",
     ]
-    timing_profile: Literal["reactive", "fast", "base", "slow", "patient"] = "base"
+    timing_profile: Literal["reactive", "fast", "base", "slow", "patient", "governed_late"] = "base"
     hard_exit_minute: int
     risk_fraction: float
     max_contracts: int
@@ -51,6 +51,10 @@ class StrategyConfig(BaseModel):
     promotion_manifest_path: str | None = None
     governed_validation_packet_uri: str | None = None
     research_profile: str | None = None
+    research_entry_timing_mode: str | None = None
+    research_entry_offset_minutes: int | None = None
+    research_exit_offset_minutes: int | None = None
+    runner_semantics_status: str | None = None
 
     @field_validator("underlying_symbol", mode="before")
     @classmethod

@@ -290,6 +290,10 @@ def test_governed_candidate_identity_survives_trade_event_base() -> None:
     trade.promotion_manifest_path = "config/promotion_manifests/qqq_option_native_governed_validation_20260430.yaml"
     trade.governed_validation_packet_uri = "gs://codexalpaca-control-us/research_results/qqq_option_native_governed_validation_20260430/"
     trade.research_profile = "first_common_within_cutoff_e330_x390_lag15_15"
+    trade.research_entry_timing_mode = "first_common_within_cutoff"
+    trade.research_entry_offset_minutes = 330
+    trade.research_exit_offset_minutes = 390
+    trade.runner_semantics_status = "proxy_shadow_not_promotion_equivalent"
 
     event = trader._event_base_for_trade(trade, phase="entry")
 
@@ -298,6 +302,10 @@ def test_governed_candidate_identity_survives_trade_event_base() -> None:
     assert event["promotion_manifest_path"] == trade.promotion_manifest_path
     assert event["governed_validation_packet_uri"] == trade.governed_validation_packet_uri
     assert event["research_profile"] == trade.research_profile
+    assert event["research_entry_timing_mode"] == trade.research_entry_timing_mode
+    assert event["research_entry_offset_minutes"] == trade.research_entry_offset_minutes
+    assert event["research_exit_offset_minutes"] == trade.research_exit_offset_minutes
+    assert event["runner_semantics_status"] == trade.runner_semantics_status
 
 
 def test_governed_qqq_candidate_order_shapes_are_broker_safe(monkeypatch) -> None:
