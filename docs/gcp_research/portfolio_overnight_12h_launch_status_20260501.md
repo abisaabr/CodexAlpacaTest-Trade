@@ -1,6 +1,6 @@
 # Portfolio Overnight 12h Launch Status - 2026-05-01
 
-Status updated UTC: `2026-05-01T11:14:19Z`
+Status updated UTC: `2026-05-01T13:38:02Z`
 
 ## Current State
 
@@ -21,8 +21,8 @@ GCS monitor prefix: `gs://codexalpaca-control-us/research_results/portfolio_over
 - Focused tests: `5 passed`
 - Focused ruff: clean
 - Monitor script smoke: `python scripts\monitor_portfolio_overnight_wave.py --once ...` wrote `portfolio_overnight_monitor_latest.json` to GCS.
-- Paper readiness smoke after the fastlane path correction and monitor cleanup: `decision=blocked_waiting_for_evidence`, `fastlane_top40_unique_eligible_base_count=4`, `running_wave_vm_count=8`.
-- QQQ governed shadow no-order preflight reached ownership/broker checks and returned `startup_preflight_pending` only because `QQQ stock frame not ready yet`.
+- Paper readiness smoke after final aggregate: `decision=operator_review_ready_no_orders`, `aggregate_artifact_count=9`, `eligible_for_promotion_review_count=8`, `fastlane_top40_unique_eligible_base_count=4`, `running_wave_vm_count=8`.
+- QQQ governed shadow no-order preflight passed with `submit_paper_orders=false`, broker position count `0`, open order count `0`, and QQQ stock/options frame ready.
 - Test command: `python -m pytest -q tests\test_build_portfolio_overnight_tournament_packet.py tests\test_build_portfolio_overnight_research_inputs.py tests\test_run_option_aware_research_backtest.py`
 - Ruff command: `python -m ruff check scripts\build_portfolio_overnight_tournament_packet.py tests\test_build_portfolio_overnight_tournament_packet.py`
 
@@ -77,6 +77,8 @@ GCS monitor prefix: `gs://codexalpaca-control-us/research_results/portfolio_over
 - The paper-readiness monitor path was corrected for nested aggregate output folders. This is observability only; it does not alter promotion gates or execution behavior.
 - Duplicate stale monitor processes were stopped. Exactly one portfolio monitor and one paper-readiness monitor are now running on a 15-minute cadence as local PIDs `4448` and `41044`.
 - Final aggregator serial output shows `aggregate_wait_seconds=34627`, `aggregate_output_subdir=aggregate`, and `candidate_identity_mode=variant_profile`; no terminal error is visible.
+- The canonical final aggregate has landed at `gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate/`. The packet is research-only, non-broker-facing, and reports 364 candidates, 8 profile-level eligible candidates, and 4 unique eligible base candidates.
+- Final eligible candidates are QQQ bull/choppy only. No QQQ bear strategy passed the final overnight packet, so any bear exposure should remain limited to the separate QQQ governed shadow-validation evidence path until a final-packet bear candidate qualifies.
 
 ## Monitor Commands
 
