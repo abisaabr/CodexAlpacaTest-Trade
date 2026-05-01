@@ -1,6 +1,6 @@
 # Portfolio Overnight 12h Launch Status - 2026-05-01
 
-Status updated UTC: `2026-05-01T03:35:00Z`
+Status updated UTC: `2026-05-01T03:41:24Z`
 
 ## Current State
 
@@ -8,7 +8,7 @@ The `portfolio_overnight_12h_20260501` research fleet is running in Google Cloud
 
 Canonical runner branch: `codex/phase2-fill-semantics-20260430`
 
-Branch head after monitor/readiness recovery: `8d6e4336312cf5236a70b4a2486b269274a545bd`
+Branch head after fastlane launch: `78e248b527c6a447c7d1e73a3d5e250c57e2cc5f`
 
 GitHub PR: `https://github.com/abisaabr/CodexAlpacaTest-Trade/pull/2`
 
@@ -35,6 +35,11 @@ GCS monitor prefix: `gs://codexalpaca-control-us/research_results/portfolio_over
 | `portfolio-overnight-12h-20260501-option-aware-core-b` | option-aware tournament | RUNNING | Symbols: `META MSFT NVDA SPY TSLA`; long replay stage, no terminal serial error observed. |
 | `portfolio-overnight-12h-20260501-option-aware-core-c` | option-aware tournament | RUNNING | Symbols: `AVGO GOOGL MU NFLX ORCL`; recreated as STANDARD after Spot termination, no terminal serial error observed. |
 | `portfolio-overnight-12h-20260501-option-aware-core-d` | option-aware tournament | RUNNING | Symbols: `PLTR QQQ TSM XLE XOM`; recreated as STANDARD after Spot termination and observed staging PLTR option bars at `2026-05-01T03:21:15Z`. |
+| `portfolio-overnight-12h-20260501-fastlane-top40-a` | option-aware fastlane | RUNNING | STANDARD top-40 shard for `AAPL AMD AMZN INTC IWM`; launched to get faster pre-RTH evidence without stopping deep workers. |
+| `portfolio-overnight-12h-20260501-fastlane-top40-b` | option-aware fastlane | RUNNING | STANDARD top-40 shard for `META MSFT NVDA SPY TSLA`; launched to get faster pre-RTH evidence without stopping deep workers. |
+| `portfolio-overnight-12h-20260501-fastlane-top40-c` | option-aware fastlane | RUNNING | STANDARD top-40 shard for `AVGO GOOGL MU NFLX ORCL`; launched to get faster pre-RTH evidence without stopping deep workers. |
+| `portfolio-overnight-12h-20260501-fastlane-top40-d` | option-aware fastlane | RUNNING | STANDARD top-40 shard for `PLTR QQQ TSM XLE XOM`; launched in `us-east1-b` after `us-central1` external-address quota was exhausted. |
+| `portfolio-overnight-12h-20260501-fastlane-top40-agg-1040z` | aggregate and promote | RUNNING | STANDARD delayed fastlane aggregator in `us-east1-b`; wakes after 25,200 seconds, about `2026-05-01T10:40:00Z`, and writes to `aggregate_fastlane_top40_20260501/`. |
 | `portfolio-overnight-12h-20260501-finalagg2-1255z` | aggregate and promote | RUNNING | STANDARD delayed final aggregator; sleeps until about `2026-05-01T12:55:00Z`, then writes to `aggregate/` using `candidate_identity_mode=variant_profile`. |
 
 ## Fixes Applied During Launch
@@ -45,6 +50,8 @@ GCS monitor prefix: `gs://codexalpaca-control-us/research_results/portfolio_over
 - `8ad565a`: aggregate reports can isolate candidates by replay profile to avoid cross-profile evidence contamination.
 - `45dd637`: promotion review packets dedupe eligible candidates by base strategy.
 - `8d6e433`: paper readiness monitor now surfaces the profile-isolated partial aggregate as evidence-only without unblocking launch.
+- `56409a9`: packet builder and config now support a reproducible top-40 fastlane recovery lane with unbuffered run markers.
+- `78e248b`: fastlane config now includes a delayed pre-RTH aggregate worker.
 
 ## Launch Events
 
@@ -59,6 +66,8 @@ GCS monitor prefix: `gs://codexalpaca-control-us/research_results/portfolio_over
 - `option-aware-core-d` was recreated as a standard on-demand `e2-standard-4` worker after Spot termination, preserving the `PLTR QQQ TSM XLE XOM` lane.
 - A profile-isolated partial aggregate exists at `gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate_partial_profile_20260501T031218Z/`; its deduped packet has 4 unique eligible base candidates, but it is evidence-only and does not unblock the final aggregate requirement.
 - Direct and IAP SSH from this machine failed with network connection abort/closed errors, so monitoring currently relies on GCS artifacts, serial logs, and GitHub/PR logging.
+- CPU telemetry showed the original option-aware workers running at roughly one fully used core each on `e2-standard-4`; a STANDARD `top_n=40` fastlane was launched as an additive recovery path instead of interrupting the exhaustive lane.
+- Fastlane packet and source are mirrored under `gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/inputs/fastlane_top40_packet_v2/` and `gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/inputs/source/codexalpaca_repo_source_fastlane_top40_20260501.tar.gz`.
 
 ## Monitor Commands
 

@@ -1,6 +1,6 @@
 # Paper Trader Readiness Watch - 2026-05-01
 
-Status updated UTC: `2026-05-01T03:26:25Z`
+Status updated UTC: `2026-05-01T03:41:24Z`
 
 ## Current Decision
 
@@ -8,9 +8,11 @@ Decision: `blocked_waiting_for_evidence`
 
 The paper VM is running and the startup-preflight command is available, but the final overnight portfolio aggregate promotion packet has not landed yet. The correct action is to keep monitoring and not arm paper orders or change manifests until the generated final promotion packet exists, has eligible candidates, and remains research-only with no manifest or risk-policy effect.
 
-At `2026-05-01T03:26:25Z`, the readiness monitor reports `decision=blocked_waiting_for_evidence`, `running_wave_vm_count=5`, `worker_artifact_count=458`, and `aggregate_artifact_count=0`.
+At `2026-05-01T03:41:24Z`, the readiness monitor reports `decision=blocked_waiting_for_evidence`, `running_wave_vm_count=10`, and `aggregate_artifact_count=0`.
 
 The monitor also sees the corrected profile-isolated partial aggregate. That packet has 8 eligible profile-level candidates and 4 unique eligible base candidates, but it is evidence-only and explicitly does not unblock the final aggregate requirement.
+
+An additive `top_n=40` fastlane is now running because the original deep option-aware workers are compute-active but single-core/sequential. The fastlane is also research-only and cannot unblock launch by itself; it feeds the same governed-validation promotion gates and writes a separate aggregate packet before RTH.
 
 ## Active Watch
 
@@ -36,6 +38,22 @@ The monitor is read-only. It checks GCP VM state, aggregate artifacts, promotion
 - `local_paper_config_present`: passed
 - `startup_preflight_available`: passed
 - `qqq_fallback_governed_candidates`: passed as a warning/fallback only
+
+## Fastlane Evidence Path
+
+Fastlane packet:
+
+`gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/inputs/fastlane_top40_packet_v2/portfolio_overnight_12h_tournament_packet.json`
+
+Workers:
+
+- `fastlane-top40-a`: `AAPL AMD AMZN INTC IWM`
+- `fastlane-top40-b`: `META MSFT NVDA SPY TSLA`
+- `fastlane-top40-c`: `AVGO GOOGL MU NFLX ORCL`
+- `fastlane-top40-d`: `PLTR QQQ TSM XLE XOM`
+- `fastlane-top40-agg-1040z`: wakes around `2026-05-01T10:40:00Z` and writes `aggregate_fastlane_top40_20260501/`
+
+This path uses `top_n=40`, `test_date_count=20`, both `nearest_contract` and `entry_liquidity_first_research_only`, and the same `fill_coverage >= 0.90`, `min_option_trades >= 20`, `min_test_net_pnl >= 0`, and `min_net_pnl >= 0` gates.
 
 ## Profile-Isolated Partial Aggregate
 
@@ -75,4 +93,4 @@ python scripts\run_multi_ticker_portfolio_paper_trader.py --portfolio-config con
 
 ## Next Action
 
-Keep the 15-minute readiness monitor running. When the final promotion packet appears, inspect `eligible_for_promotion_review_count`, `unique_eligible_base_candidate_count`, `review_candidates`, `broker_facing`, `live_manifest_effect`, and `risk_policy_effect`. If the packet is eligible and safe, prepare an operator-reviewed launch packet; do not automatically alter the live manifest or start the trader. If the aggregator runs before all four option-aware workers have uploaded artifacts, rerun the aggregator after the missing lane completes.
+Keep the 15-minute readiness monitor running. When either the fastlane or final promotion packet appears, inspect `eligible_for_promotion_review_count`, `unique_eligible_base_candidate_count`, `review_candidates`, `broker_facing`, `live_manifest_effect`, and `risk_policy_effect`. If a packet is eligible and safe, prepare an operator-reviewed launch packet; do not automatically alter the live manifest or start the trader. If an aggregator runs before all intended workers have uploaded artifacts, rerun that aggregator after the missing lane completes.
