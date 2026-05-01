@@ -18,6 +18,10 @@ DEFAULT_PAPER_VM_ZONE = "us-east1-b"
 DEFAULT_QQQ_PROMOTION_MANIFEST = (
     "config/promotion_manifests/qqq_option_native_governed_validation_20260430.yaml"
 )
+DEFAULT_EARLY_QQQ_PROMOTION_PACKET_URI = (
+    "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/"
+    "early_qqq_governed_validation/promotion_packet/research_promotion_review_packet.json"
+)
 DEFAULT_LIVE_MANIFEST = "config/strategy_manifests/multi_ticker_portfolio_live.yaml"
 DEFAULT_PAPER_CONFIG = "config/multi_ticker_paper_portfolio.yaml"
 
@@ -217,6 +221,7 @@ def build_readiness_snapshot(
     paper_config: Path,
     live_manifest: Path,
     qqq_promotion_manifest: Path,
+    early_qqq_promotion_packet_uri: str,
 ) -> dict[str, Any]:
     gcs_prefix = gcs_prefix.rstrip("/")
     now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -224,6 +229,10 @@ def build_readiness_snapshot(
     portfolio_report_uri = f"{gcs_prefix}/aggregate/portfolio_report/research_portfolio_report.json"
     promotion_packet, promotion_command = _json_gcs(gcloud_bin=gcloud_bin, uri=promotion_uri)
     portfolio_report, portfolio_command = _json_gcs(gcloud_bin=gcloud_bin, uri=portfolio_report_uri)
+    early_qqq_packet, early_qqq_command = _json_gcs(
+        gcloud_bin=gcloud_bin,
+        uri=early_qqq_promotion_packet_uri,
+    )
     worker_artifacts, workers_command = _list_gcs(gcloud_bin=gcloud_bin, uri=f"{gcs_prefix}/workers/")
     aggregate_artifacts, aggregate_command = _list_gcs(gcloud_bin=gcloud_bin, uri=f"{gcs_prefix}/aggregate/")
     wave_instances, instances_command = _wave_instances(gcloud_bin=gcloud_bin, wave_id=wave_id)
@@ -236,6 +245,8 @@ def build_readiness_snapshot(
     qqq_fallback = _local_qqq_fallback_summary(qqq_promotion_manifest)
     eligible_count = _eligible_count(promotion_packet)
     review_candidates = _review_candidates(promotion_packet)
+    early_qqq_eligible_count = _eligible_count(early_qqq_packet)
+    early_qqq_review_candidates = _review_candidates(early_qqq_packet)
     running_workers = [
         item for item in wave_instances if str(item.get("status", "")).upper() == "RUNNING"
     ]
@@ -247,6 +258,12 @@ def build_readiness_snapshot(
         and promotion_packet.get("broker_facing") is False
         and promotion_packet.get("live_manifest_effect") == "none"
         and promotion_packet.get("risk_policy_effect") == "none"
+    )
+    early_qqq_safety_ok = bool(
+        early_qqq_packet
+        and early_qqq_packet.get("broker_facing") is False
+        and early_qqq_packet.get("live_manifest_effect") == "none"
+        and early_qqq_packet.get("risk_policy_effect") == "none"
     )
     gates = [
         _gate(
@@ -287,6 +304,28 @@ def build_readiness_snapshot(
             "Promotion packet is research-only, non-broker-facing, and has no manifest/risk effect."
             if promotion_safety_ok
             else "Waiting for promotion packet safety-scope check.",
+        ),
+        _gate(
+            "early_qqq_governed_packet_present",
+            early_qqq_packet is not None,
+            early_qqq_promotion_packet_uri
+            if early_qqq_packet
+            else "Early QQQ governed-validation packet not present yet.",
+            severity="warning",
+        ),
+        _gate(
+            "early_qqq_governed_packet_has_candidates",
+            early_qqq_eligible_count > 0,
+            f"Eligible candidates in early QQQ governed packet: {early_qqq_eligible_count}",
+            severity="warning",
+        ),
+        _gate(
+            "early_qqq_governed_packet_safety_scope",
+            early_qqq_safety_ok,
+            "Early QQQ packet is research-only, non-broker-facing, and has no manifest/risk effect."
+            if early_qqq_safety_ok
+            else "Waiting for early QQQ packet safety-scope check.",
+            severity="warning",
         ),
         _gate(
             "local_paper_config_present",
@@ -330,12 +369,28 @@ def build_readiness_snapshot(
         "portfolio_report_present": portfolio_report is not None,
         "eligible_for_promotion_review_count": eligible_count,
         "review_candidates": review_candidates[:20],
+        "early_qqq_governed_validation": {
+            "promotion_packet_uri": early_qqq_promotion_packet_uri,
+            "promotion_packet_present": early_qqq_packet is not None,
+            "eligible_for_promotion_review_count": early_qqq_eligible_count,
+            "broker_facing": early_qqq_packet.get("broker_facing") if early_qqq_packet else None,
+            "live_manifest_effect": (
+                early_qqq_packet.get("live_manifest_effect") if early_qqq_packet else None
+            ),
+            "risk_policy_effect": (
+                early_qqq_packet.get("risk_policy_effect") if early_qqq_packet else None
+            ),
+            "review_candidates": early_qqq_review_candidates[:20],
+            "safety_scope_ok": early_qqq_safety_ok,
+            "launch_gate_effect": "evidence_only_does_not_unblock_full_portfolio_launch",
+        },
         "manifest_summary": manifest_summary,
         "qqq_fallback": qqq_fallback,
         "readiness_gates": gates,
         "commands": {
             "promotion_packet": promotion_command,
             "portfolio_report": portfolio_command,
+            "early_qqq_promotion_packet": early_qqq_command,
             "workers": workers_command,
             "aggregate": aggregate_command,
             "instances": instances_command,
@@ -357,6 +412,8 @@ def build_readiness_snapshot(
 def _write_markdown(path: Path, snapshot: dict[str, Any]) -> None:
     gates = snapshot["readiness_gates"]
     candidates = snapshot["review_candidates"]
+    early_qqq = snapshot["early_qqq_governed_validation"]
+    early_qqq_candidates = early_qqq["review_candidates"]
     lines = [
         "# Paper Trader Readiness Watch",
         "",
@@ -365,6 +422,8 @@ def _write_markdown(path: Path, snapshot: dict[str, Any]) -> None:
         f"- GCS prefix: `{snapshot['gcs_prefix']}`",
         f"- Promotion packet present: `{snapshot['promotion_packet_present']}`",
         f"- Eligible overnight candidates: `{snapshot['eligible_for_promotion_review_count']}`",
+        "- Early QQQ governed candidates: "
+        f"`{early_qqq['eligible_for_promotion_review_count']}`",
         f"- Running wave VMs: `{snapshot['running_wave_vm_count']}`",
         f"- Worker artifact count: `{snapshot['worker_artifact_count']}`",
         f"- Aggregate artifact count: `{snapshot['aggregate_artifact_count']}`",
@@ -388,6 +447,22 @@ def _write_markdown(path: Path, snapshot: dict[str, Any]) -> None:
     if not candidates:
         lines.append("- No overnight promotion-review candidates are available yet.")
     for row in candidates:
+        lines.append(
+            "- "
+            f"`{row.get('symbol')}` `{row.get('candidate_variant_id')}` "
+            f"family `{row.get('family')}` regime `{row.get('intended_regime')}` "
+            f"fill `{row.get('min_fill_coverage')}` test_pnl `{row.get('min_test_net_pnl')}`"
+        )
+    lines.extend(["", "## Early QQQ Governed-Validation Evidence", ""])
+    lines.append(
+        "- Packet present: "
+        f"`{early_qqq['promotion_packet_present']}`; "
+        f"eligible candidates: `{early_qqq['eligible_for_promotion_review_count']}`; "
+        f"launch gate effect: `{early_qqq['launch_gate_effect']}`"
+    )
+    if not early_qqq_candidates:
+        lines.append("- No early QQQ governed-validation candidates are available yet.")
+    for row in early_qqq_candidates:
         lines.append(
             "- "
             f"`{row.get('symbol')}` `{row.get('candidate_variant_id')}` "
@@ -466,6 +541,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--paper-config", default=DEFAULT_PAPER_CONFIG)
     parser.add_argument("--live-manifest", default=DEFAULT_LIVE_MANIFEST)
     parser.add_argument("--qqq-promotion-manifest", default=DEFAULT_QQQ_PROMOTION_MANIFEST)
+    parser.add_argument("--early-qqq-promotion-packet-uri", default=DEFAULT_EARLY_QQQ_PROMOTION_PACKET_URI)
     parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--interval-seconds", type=int, default=900)
     parser.add_argument("--duration-hours", type=float, default=12.0)
@@ -487,6 +563,7 @@ def main() -> None:
             paper_config=Path(args.paper_config),
             live_manifest=Path(args.live_manifest),
             qqq_promotion_manifest=Path(args.qqq_promotion_manifest),
+            early_qqq_promotion_packet_uri=str(args.early_qqq_promotion_packet_uri),
         )
         _write_and_upload(
             snapshot=snapshot,
@@ -502,6 +579,9 @@ def main() -> None:
                     "eligible_for_promotion_review_count": snapshot[
                         "eligible_for_promotion_review_count"
                     ],
+                    "early_qqq_eligible_for_promotion_review_count": snapshot[
+                        "early_qqq_governed_validation"
+                    ]["eligible_for_promotion_review_count"],
                     "running_wave_vm_count": snapshot["running_wave_vm_count"],
                 },
                 sort_keys=True,
