@@ -1,6 +1,6 @@
 # Paper Trader Readiness Watch - 2026-05-01
 
-Status updated UTC: `2026-05-01T11:03:54Z`
+Status updated UTC: `2026-05-01T11:14:19Z`
 
 ## Current Decision
 
@@ -8,7 +8,7 @@ Decision: `blocked_waiting_for_evidence`
 
 The paper VM is running and the startup-preflight command is available, but the canonical final overnight portfolio aggregate promotion packet has not landed yet. The correct action is to keep monitoring and not arm paper orders or change manifests until the generated final promotion packet exists, has eligible candidates, and remains research-only with no manifest or risk-policy effect.
 
-At `2026-05-01T11:03:54Z`, the readiness monitor reports `decision=blocked_waiting_for_evidence`, `running_wave_vm_count=8`, `eligible_for_promotion_review_count=0`, `fastlane_top40_artifact_count=9`, `fastlane_top40_unique_eligible_base_count=4`, and `partial_aggregate_unique_eligible_base_count=4`.
+At `2026-05-01T11:14:19Z`, the readiness monitor reports `decision=blocked_waiting_for_evidence`, `running_wave_vm_count=8`, `eligible_for_promotion_review_count=0`, `fastlane_top40_artifact_count=9`, `fastlane_top40_unique_eligible_base_count=4`, and `partial_aggregate_unique_eligible_base_count=4`.
 
 The fastlane aggregate has landed and is now visible to the patched readiness monitor. Its promotion packet has 8 profile-level eligible candidates and 4 unique eligible base candidates, but it is evidence-only and explicitly does not unblock the canonical final aggregate requirement.
 
@@ -64,7 +64,12 @@ The fastlane aggregate promotion packet is:
 
 It reports 8 eligible profile-level candidates and 4 unique eligible base candidates. All eligible candidates are QQQ bull/choppy research candidates; no QQQ bear candidate is eligible yet.
 
-The fastlane-aware monitor path bug was corrected so the readiness monitor now reads the nested promotion packet and portfolio report paths. The monitor patch is validation-only and does not change strategy gates, risk, manifests, or execution behavior.
+The fastlane-aware monitor path bug was corrected so the readiness monitor now reads the nested promotion packet and portfolio report paths. The monitor patch is validation-only and does not change strategy gates, risk, manifests, or execution behavior. Duplicate stale monitor processes were stopped, and exactly one portfolio monitor plus one paper-readiness monitor were restarted on a 15-minute cadence.
+
+Current local monitor PIDs:
+
+- Portfolio wave monitor: `4448`
+- Paper-readiness monitor: `41044`
 
 ## Profile-Isolated Partial Aggregate
 
@@ -87,6 +92,16 @@ Zone: `us-east1-b`
 Status at snapshot: `RUNNING`
 
 Mode labels indicate validation stage. This is good for readiness, but it is not permission to submit orders.
+
+## No-Order Preflight
+
+The QQQ governed shadow-validation preflight was run locally with `--startup-preflight --no-submit-paper-orders` and `GOOGLE_APPLICATION_CREDENTIALS` pointed at the local service-account JSON. It reached the GCS ownership lease and broker-readiness checks without submitting orders.
+
+Result: `startup_preflight_pending`
+
+Reason: `QQQ stock frame not ready yet`
+
+Broker account visibility was available, open order count was `0`, and `submit_paper_orders=false`. This is expected before the market data frame is ready and should be retried after RTH data is available.
 
 ## Commands
 

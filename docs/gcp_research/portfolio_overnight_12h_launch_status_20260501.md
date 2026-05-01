@@ -1,6 +1,6 @@
 # Portfolio Overnight 12h Launch Status - 2026-05-01
 
-Status updated UTC: `2026-05-01T11:03:54Z`
+Status updated UTC: `2026-05-01T11:14:19Z`
 
 ## Current State
 
@@ -21,7 +21,8 @@ GCS monitor prefix: `gs://codexalpaca-control-us/research_results/portfolio_over
 - Focused tests: `5 passed`
 - Focused ruff: clean
 - Monitor script smoke: `python scripts\monitor_portfolio_overnight_wave.py --once ...` wrote `portfolio_overnight_monitor_latest.json` to GCS.
-- Paper readiness smoke after the fastlane path correction: `decision=blocked_waiting_for_evidence`, `fastlane_top40_unique_eligible_base_count=4`, `running_wave_vm_count=8`.
+- Paper readiness smoke after the fastlane path correction and monitor cleanup: `decision=blocked_waiting_for_evidence`, `fastlane_top40_unique_eligible_base_count=4`, `running_wave_vm_count=8`.
+- QQQ governed shadow no-order preflight reached ownership/broker checks and returned `startup_preflight_pending` only because `QQQ stock frame not ready yet`.
 - Test command: `python -m pytest -q tests\test_build_portfolio_overnight_tournament_packet.py tests\test_build_portfolio_overnight_research_inputs.py tests\test_run_option_aware_research_backtest.py`
 - Ruff command: `python -m ruff check scripts\build_portfolio_overnight_tournament_packet.py tests\test_build_portfolio_overnight_tournament_packet.py`
 
@@ -74,6 +75,8 @@ GCS monitor prefix: `gs://codexalpaca-control-us/research_results/portfolio_over
 - The fastlane aggregate has now landed at `gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate_fastlane_top40_20260501/`. The packet is research-only and reports 8 eligible profile-level candidates, 4 unique eligible base candidates, and no broker-facing/live-manifest/risk-policy effect.
 - Eligible fastlane candidates are currently QQQ bull/choppy only: three QQQ bull structures and one QQQ choppy iron-condor structure. No QQQ bear strategy is eligible yet; bear candidates remain blocked mainly by fill coverage and option-trade count.
 - The paper-readiness monitor path was corrected for nested aggregate output folders. This is observability only; it does not alter promotion gates or execution behavior.
+- Duplicate stale monitor processes were stopped. Exactly one portfolio monitor and one paper-readiness monitor are now running on a 15-minute cadence as local PIDs `4448` and `41044`.
+- Final aggregator serial output shows `aggregate_wait_seconds=34627`, `aggregate_output_subdir=aggregate`, and `candidate_identity_mode=variant_profile`; no terminal error is visible.
 
 ## Monitor Commands
 
