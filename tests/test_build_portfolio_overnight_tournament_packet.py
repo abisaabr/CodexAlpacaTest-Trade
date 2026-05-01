@@ -92,5 +92,7 @@ def test_partial_aggregate_worker_can_run_immediately_to_separate_prefix(tmp_pat
     assert "--instance-termination-action STOP" not in worker["create_vm_command"]
     assert "aggregate_wait_seconds=0" in startup_script
     assert "aggregate_output_subdir='aggregate_partial_smoke'" in startup_script
+    assert "candidate_identity_mode='variant_profile'" in startup_script
+    assert "--candidate-identity-mode variant_profile" in startup_script
     assert "${GCS_PREFIX}/aggregate_partial_smoke/portfolio_report/" in startup_script
     assert "${GCS_PREFIX}/aggregate_partial_smoke/promotion_packet/" in startup_script

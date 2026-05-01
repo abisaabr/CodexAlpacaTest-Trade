@@ -327,10 +327,12 @@ def _data_coverage_worker_lines(worker: dict[str, Any], config: dict[str, Any]) 
 def _aggregate_worker_lines(worker: dict[str, Any], config: dict[str, Any]) -> list[str]:
     sleep_seconds = int(worker.get("start_after_seconds", int(worker.get("start_after_hours", 11)) * 3600))
     aggregate_output_subdir = str(worker.get("aggregate_output_subdir", "aggregate")).strip("/")
+    candidate_identity_mode = str(worker.get("candidate_identity_mode", "variant_profile"))
     gates = config["promotion_gates"]
     return [
         f"echo aggregate_wait_seconds={sleep_seconds}",
         f"echo aggregate_output_subdir={_shell_quote(aggregate_output_subdir)}",
+        f"echo candidate_identity_mode={_shell_quote(candidate_identity_mode)}",
         f"sleep {sleep_seconds}",
         "date -u '+aggregate_started_utc=%Y-%m-%dT%H:%M:%SZ'",
         "mkdir -p ${WORKROOT}/worker_outputs",
@@ -344,7 +346,8 @@ def _aggregate_worker_lines(worker: dict[str, Any], config: dict[str, Any]) -> l
         f"--max-positions {gates['max_positions']} "
         f"--max-strategies-per-symbol {gates['max_strategies_per_symbol']} "
         f"--max-symbol-weight {gates['max_symbol_weight']} "
-        f"--initial-cash {gates['initial_cash']}",
+        f"--initial-cash {gates['initial_cash']} "
+        f"--candidate-identity-mode {candidate_identity_mode}",
         "python scripts/build_research_promotion_review_packet.py "
         "--portfolio-report-json reports/research_wave/portfolio_overnight_12h_aggregate/research_portfolio_report.json "
         "--output-dir reports/research_wave/portfolio_overnight_12h_promotion_packet",

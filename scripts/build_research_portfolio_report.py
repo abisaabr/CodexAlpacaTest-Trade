@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import Counter
 from datetime import UTC, datetime
@@ -28,6 +29,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-strategies-per-symbol", type=int, default=2)
     parser.add_argument("--max-symbol-weight", type=float, default=0.50)
     parser.add_argument("--initial-cash", type=float, default=25_000.0)
+    parser.add_argument(
+        "--candidate-identity-mode",
+        choices=["variant", "variant_profile"],
+        default="variant",
+        help=(
+            "Use variant_profile for portfolio-wide aggregation so rescue/stress "
+            "runs cannot demote a candidate from a different replay profile."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -58,6 +68,11 @@ def _first_text(row: pd.Series, key: str) -> str:
     if pd.isna(value):
         return ""
     return str(value)
+
+
+def _identity_slug(value: object) -> str:
+    slug = re.sub(r"[^a-z0-9-]+", "-", str(value).lower()).strip("-")
+    return slug or "unknown"
 
 
 def _candidate_score(row: dict[str, Any]) -> float:
@@ -94,9 +109,12 @@ def summarize_candidates(
     fill_coverage_gate: float,
     min_option_trades: int,
     min_test_net_pnl: float,
+    candidate_identity_mode: str = "variant",
 ) -> list[dict[str, Any]]:
     if candidates.empty:
         return []
+    if candidate_identity_mode not in {"variant", "variant_profile"}:
+        raise ValueError(f"Unsupported candidate identity mode: {candidate_identity_mode}")
 
     numeric_columns = [
         "net_pnl",
@@ -122,10 +140,21 @@ def summarize_candidates(
     for column in numeric_columns:
         if column in frame.columns:
             frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    frame["base_candidate_variant_id"] = frame["candidate_variant_id"].astype(str)
+    if candidate_identity_mode == "variant_profile":
+        frame["aggregate_candidate_key"] = frame.apply(
+            lambda row: (
+                f"{row['base_candidate_variant_id']}__profile_{_identity_slug(row.get('profile'))}"
+            ),
+            axis=1,
+        )
+    else:
+        frame["aggregate_candidate_key"] = frame["base_candidate_variant_id"]
 
     rows: list[dict[str, Any]] = []
-    for candidate_id, group in frame.groupby("candidate_variant_id", sort=False):
+    for candidate_key, group in frame.groupby("aggregate_candidate_key", sort=False):
         first = group.iloc[0]
+        base_candidate_id = str(first.get("base_candidate_variant_id"))
         fill_column = "strategy_fill_coverage" if "strategy_fill_coverage" in group else "fill_coverage"
         min_fill = _float(group[fill_column].min())
         min_trades = int(_float(group["option_trade_count"].min()))
@@ -136,7 +165,12 @@ def summarize_candidates(
             else None
         )
         row = {
-            "candidate_variant_id": candidate_id,
+            "candidate_variant_id": str(candidate_key),
+            "base_candidate_variant_id": base_candidate_id,
+            "candidate_identity_mode": candidate_identity_mode,
+            "aggregate_profile": (
+                _first_text(first, "profile") if candidate_identity_mode == "variant_profile" else None
+            ),
             "symbol": str(first.get("symbol")),
             "strategy_id": _first_text(first, "strategy_id")
             or _first_text(first, "source_strategy_id"),
@@ -291,15 +325,20 @@ def build_capital_plan(
 
     selected: list[dict[str, Any]] = []
     selected_per_symbol: dict[str, int] = {}
+    selected_base_candidate_ids: set[str] = set()
     for row in sorted(plan_pool, key=lambda item: item["research_score"], reverse=True):
         if row["min_net_pnl"] <= 0 or row["min_test_net_pnl"] <= 0:
             continue
         if row["min_option_trade_count"] < min_option_trades:
             continue
+        base_candidate_id = str(row.get("base_candidate_variant_id") or row["candidate_variant_id"])
+        if base_candidate_id in selected_base_candidate_ids:
+            continue
         symbol = str(row["symbol"]).upper()
         if selected_per_symbol.get(symbol, 0) >= max_strategies_per_symbol:
             continue
         selected.append(row)
+        selected_base_candidate_ids.add(base_candidate_id)
         selected_per_symbol[symbol] = selected_per_symbol.get(symbol, 0) + 1
         if len(selected) >= max_positions:
             break
@@ -334,6 +373,9 @@ def build_capital_plan(
         plan.append(
             {
                 "candidate_variant_id": row["candidate_variant_id"],
+                "base_candidate_variant_id": row.get("base_candidate_variant_id"),
+                "candidate_identity_mode": row.get("candidate_identity_mode"),
+                "aggregate_profile": row.get("aggregate_profile"),
                 "symbol": row["symbol"],
                 "strategy_id": row.get("strategy_id"),
                 "source_strategy_id": row["source_strategy_id"],
@@ -569,6 +611,7 @@ def build_research_portfolio_report(
     max_strategies_per_symbol: int,
     max_symbol_weight: float,
     initial_cash: float,
+    candidate_identity_mode: str = "variant",
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     candidates = _load_candidate_summaries(replay_root)
@@ -577,6 +620,7 @@ def build_research_portfolio_report(
         fill_coverage_gate=fill_coverage_gate,
         min_option_trades=min_option_trades,
         min_test_net_pnl=min_test_net_pnl,
+        candidate_identity_mode=candidate_identity_mode,
     )
     capital_plan = build_capital_plan(
         candidate_rows,
@@ -606,6 +650,7 @@ def build_research_portfolio_report(
         "live_manifest_effect": "none",
         "risk_policy_effect": "none",
         "replay_root": str(replay_root),
+        "candidate_identity_mode": candidate_identity_mode,
         "candidate_count": len(candidate_rows),
         "eligible_for_promotion_review_count": eligible_count,
         "fill_coverage_gate": fill_coverage_gate,
@@ -661,6 +706,7 @@ def main() -> None:
         max_strategies_per_symbol=args.max_strategies_per_symbol,
         max_symbol_weight=args.max_symbol_weight,
         initial_cash=args.initial_cash,
+        candidate_identity_mode=args.candidate_identity_mode,
     )
     print(json.dumps(packet, indent=2, default=str))
 

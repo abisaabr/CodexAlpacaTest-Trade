@@ -226,6 +226,89 @@ def test_research_portfolio_report_prefers_eligible_candidate_over_blocked_high_
     assert packet["capital_plan"][0]["promotion_status"] == "eligible_for_promotion_review"
 
 
+def test_research_portfolio_report_can_isolate_same_variant_across_profiles(
+    tmp_path: Path,
+) -> None:
+    replay_root = tmp_path / "replay"
+    shared_candidate = {
+        "candidate_variant_id": "qqq_choppy_iron_condor",
+        "symbol": "QQQ",
+        "source_strategy_id": "qqq_choppy_iron_condor",
+        "family": "iron_condor",
+        "intended_regime": "choppy",
+        "directional_option_type": "call,put",
+        "max_drawdown": -150.0,
+        "win_rate": 0.6,
+        "profit_factor": 1.5,
+        "missing_option_price_count": 0,
+        "missing_no_selected_contract": 0,
+        "missing_no_entry_bar": 0,
+        "missing_no_exit_bar": 0,
+    }
+    _write_profile(
+        replay_root,
+        "clean_choppy_profile",
+        [
+            {
+                **shared_candidate,
+                "net_pnl": 300.0,
+                "test_net_pnl": 200.0,
+                "fill_coverage": 0.95,
+                "option_trade_count": 35,
+            }
+        ],
+    )
+    _write_profile(
+        replay_root,
+        "bear_rescue_profile",
+        [
+            {
+                **shared_candidate,
+                "net_pnl": -50.0,
+                "test_net_pnl": 100.0,
+                "fill_coverage": 0.92,
+                "option_trade_count": 35,
+            }
+        ],
+    )
+
+    contaminated = build_research_portfolio_report(
+        replay_root=replay_root,
+        output_dir=tmp_path / "contaminated",
+        fill_coverage_gate=0.90,
+        min_option_trades=20,
+        min_test_net_pnl=0.0,
+        max_positions=5,
+        max_strategies_per_symbol=2,
+        max_symbol_weight=0.50,
+        initial_cash=25_000.0,
+    )
+    isolated = build_research_portfolio_report(
+        replay_root=replay_root,
+        output_dir=tmp_path / "isolated",
+        fill_coverage_gate=0.90,
+        min_option_trades=20,
+        min_test_net_pnl=0.0,
+        max_positions=5,
+        max_strategies_per_symbol=2,
+        max_symbol_weight=0.50,
+        initial_cash=25_000.0,
+        candidate_identity_mode="variant_profile",
+    )
+
+    assert contaminated["eligible_for_promotion_review_count"] == 0
+    assert isolated["candidate_identity_mode"] == "variant_profile"
+    assert isolated["eligible_for_promotion_review_count"] == 1
+    eligible = next(
+        row
+        for row in isolated["top_candidates"]
+        if row["promotion_status"] == "eligible_for_promotion_review"
+    )
+    assert eligible["base_candidate_variant_id"] == "qqq_choppy_iron_condor"
+    assert eligible["aggregate_profile"] == "clean_choppy_profile"
+    assert eligible["candidate_variant_id"].endswith("__profile_clean-choppy-profile")
+
+
 def test_research_portfolio_report_allows_multiple_strategies_per_symbol_with_symbol_cap(
     tmp_path: Path,
 ) -> None:

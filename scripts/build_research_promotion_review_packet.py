@@ -42,6 +42,9 @@ def _float(value: object, default: float = 0.0) -> float:
 def _candidate_summary(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "candidate_variant_id": row.get("candidate_variant_id"),
+        "base_candidate_variant_id": row.get("base_candidate_variant_id"),
+        "candidate_identity_mode": row.get("candidate_identity_mode"),
+        "aggregate_profile": row.get("aggregate_profile"),
         "symbol": row.get("symbol"),
         "strategy_id": row.get("strategy_id") or row.get("source_strategy_id"),
         "source_strategy_id": row.get("source_strategy_id"),
@@ -280,6 +283,7 @@ def build_research_promotion_review_packet(
             ),
             "fill_coverage_unit": source.get("fill_coverage_unit"),
             "fill_coverage_semantics": source.get("fill_coverage_semantics"),
+            "candidate_identity_mode": source.get("candidate_identity_mode"),
             "min_option_trades": source.get("min_option_trades"),
             "min_test_net_pnl": source.get("min_test_net_pnl"),
             "capital_plan_allocated_weight": source.get("capital_plan_allocated_weight"),
