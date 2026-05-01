@@ -12,6 +12,27 @@ Run a clean, aggressively sharded 365-day option-aware research backtest for eve
 - Sharding: one VM per ticker, two selector processes per VM
 - Expected candidate-summary files: `40`
 
+## Launch Status
+
+The full 20-shard launch was prepared, but the project has a hard global CPU quota of `32` CPUs. At launch time, active research/paper infrastructure already used `30` CPUs, so the first 20-VM fanout was blocked by `CPUS_ALL_REGIONS`.
+
+Completed aggregate/watch VMs were stopped to free `6` CPUs without stopping active ticker workers. With active ticker workers and the paper validation VM preserved, the maximum safe additional tranche was four `e2-standard-2` ticker shards.
+
+First launched shard tranche:
+
+- `ticker365-intc-20260501-2300z` in `us-east4-a`
+- `ticker365-iwm-20260501-2300z` in `us-east4-a`
+- `ticker365-spy-20260501-2300z` in `us-west1-a`
+- `ticker365-tsla-20260501-2300z` in `us-west1-a`
+
+Stopped nonessential completed VMs:
+
+- `portfolio-12h-postagg-watch-20260501-1619z`
+- `portfolio-overnight-12h-20260501-finalagg2-1255z`
+- `portfolio-overnight-12h-20260501-fastlane-top40-agg-1040z`
+
+Active ticker workers were left running.
+
 ## GCS Prefix
 
 `gs://codexalpaca-control-us/research_results/ticker_365d_all_available_20260501T2300Z/`
