@@ -184,6 +184,7 @@ def _script_header(worker: dict[str, Any], config: dict[str, Any]) -> list[str]:
         "apt-get update",
         "apt-get install -y python3 python3-venv python3-pip ca-certificates",
         "gcloud storage cp ${SOURCE_ARCHIVE_URI} ${WORKROOT}/source.tar.gz",
+        "rm -rf ${REPO_DIR}",
         "mkdir -p ${REPO_DIR}",
         "tar -xzf ${WORKROOT}/source.tar.gz -C ${REPO_DIR}",
         "cd ${REPO_DIR}",

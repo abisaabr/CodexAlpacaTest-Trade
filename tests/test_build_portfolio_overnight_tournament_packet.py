@@ -27,6 +27,7 @@ def test_build_portfolio_overnight_tournament_packet(tmp_path: Path) -> None:
     assert all("startup_scripts/" in worker["create_vm_command"] for worker in packet["workers"])
     assert all("C:\\" not in worker["create_vm_command"] for worker in packet["workers"])
     assert all(Path(worker["startup_script_path"]).exists() for worker in packet["workers"])
+    assert all("rm -rf ${REPO_DIR}" in Path(worker["startup_script_path"]).read_text() for worker in packet["workers"])
     assert all("--image-family debian-12" in worker["create_vm_command"] for worker in packet["workers"])
     assert all("--scopes cloud-platform" in worker["create_vm_command"] for worker in packet["workers"])
     assert all("--boot-disk-size 250GB" not in worker["create_vm_command"] for worker in packet["workers"])
