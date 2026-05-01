@@ -53,9 +53,12 @@ def test_build_portfolio_overnight_research_inputs_expands_templates_round_robin
     )
 
     queue = json.loads(Path(manifest["outputs"]["queue_json"]).read_text(encoding="utf-8"))
-    generated_variants = Path(manifest["outputs"]["variants_jsonl"]).read_text(
-        encoding="utf-8"
-    ).splitlines()
+    generated_variants = [
+        json.loads(line)
+        for line in Path(manifest["outputs"]["variants_jsonl"])
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
 
     assert manifest["variant_count"] == 4
     assert len(generated_variants) == 4
@@ -67,3 +70,5 @@ def test_build_portfolio_overnight_research_inputs_expands_templates_round_robin
     }
     assert {item["intended_regime"] for item in queue["queue_items"]} == {"bull", "bear"}
     assert all(item["promotion_allowed"] is False for item in queue["queue_items"])
+    put_variant = next(row for row in generated_variants if "__put__" in row["variant_id"])
+    assert "put" in put_variant["source_strategy_id"]

@@ -73,6 +73,12 @@ def _template_slug(template_key: str) -> str:
     return hashlib.sha256(template_key.encode("utf-8")).hexdigest()[:14]
 
 
+def _text_slug(value: str) -> str:
+    chars = [char.lower() if char.isalnum() else "_" for char in value]
+    slug = "_".join("".join(chars).split("_"))
+    return slug or "unknown"
+
+
 def _direction(row: dict[str, Any]) -> str:
     parameters = row.get("parameters") if isinstance(row.get("parameters"), dict) else {}
     source = " ".join(
@@ -168,9 +174,18 @@ def build_inputs(
         for template_key, template in ordered_templates:
             slug = _template_slug(template_key)
             variant = dict(template)
-            variant_id = f"portfolio12h__{symbol.lower()}__{slug}"
+            direction = _direction(variant)
+            intended_regime = _intended_regime(variant)
+            family = _family(variant)
+            variant_id = (
+                f"portfolio12h__{symbol.lower()}__{intended_regime}__{direction}__"
+                f"{_text_slug(family)}__{slug}"
+            )
             variant["variant_id"] = variant_id
             variant["symbol"] = symbol
+            variant["source_strategy_id"] = (
+                f"{symbol.lower()}__{intended_regime}__{direction}__{_text_slug(family)}"
+            )
             variant["source_template_variant_id"] = template.get("variant_id")
             variant["source_template_symbol"] = template.get("symbol")
             variant["generated_for_wave"] = config.get("wave_id")
@@ -185,13 +200,13 @@ def build_inputs(
                     "state": "research_follow_up_only",
                     "candidate_variant_id": variant_id,
                     "symbol": symbol,
-                    "directional_option_type": _direction(variant),
-                    "family": _family(variant),
-                    "intended_regime": _intended_regime(variant),
+                    "directional_option_type": direction,
+                    "family": family,
+                    "intended_regime": intended_regime,
                     "parameter_set": json.dumps(
                         variant.get("parameters", {}), sort_keys=True, separators=(",", ":")
                     ),
-                    "source_strategy_id": variant_id,
+                    "source_strategy_id": variant["source_strategy_id"],
                     "source_template_variant_id": template.get("variant_id"),
                     "promotion_allowed": False,
                     "broker_facing": False,
