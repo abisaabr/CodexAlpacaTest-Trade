@@ -1,6 +1,6 @@
 # Portfolio Overnight 12h Launch Status - 2026-05-01
 
-Status updated UTC: `2026-05-01T02:18:32Z`
+Status updated UTC: `2026-05-01T02:21:03Z`
 
 ## Current State
 
@@ -25,9 +25,9 @@ GCS wave prefix: `gs://codexalpaca-control-us/research_results/portfolio_overnig
 
 | VM | Role | Status | Notes |
 | --- | --- | --- | --- |
-| `portfolio-overnight-12h-20260501-data-coverage-top10` | data coverage | RUNNING | Startup, command, source commit, and artifacts manifest uploaded. |
-| `portfolio-overnight-12h-20260501-data-coverage-next10` | data coverage | RUNNING | Startup, command, source commit, and artifacts manifest uploaded. |
-| `portfolio-overnight-12h-20260501-qqq-deep-regime-grid` | QQQ deep grid | RUNNING | Completed at `2026-05-01T01:57:32Z`; three `option_aware_candidate_summary.csv` files uploaded. |
+| `portfolio-overnight-12h-20260501-data-coverage-top10` | data coverage | DELETED AFTER COMPLETION | Completed at `2026-05-01T02:01:39Z`; startup, command, source commit, and artifacts manifest uploaded. |
+| `portfolio-overnight-12h-20260501-data-coverage-next10` | data coverage | DELETED AFTER COMPLETION | Completed at `2026-05-01T02:02:25Z`; startup, command, source commit, and artifacts manifest uploaded. |
+| `portfolio-overnight-12h-20260501-qqq-deep-regime-grid` | QQQ deep grid | DELETED AFTER COMPLETION | Completed at `2026-05-01T01:57:32Z`; three `option_aware_candidate_summary.csv` files uploaded. |
 | `portfolio-overnight-12h-20260501-option-aware-core-a` | option-aware tournament | RUNNING | Symbols: `AAPL AMD AMZN INTC IWM`; long replay stage, no terminal serial error observed. |
 | `portfolio-overnight-12h-20260501-option-aware-core-b` | option-aware tournament | RUNNING | Symbols: `META MSFT NVDA SPY TSLA`; long replay stage, no terminal serial error observed. |
 | `portfolio-overnight-12h-20260501-option-aware-core-c` | option-aware tournament | RUNNING | Symbols: `AVGO GOOGL MU NFLX ORCL`; recreated on clean disk after reused-disk pip corruption. |
@@ -46,6 +46,7 @@ GCS wave prefix: `gs://codexalpaca-control-us/research_results/portfolio_overnig
 - The first option-aware launch used raw contract inventory for ladder datasets and failed on `relative_strike_step`; this was corrected by staging `selected_option_contracts`.
 - `option-aware-core-c` hit a corrupted `pip._vendor.resolvelib` import after a same-disk restart; it was recreated on a clean disk and the packet now has idempotent startup scripts.
 - Startup metadata on all fleet VMs was refreshed with the idempotent scripts for future Spot restarts.
+- Completed data coverage workers and the completed QQQ deep grid worker were deleted after artifact upload to reduce idle compute cost.
 
 ## Monitor Commands
 

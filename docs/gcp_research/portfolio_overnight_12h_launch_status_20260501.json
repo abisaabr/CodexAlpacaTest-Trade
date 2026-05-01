@@ -1,6 +1,6 @@
 {
   "wave_id": "portfolio_overnight_12h_20260501",
-  "status_updated_utc": "2026-05-01T02:18:32Z",
+  "status_updated_utc": "2026-05-01T02:21:03Z",
   "status": "running",
   "latest_runner_commit": "c09d48a478feec8414349d58c9adba4badda6012",
   "branch": "codex/phase2-fill-semantics-20260430",
@@ -25,23 +25,23 @@
       "name": "portfolio-overnight-12h-20260501-data-coverage-top10",
       "role": "data_coverage",
       "machine_type": "e2-standard-2",
-      "status": "RUNNING",
+      "status": "DELETED_AFTER_COMPLETION",
       "last_start": "2026-04-30T18:54:21.988-07:00",
-      "artifact_status": "startup, command, source_commit, artifacts_manifest uploaded"
+      "artifact_status": "completed_utc=2026-05-01T02:01:39Z; startup, command, source_commit, artifacts_manifest uploaded"
     },
     {
       "name": "portfolio-overnight-12h-20260501-data-coverage-next10",
       "role": "data_coverage",
       "machine_type": "e2-standard-2",
-      "status": "RUNNING",
+      "status": "DELETED_AFTER_COMPLETION",
       "last_start": "2026-04-30T18:54:32.763-07:00",
-      "artifact_status": "startup, command, source_commit, artifacts_manifest uploaded"
+      "artifact_status": "completed_utc=2026-05-01T02:02:25Z; startup, command, source_commit, artifacts_manifest uploaded"
     },
     {
       "name": "portfolio-overnight-12h-20260501-qqq-deep-regime-grid",
       "role": "qqq_option_native_deep_grid",
       "machine_type": "e2-standard-4",
-      "status": "RUNNING",
+      "status": "DELETED_AFTER_COMPLETION",
       "last_start": "2026-04-30T18:54:45.017-07:00",
       "artifact_status": "completed_utc=2026-05-01T01:57:32Z; three option_aware_candidate_summary.csv files uploaded"
     },
@@ -104,7 +104,8 @@
     "Initial large-disk fleet exceeded SSD quota and was resized to 20GB/40GB workers.",
     "Initial high-CPU fleet exceeded 32-vCPU quota and was resized to 26 research vCPUs plus the existing 4-vCPU paper VM.",
     "The first option-aware worker launch used raw contract inventory for ladder datasets and failed on missing relative_strike_step; fixed by routing workers to selected_option_contracts.",
-    "option-aware-core-c restarted on a reused disk and hit a corrupted pip resolver import; fixed by idempotent startup plus clean recreate."
+    "option-aware-core-c restarted on a reused disk and hit a corrupted pip resolver import; fixed by idempotent startup plus clean recreate.",
+    "Completed data coverage workers and the completed QQQ deep grid worker were deleted after artifact upload to reduce idle compute cost."
   ],
   "next_monitor_commands": [
     "gcloud compute instances list --filter='name~portfolio-overnight-12h-20260501' --format='table(name,status,machineType,lastStartTimestamp,lastStopTimestamp)'",
