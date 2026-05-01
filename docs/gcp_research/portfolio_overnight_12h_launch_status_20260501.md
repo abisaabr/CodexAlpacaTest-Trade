@@ -1,6 +1,6 @@
 # Portfolio Overnight 12h Launch Status - 2026-05-01
 
-Status updated UTC: `2026-05-01T02:21:03Z`
+Status updated UTC: `2026-05-01T03:35:00Z`
 
 ## Current State
 
@@ -8,7 +8,7 @@ The `portfolio_overnight_12h_20260501` research fleet is running in Google Cloud
 
 Canonical runner branch: `codex/phase2-fill-semantics-20260430`
 
-Branch head when the monitor smoke ran: `f00ebbe217b599e4789d3f70665ae594ccfa2490`
+Branch head after monitor/readiness recovery: `8d6e4336312cf5236a70b4a2486b269274a545bd`
 
 GitHub PR: `https://github.com/abisaabr/CodexAlpacaTest-Trade/pull/2`
 
@@ -33,14 +33,18 @@ GCS monitor prefix: `gs://codexalpaca-control-us/research_results/portfolio_over
 | `portfolio-overnight-12h-20260501-qqq-deep-regime-grid` | QQQ deep grid | DELETED AFTER COMPLETION | Completed at `2026-05-01T01:57:32Z`; three `option_aware_candidate_summary.csv` files uploaded. |
 | `portfolio-overnight-12h-20260501-option-aware-core-a` | option-aware tournament | RUNNING | Symbols: `AAPL AMD AMZN INTC IWM`; long replay stage, no terminal serial error observed. |
 | `portfolio-overnight-12h-20260501-option-aware-core-b` | option-aware tournament | RUNNING | Symbols: `META MSFT NVDA SPY TSLA`; long replay stage, no terminal serial error observed. |
-| `portfolio-overnight-12h-20260501-option-aware-core-c` | option-aware tournament | RUNNING | Symbols: `AVGO GOOGL MU NFLX ORCL`; recreated on clean disk after reused-disk pip corruption. |
-| `portfolio-overnight-12h-20260501-option-aware-core-d` | option-aware tournament | RUNNING | Symbols: `PLTR QQQ TSM XLE XOM`; long replay stage, no terminal serial error observed. |
-| `portfolio-overnight-12h-20260501-aggregator-promotion-rev` | aggregate and promote | RUNNING | Sleeps until the worker window completes, then builds portfolio report and promotion packet. |
+| `portfolio-overnight-12h-20260501-option-aware-core-c` | option-aware tournament | RUNNING | Symbols: `AVGO GOOGL MU NFLX ORCL`; recreated as STANDARD after Spot termination, no terminal serial error observed. |
+| `portfolio-overnight-12h-20260501-option-aware-core-d` | option-aware tournament | RUNNING | Symbols: `PLTR QQQ TSM XLE XOM`; recreated as STANDARD after Spot termination and observed staging PLTR option bars at `2026-05-01T03:21:15Z`. |
+| `portfolio-overnight-12h-20260501-finalagg2-1255z` | aggregate and promote | RUNNING | STANDARD delayed final aggregator; sleeps until about `2026-05-01T12:55:00Z`, then writes to `aggregate/` using `candidate_identity_mode=variant_profile`. |
 
 ## Fixes Applied During Launch
 
 - `4230a2f1a90ee5a9ae52dc004a3131d06a2ab3ea`: ladder workers now use selected contract universe roots instead of raw contract inventory roots.
 - `c09d48a478feec8414349d58c9adba4badda6012`: worker startup scripts now clear `${REPO_DIR}` before unpack/install, preventing partial `.venv` reuse after a Spot interruption.
+- `0f43267`: aggregate recovery workers can be launched with a bounded delay and output subdir.
+- `8ad565a`: aggregate reports can isolate candidates by replay profile to avoid cross-profile evidence contamination.
+- `45dd637`: promotion review packets dedupe eligible candidates by base strategy.
+- `8d6e433`: paper readiness monitor now surfaces the profile-isolated partial aggregate as evidence-only without unblocking launch.
 
 ## Launch Events
 
@@ -51,6 +55,10 @@ GCS monitor prefix: `gs://codexalpaca-control-us/research_results/portfolio_over
 - Startup metadata on all fleet VMs was refreshed with the idempotent scripts for future Spot restarts.
 - Completed data coverage workers and the completed QQQ deep grid worker were deleted after artifact upload to reduce idle compute cost.
 - `option-aware-core-c` was later recreated as a standard on-demand `e2-standard-4` worker after another Spot termination, preserving the `AVGO GOOGL MU NFLX ORCL` lane for the overnight portfolio tournament.
+- The old sleeping `aggregator-promotion-rev` was replaced by `finalagg2-1255z` so the final aggregate uses profile-isolated candidate identity and base-strategy dedupe.
+- `option-aware-core-d` was recreated as a standard on-demand `e2-standard-4` worker after Spot termination, preserving the `PLTR QQQ TSM XLE XOM` lane.
+- A profile-isolated partial aggregate exists at `gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate_partial_profile_20260501T031218Z/`; its deduped packet has 4 unique eligible base candidates, but it is evidence-only and does not unblock the final aggregate requirement.
+- Direct and IAP SSH from this machine failed with network connection abort/closed errors, so monitoring currently relies on GCS artifacts, serial logs, and GitHub/PR logging.
 
 ## Monitor Commands
 

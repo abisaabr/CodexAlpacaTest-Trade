@@ -1,14 +1,16 @@
 # Paper Trader Readiness Watch - 2026-05-01
 
-Status updated UTC: `2026-05-01T02:35:51Z`
+Status updated UTC: `2026-05-01T03:26:25Z`
 
 ## Current Decision
 
 Decision: `blocked_waiting_for_evidence`
 
-The paper VM is running and the startup-preflight command is available, but the overnight portfolio aggregate promotion packet has not landed yet. The correct action is to keep monitoring and not arm paper orders or change manifests until the generated promotion packet exists, has eligible candidates, and remains research-only with no manifest or risk-policy effect.
+The paper VM is running and the startup-preflight command is available, but the final overnight portfolio aggregate promotion packet has not landed yet. The correct action is to keep monitoring and not arm paper orders or change manifests until the generated final promotion packet exists, has eligible candidates, and remains research-only with no manifest or risk-policy effect.
 
-At `2026-05-01T02:35:51Z`, `option-aware-core-c` was recreated as a standard on-demand `e2-standard-4` worker after Spot termination. This protects the `AVGO GOOGL MU NFLX ORCL` lane from repeated preemption before the aggregator runs.
+At `2026-05-01T03:26:25Z`, the readiness monitor reports `decision=blocked_waiting_for_evidence`, `running_wave_vm_count=5`, `worker_artifact_count=458`, and `aggregate_artifact_count=0`.
+
+The monitor also sees the corrected profile-isolated partial aggregate. That packet has 8 eligible profile-level candidates and 4 unique eligible base candidates, but it is evidence-only and explicitly does not unblock the final aggregate requirement.
 
 ## Active Watch
 
@@ -28,9 +30,24 @@ The monitor is read-only. It checks GCP VM state, aggregate artifacts, promotion
 - `overnight_promotion_packet_present`: failed, waiting for aggregate output
 - `overnight_packet_has_eligible_candidates`: failed, waiting for aggregate output
 - `overnight_packet_safety_scope`: failed, waiting for aggregate output
+- `profile_isolated_partial_aggregate_present`: passed as warning/evidence only
+- `profile_isolated_partial_aggregate_has_candidates`: passed as warning/evidence only, 4 unique base candidates
+- `profile_isolated_partial_aggregate_safety_scope`: passed as warning/evidence only
 - `local_paper_config_present`: passed
 - `startup_preflight_available`: passed
 - `qqq_fallback_governed_candidates`: passed as a warning/fallback only
+
+## Profile-Isolated Partial Aggregate
+
+Promotion packet:
+
+`gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate_partial_profile_20260501T031218Z/promotion_packet_deduped_45dd637/promotion_packet/research_promotion_review_packet.json`
+
+Portfolio report:
+
+`gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate_partial_profile_20260501T031218Z/portfolio_report/portfolio_overnight_12h_aggregate/research_portfolio_report.json`
+
+This evidence is research-only, non-broker-facing, and has no live-manifest or risk-policy effect. It is useful for human review, but launch remains blocked until `finalagg2-1255z` writes the final aggregate packet to `aggregate/`.
 
 ## Paper VM
 
@@ -58,4 +75,4 @@ python scripts\run_multi_ticker_portfolio_paper_trader.py --portfolio-config con
 
 ## Next Action
 
-Keep the 15-minute readiness monitor running. When the promotion packet appears, inspect `eligible_for_promotion_review_count`, `review_candidates`, `broker_facing`, `live_manifest_effect`, and `risk_policy_effect`. If the packet is eligible and safe, prepare an operator-reviewed launch packet; do not automatically alter the live manifest or start the trader. If the aggregator runs before `core-c` completes, rerun the aggregator after all four option-aware workers have uploaded artifacts.
+Keep the 15-minute readiness monitor running. When the final promotion packet appears, inspect `eligible_for_promotion_review_count`, `unique_eligible_base_candidate_count`, `review_candidates`, `broker_facing`, `live_manifest_effect`, and `risk_policy_effect`. If the packet is eligible and safe, prepare an operator-reviewed launch packet; do not automatically alter the live manifest or start the trader. If the aggregator runs before all four option-aware workers have uploaded artifacts, rerun the aggregator after the missing lane completes.

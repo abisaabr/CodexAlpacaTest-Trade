@@ -1,8 +1,8 @@
 {
   "wave_id": "portfolio_overnight_12h_20260501",
-  "status_updated_utc": "2026-05-01T02:21:03Z",
+  "status_updated_utc": "2026-05-01T03:35:00Z",
   "status": "running",
-  "branch_head_at_monitor_smoke": "f00ebbe217b599e4789d3f70665ae594ccfa2490",
+  "branch_head_at_monitor_smoke": "8d6e4336312cf5236a70b4a2486b269274a545bd",
   "branch": "codex/phase2-fill-semantics-20260430",
   "github_pr": "https://github.com/abisaabr/CodexAlpacaTest-Trade/pull/2",
   "gcs_prefix": "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/",
@@ -25,6 +25,22 @@
     "script": "scripts/monitor_portfolio_overnight_wave.py",
     "latest_snapshot": "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/monitor/portfolio_overnight_monitor_latest.json",
     "mode": "read-only GCP/GCS polling"
+  },
+  "latest_update": {
+    "readiness_decision": "blocked_waiting_for_evidence",
+    "readiness_monitor_pid": 50596,
+    "portfolio_monitor_pid": 47024,
+    "running_wave_vm_count": 5,
+    "worker_artifact_count": 458,
+    "aggregate_artifact_count": 0,
+    "final_aggregator": "portfolio-overnight-12h-20260501-finalagg2-1255z",
+    "final_aggregator_expected_wake_utc": "2026-05-01T12:55:00Z",
+    "final_aggregator_identity_mode": "variant_profile",
+    "profile_isolated_partial_aggregate_uri": "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate_partial_profile_20260501T031218Z/",
+    "partial_aggregate_profile_level_eligible_count": 8,
+    "partial_aggregate_unique_base_eligible_count": 4,
+    "partial_aggregate_launch_gate_effect": "evidence_only_does_not_unblock_final_aggregate_requirement",
+    "ssh_status_from_this_machine": "direct_and_iap_ssh_failed_with_network_connection_abort_or_closed"
   },
   "fleet": [
     {
