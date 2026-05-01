@@ -50,6 +50,7 @@ GCS monitor prefix: `gs://codexalpaca-control-us/research_results/portfolio_over
 - `option-aware-core-c` hit a corrupted `pip._vendor.resolvelib` import after a same-disk restart; it was recreated on a clean disk and the packet now has idempotent startup scripts.
 - Startup metadata on all fleet VMs was refreshed with the idempotent scripts for future Spot restarts.
 - Completed data coverage workers and the completed QQQ deep grid worker were deleted after artifact upload to reduce idle compute cost.
+- `option-aware-core-c` was later recreated as a standard on-demand `e2-standard-4` worker after another Spot termination, preserving the `AVGO GOOGL MU NFLX ORCL` lane for the overnight portfolio tournament.
 
 ## Monitor Commands
 

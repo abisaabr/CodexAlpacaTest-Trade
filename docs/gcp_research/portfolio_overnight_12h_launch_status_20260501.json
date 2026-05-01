@@ -111,7 +111,8 @@
     "Initial high-CPU fleet exceeded 32-vCPU quota and was resized to 26 research vCPUs plus the existing 4-vCPU paper VM.",
     "The first option-aware worker launch used raw contract inventory for ladder datasets and failed on missing relative_strike_step; fixed by routing workers to selected_option_contracts.",
     "option-aware-core-c restarted on a reused disk and hit a corrupted pip resolver import; fixed by idempotent startup plus clean recreate.",
-    "Completed data coverage workers and the completed QQQ deep grid worker were deleted after artifact upload to reduce idle compute cost."
+    "Completed data coverage workers and the completed QQQ deep grid worker were deleted after artifact upload to reduce idle compute cost.",
+    "option-aware-core-c was later recreated as a standard on-demand e2-standard-4 worker after another Spot termination, preserving the AVGO/GOOGL/MU/NFLX/ORCL lane."
   ],
   "next_monitor_commands": [
     "python scripts\\monitor_portfolio_overnight_wave.py --once --gcloud-bin <path-to-gcloud>",

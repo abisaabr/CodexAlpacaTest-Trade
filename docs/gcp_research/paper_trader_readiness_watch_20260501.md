@@ -1,12 +1,14 @@
 # Paper Trader Readiness Watch - 2026-05-01
 
-Status updated UTC: `2026-05-01T02:29:45Z`
+Status updated UTC: `2026-05-01T02:35:51Z`
 
 ## Current Decision
 
 Decision: `blocked_waiting_for_evidence`
 
 The paper VM is running and the startup-preflight command is available, but the overnight portfolio aggregate promotion packet has not landed yet. The correct action is to keep monitoring and not arm paper orders or change manifests until the generated promotion packet exists, has eligible candidates, and remains research-only with no manifest or risk-policy effect.
+
+At `2026-05-01T02:35:51Z`, `option-aware-core-c` was recreated as a standard on-demand `e2-standard-4` worker after Spot termination. This protects the `AVGO GOOGL MU NFLX ORCL` lane from repeated preemption before the aggregator runs.
 
 ## Active Watch
 
@@ -22,7 +24,7 @@ The monitor is read-only. It checks GCP VM state, aggregate artifacts, promotion
 
 - `paper_vm_running`: passed
 - `paper_vm_validation_only_label`: passed
-- `overnight_workers_active_or_complete`: passed
+- `overnight_workers_active_or_complete`: passed, four option-aware workers plus aggregator are running
 - `overnight_promotion_packet_present`: failed, waiting for aggregate output
 - `overnight_packet_has_eligible_candidates`: failed, waiting for aggregate output
 - `overnight_packet_safety_scope`: failed, waiting for aggregate output
@@ -56,4 +58,4 @@ python scripts\run_multi_ticker_portfolio_paper_trader.py --portfolio-config con
 
 ## Next Action
 
-Keep the 15-minute readiness monitor running. When the promotion packet appears, inspect `eligible_for_promotion_review_count`, `review_candidates`, `broker_facing`, `live_manifest_effect`, and `risk_policy_effect`. If the packet is eligible and safe, prepare an operator-reviewed launch packet; do not automatically alter the live manifest or start the trader.
+Keep the 15-minute readiness monitor running. When the promotion packet appears, inspect `eligible_for_promotion_review_count`, `review_candidates`, `broker_facing`, `live_manifest_effect`, and `risk_policy_effect`. If the packet is eligible and safe, prepare an operator-reviewed launch packet; do not automatically alter the live manifest or start the trader. If the aggregator runs before `core-c` completes, rerun the aggregator after all four option-aware workers have uploaded artifacts.
