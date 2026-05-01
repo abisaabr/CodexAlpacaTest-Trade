@@ -44,6 +44,14 @@ def test_build_portfolio_overnight_tournament_packet(tmp_path: Path) -> None:
         "entry_liquidity_first_research_only" in Path(worker["startup_script_path"]).read_text()
         for worker in option_workers
     )
+    assert all(
+        "completed_run_id=" in Path(worker["startup_script_path"]).read_text()
+        for worker in option_workers
+    )
+    assert all(
+        "gcloud storage cp --recursive reports/research_wave/" in Path(worker["startup_script_path"]).read_text()
+        for worker in option_workers
+    )
     core_a_script = Path(option_workers[0]["startup_script_path"]).read_text()
     assert "research_wave/dense_universe/selected_option_contracts" in core_a_script
     assert "contract_inventory_silver/option_contract_inventory" not in core_a_script

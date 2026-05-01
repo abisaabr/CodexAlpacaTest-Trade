@@ -257,6 +257,11 @@ def _option_aware_worker_lines(worker: dict[str, Any], config: dict[str, Any]) -
             )
             lines.append(f"echo {_shell_quote(command)} >> ${{WORKROOT}}/command.txt")
             lines.append(command)
+            lines.append(f"echo completed_run_id={run_id}")
+            lines.append(
+                f"gcloud storage cp --recursive {output_dir} "
+                f"${{WORKER_PREFIX}}/reports/research_wave/{run_id}/ || true"
+            )
     return lines
 
 
@@ -291,6 +296,11 @@ def _qqq_worker_lines(worker: dict[str, Any], config: dict[str, Any]) -> list[st
         )
         lines.append(f"echo {_shell_quote(command)} >> ${{WORKROOT}}/command.txt")
         lines.append(command)
+        lines.append(f"echo completed_run_id={run_id}")
+        lines.append(
+            f"gcloud storage cp --recursive reports/research_wave/{run_id} "
+            f"${{WORKER_PREFIX}}/reports/research_wave/{run_id}/ || true"
+        )
     return lines
 
 
