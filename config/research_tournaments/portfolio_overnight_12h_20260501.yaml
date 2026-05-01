@@ -61,7 +61,7 @@ datasets:
 workers:
   - worker_id: data_coverage_top10
     role: data_coverage
-    machine_type: e2-standard-4
+    machine_type: e2-standard-2
     boot_disk_size_gb: 20
     zone: us-central1-a
     spot: true
@@ -69,7 +69,7 @@ workers:
     stages: [365d_5x5, 30d_5x5, 30d_atm, 7d_atm]
   - worker_id: data_coverage_next10
     role: data_coverage
-    machine_type: e2-standard-4
+    machine_type: e2-standard-2
     boot_disk_size_gb: 20
     zone: us-central1-a
     spot: true
@@ -77,7 +77,7 @@ workers:
     stages: [365d_5x5, 30d_5x5, 30d_atm, 7d_atm]
   - worker_id: qqq_deep_regime_grid
     role: qqq_option_native_deep_grid
-    machine_type: e2-standard-8
+    machine_type: e2-standard-4
     boot_disk_size_gb: 40
     zone: us-central1-a
     spot: true
@@ -88,7 +88,7 @@ workers:
       - fixed_e330_x390_lag15_15_nearest
   - worker_id: option_aware_core_a
     role: option_aware_tournament
-    machine_type: e2-standard-8
+    machine_type: e2-standard-4
     boot_disk_size_gb: 40
     zone: us-central1-a
     spot: true
@@ -97,7 +97,7 @@ workers:
     selectors: [nearest_contract, entry_liquidity_first_research_only]
   - worker_id: option_aware_core_b
     role: option_aware_tournament
-    machine_type: e2-standard-8
+    machine_type: e2-standard-4
     boot_disk_size_gb: 40
     zone: us-central1-a
     spot: true
@@ -106,7 +106,7 @@ workers:
     selectors: [nearest_contract, entry_liquidity_first_research_only]
   - worker_id: option_aware_core_c
     role: option_aware_tournament
-    machine_type: e2-standard-8
+    machine_type: e2-standard-4
     boot_disk_size_gb: 40
     zone: us-central1-a
     spot: true
@@ -115,7 +115,7 @@ workers:
     selectors: [nearest_contract, entry_liquidity_first_research_only]
   - worker_id: option_aware_core_d
     role: option_aware_tournament
-    machine_type: e2-standard-8
+    machine_type: e2-standard-4
     boot_disk_size_gb: 40
     zone: us-central1-a
     spot: true
@@ -124,7 +124,7 @@ workers:
     selectors: [nearest_contract, entry_liquidity_first_research_only]
   - worker_id: aggregator_promotion_review
     role: aggregate_and_promote
-    machine_type: e2-standard-4
+    machine_type: e2-standard-2
     boot_disk_size_gb: 20
     zone: us-central1-a
     spot: true

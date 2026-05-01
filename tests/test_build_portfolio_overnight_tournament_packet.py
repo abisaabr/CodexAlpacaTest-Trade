@@ -32,6 +32,9 @@ def test_build_portfolio_overnight_tournament_packet(tmp_path: Path) -> None:
     assert all("--boot-disk-size 250GB" not in worker["create_vm_command"] for worker in packet["workers"])
     assert any("--boot-disk-size 20GB" in worker["create_vm_command"] for worker in packet["workers"])
     assert any("--boot-disk-size 40GB" in worker["create_vm_command"] for worker in packet["workers"])
+    assert "e2-standard-8" not in "\n".join(worker["create_vm_command"] for worker in packet["workers"])
+    assert any("--machine-type e2-standard-2" in worker["create_vm_command"] for worker in packet["workers"])
+    assert any("--machine-type e2-standard-4" in worker["create_vm_command"] for worker in packet["workers"])
     coverage_workers = [worker for worker in packet["workers"] if worker["role"] == "data_coverage"]
     assert all("for symbol in" in worker["research_command"] for worker in coverage_workers)
     assert all("gcs_data_inventory.tsv" in Path(worker["startup_script_path"]).read_text() for worker in coverage_workers)
