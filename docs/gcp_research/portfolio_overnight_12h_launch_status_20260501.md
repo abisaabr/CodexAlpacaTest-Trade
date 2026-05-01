@@ -8,16 +8,19 @@ The `portfolio_overnight_12h_20260501` research fleet is running in Google Cloud
 
 Canonical runner branch: `codex/phase2-fill-semantics-20260430`
 
-Latest pushed commit: `c09d48a478feec8414349d58c9adba4badda6012`
+Branch head when the monitor smoke ran: `f00ebbe217b599e4789d3f70665ae594ccfa2490`
 
 GitHub PR: `https://github.com/abisaabr/CodexAlpacaTest-Trade/pull/2`
 
 GCS wave prefix: `gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/`
 
+GCS monitor prefix: `gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/monitor/`
+
 ## Validation
 
 - Focused tests: `5 passed`
 - Focused ruff: clean
+- Monitor script smoke: `python scripts\monitor_portfolio_overnight_wave.py --once ...` wrote `portfolio_overnight_monitor_latest.json` to GCS.
 - Test command: `python -m pytest -q tests\test_build_portfolio_overnight_tournament_packet.py tests\test_build_portfolio_overnight_research_inputs.py tests\test_run_option_aware_research_backtest.py`
 - Ruff command: `python -m ruff check scripts\build_portfolio_overnight_tournament_packet.py tests\test_build_portfolio_overnight_tournament_packet.py`
 
@@ -53,6 +56,7 @@ GCS wave prefix: `gs://codexalpaca-control-us/research_results/portfolio_overnig
 ```powershell
 $env:CLOUDSDK_PYTHON='C:\Users\rabisaab\AppData\Local\Programs\Python\Python312\python.exe'
 $gcloud='C:\Users\rabisaab\Downloads\google-cloud-sdk-local\google-cloud-sdk\bin\gcloud.cmd'
+python scripts\monitor_portfolio_overnight_wave.py --once --gcloud-bin $gcloud
 & $gcloud compute instances list --filter='name~portfolio-overnight-12h-20260501' --format='table(name,status,machineType,lastStartTimestamp,lastStopTimestamp)'
 & $gcloud storage ls gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/workers/ --recursive
 & $gcloud storage ls gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate/ --recursive
