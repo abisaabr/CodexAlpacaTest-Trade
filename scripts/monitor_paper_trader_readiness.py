@@ -22,6 +22,16 @@ DEFAULT_EARLY_QQQ_PROMOTION_PACKET_URI = (
     "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/"
     "early_qqq_governed_validation/promotion_packet/research_promotion_review_packet.json"
 )
+DEFAULT_PARTIAL_AGGREGATE_PROMOTION_PACKET_URI = (
+    "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/"
+    "aggregate_partial_profile_20260501T031218Z/promotion_packet_deduped_45dd637/"
+    "promotion_packet/research_promotion_review_packet.json"
+)
+DEFAULT_PARTIAL_AGGREGATE_PORTFOLIO_REPORT_URI = (
+    "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/"
+    "aggregate_partial_profile_20260501T031218Z/portfolio_report/"
+    "portfolio_overnight_12h_aggregate/research_portfolio_report.json"
+)
 DEFAULT_LIVE_MANIFEST = "config/strategy_manifests/multi_ticker_portfolio_live.yaml"
 DEFAULT_PAPER_CONFIG = "config/multi_ticker_paper_portfolio.yaml"
 
@@ -222,6 +232,8 @@ def build_readiness_snapshot(
     live_manifest: Path,
     qqq_promotion_manifest: Path,
     early_qqq_promotion_packet_uri: str,
+    partial_aggregate_promotion_packet_uri: str,
+    partial_aggregate_portfolio_report_uri: str,
 ) -> dict[str, Any]:
     gcs_prefix = gcs_prefix.rstrip("/")
     now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -232,6 +244,14 @@ def build_readiness_snapshot(
     early_qqq_packet, early_qqq_command = _json_gcs(
         gcloud_bin=gcloud_bin,
         uri=early_qqq_promotion_packet_uri,
+    )
+    partial_aggregate_packet, partial_aggregate_command = _json_gcs(
+        gcloud_bin=gcloud_bin,
+        uri=partial_aggregate_promotion_packet_uri,
+    )
+    partial_portfolio_report, partial_portfolio_command = _json_gcs(
+        gcloud_bin=gcloud_bin,
+        uri=partial_aggregate_portfolio_report_uri,
     )
     worker_artifacts, workers_command = _list_gcs(gcloud_bin=gcloud_bin, uri=f"{gcs_prefix}/workers/")
     aggregate_artifacts, aggregate_command = _list_gcs(gcloud_bin=gcloud_bin, uri=f"{gcs_prefix}/aggregate/")
@@ -247,6 +267,8 @@ def build_readiness_snapshot(
     review_candidates = _review_candidates(promotion_packet)
     early_qqq_eligible_count = _eligible_count(early_qqq_packet)
     early_qqq_review_candidates = _review_candidates(early_qqq_packet)
+    partial_aggregate_eligible_count = _eligible_count(partial_aggregate_packet)
+    partial_aggregate_review_candidates = _review_candidates(partial_aggregate_packet)
     running_workers = [
         item for item in wave_instances if str(item.get("status", "")).upper() == "RUNNING"
     ]
@@ -264,6 +286,12 @@ def build_readiness_snapshot(
         and early_qqq_packet.get("broker_facing") is False
         and early_qqq_packet.get("live_manifest_effect") == "none"
         and early_qqq_packet.get("risk_policy_effect") == "none"
+    )
+    partial_aggregate_safety_ok = bool(
+        partial_aggregate_packet
+        and partial_aggregate_packet.get("broker_facing") is False
+        and partial_aggregate_packet.get("live_manifest_effect") == "none"
+        and partial_aggregate_packet.get("risk_policy_effect") == "none"
     )
     gates = [
         _gate(
@@ -328,6 +356,32 @@ def build_readiness_snapshot(
             severity="warning",
         ),
         _gate(
+            "profile_isolated_partial_aggregate_present",
+            partial_aggregate_packet is not None and partial_portfolio_report is not None,
+            partial_aggregate_promotion_packet_uri
+            if partial_aggregate_packet and partial_portfolio_report
+            else "Profile-isolated partial aggregate packet/report not both present yet.",
+            severity="warning",
+        ),
+        _gate(
+            "profile_isolated_partial_aggregate_has_candidates",
+            partial_aggregate_eligible_count > 0,
+            "Eligible unique candidates in profile-isolated partial aggregate: "
+            f"{partial_aggregate_eligible_count}",
+            severity="warning",
+        ),
+        _gate(
+            "profile_isolated_partial_aggregate_safety_scope",
+            partial_aggregate_safety_ok,
+            (
+                "Partial aggregate is research-only, non-broker-facing, and has no "
+                "manifest/risk effect."
+            )
+            if partial_aggregate_safety_ok
+            else "Waiting for partial aggregate safety-scope check.",
+            severity="warning",
+        ),
+        _gate(
             "local_paper_config_present",
             manifest_summary["paper_config_present"] and manifest_summary["live_manifest_present"],
             f"Paper config present={manifest_summary['paper_config_present']}; live manifest present={manifest_summary['live_manifest_present']}",
@@ -384,6 +438,45 @@ def build_readiness_snapshot(
             "safety_scope_ok": early_qqq_safety_ok,
             "launch_gate_effect": "evidence_only_does_not_unblock_full_portfolio_launch",
         },
+        "profile_isolated_partial_aggregate": {
+            "promotion_packet_uri": partial_aggregate_promotion_packet_uri,
+            "portfolio_report_uri": partial_aggregate_portfolio_report_uri,
+            "promotion_packet_present": partial_aggregate_packet is not None,
+            "portfolio_report_present": partial_portfolio_report is not None,
+            "eligible_for_promotion_review_count": partial_aggregate_eligible_count,
+            "unique_eligible_base_candidate_count": (
+                (
+                    partial_aggregate_packet.get("gate_summary", {}).get(
+                        "unique_eligible_base_candidate_count"
+                    )
+                )
+                if partial_aggregate_packet
+                else None
+            ),
+            "candidate_identity_mode": (
+                partial_aggregate_packet.get("gate_summary", {}).get("candidate_identity_mode")
+                if partial_aggregate_packet
+                else None
+            ),
+            "broker_facing": (
+                partial_aggregate_packet.get("broker_facing")
+                if partial_aggregate_packet
+                else None
+            ),
+            "live_manifest_effect": (
+                partial_aggregate_packet.get("live_manifest_effect")
+                if partial_aggregate_packet
+                else None
+            ),
+            "risk_policy_effect": (
+                partial_aggregate_packet.get("risk_policy_effect")
+                if partial_aggregate_packet
+                else None
+            ),
+            "review_candidates": partial_aggregate_review_candidates[:20],
+            "safety_scope_ok": partial_aggregate_safety_ok,
+            "launch_gate_effect": "evidence_only_does_not_unblock_final_aggregate_requirement",
+        },
         "manifest_summary": manifest_summary,
         "qqq_fallback": qqq_fallback,
         "readiness_gates": gates,
@@ -391,6 +484,8 @@ def build_readiness_snapshot(
             "promotion_packet": promotion_command,
             "portfolio_report": portfolio_command,
             "early_qqq_promotion_packet": early_qqq_command,
+            "partial_aggregate_promotion_packet": partial_aggregate_command,
+            "partial_aggregate_portfolio_report": partial_portfolio_command,
             "workers": workers_command,
             "aggregate": aggregate_command,
             "instances": instances_command,
@@ -414,6 +509,8 @@ def _write_markdown(path: Path, snapshot: dict[str, Any]) -> None:
     candidates = snapshot["review_candidates"]
     early_qqq = snapshot["early_qqq_governed_validation"]
     early_qqq_candidates = early_qqq["review_candidates"]
+    partial_aggregate = snapshot["profile_isolated_partial_aggregate"]
+    partial_aggregate_candidates = partial_aggregate["review_candidates"]
     lines = [
         "# Paper Trader Readiness Watch",
         "",
@@ -424,6 +521,10 @@ def _write_markdown(path: Path, snapshot: dict[str, Any]) -> None:
         f"- Eligible overnight candidates: `{snapshot['eligible_for_promotion_review_count']}`",
         "- Early QQQ governed candidates: "
         f"`{early_qqq['eligible_for_promotion_review_count']}`",
+        "- Profile-isolated partial aggregate candidates: "
+        f"`{partial_aggregate['eligible_for_promotion_review_count']}`",
+        "- Profile-isolated partial unique base candidates: "
+        f"`{partial_aggregate['unique_eligible_base_candidate_count']}`",
         f"- Running wave VMs: `{snapshot['running_wave_vm_count']}`",
         f"- Worker artifact count: `{snapshot['worker_artifact_count']}`",
         f"- Aggregate artifact count: `{snapshot['aggregate_artifact_count']}`",
@@ -466,6 +567,27 @@ def _write_markdown(path: Path, snapshot: dict[str, Any]) -> None:
         lines.append(
             "- "
             f"`{row.get('symbol')}` `{row.get('candidate_variant_id')}` "
+            f"family `{row.get('family')}` regime `{row.get('intended_regime')}` "
+            f"fill `{row.get('min_fill_coverage')}` test_pnl `{row.get('min_test_net_pnl')}`"
+        )
+    lines.extend(["", "## Profile-Isolated Partial Aggregate Evidence", ""])
+    lines.append(
+        "- Packet present: "
+        f"`{partial_aggregate['promotion_packet_present']}`; "
+        f"portfolio report present: `{partial_aggregate['portfolio_report_present']}`; "
+        f"eligible candidates: `{partial_aggregate['eligible_for_promotion_review_count']}`; "
+        "unique base candidates: "
+        f"`{partial_aggregate['unique_eligible_base_candidate_count']}`; "
+        f"identity mode: `{partial_aggregate['candidate_identity_mode']}`; "
+        f"launch gate effect: `{partial_aggregate['launch_gate_effect']}`"
+    )
+    if not partial_aggregate_candidates:
+        lines.append("- No profile-isolated partial aggregate candidates are available yet.")
+    for row in partial_aggregate_candidates:
+        lines.append(
+            "- "
+            f"`{row.get('symbol')}` `{row.get('base_candidate_variant_id') or row.get('candidate_variant_id')}` "
+            f"profile `{row.get('aggregate_profile')}` "
             f"family `{row.get('family')}` regime `{row.get('intended_regime')}` "
             f"fill `{row.get('min_fill_coverage')}` test_pnl `{row.get('min_test_net_pnl')}`"
         )
@@ -542,6 +664,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--live-manifest", default=DEFAULT_LIVE_MANIFEST)
     parser.add_argument("--qqq-promotion-manifest", default=DEFAULT_QQQ_PROMOTION_MANIFEST)
     parser.add_argument("--early-qqq-promotion-packet-uri", default=DEFAULT_EARLY_QQQ_PROMOTION_PACKET_URI)
+    parser.add_argument(
+        "--partial-aggregate-promotion-packet-uri",
+        default=DEFAULT_PARTIAL_AGGREGATE_PROMOTION_PACKET_URI,
+    )
+    parser.add_argument(
+        "--partial-aggregate-portfolio-report-uri",
+        default=DEFAULT_PARTIAL_AGGREGATE_PORTFOLIO_REPORT_URI,
+    )
     parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--interval-seconds", type=int, default=900)
     parser.add_argument("--duration-hours", type=float, default=12.0)
@@ -564,6 +694,12 @@ def main() -> None:
             live_manifest=Path(args.live_manifest),
             qqq_promotion_manifest=Path(args.qqq_promotion_manifest),
             early_qqq_promotion_packet_uri=str(args.early_qqq_promotion_packet_uri),
+            partial_aggregate_promotion_packet_uri=str(
+                args.partial_aggregate_promotion_packet_uri
+            ),
+            partial_aggregate_portfolio_report_uri=str(
+                args.partial_aggregate_portfolio_report_uri
+            ),
         )
         _write_and_upload(
             snapshot=snapshot,
@@ -582,6 +718,9 @@ def main() -> None:
                     "early_qqq_eligible_for_promotion_review_count": snapshot[
                         "early_qqq_governed_validation"
                     ]["eligible_for_promotion_review_count"],
+                    "partial_aggregate_unique_eligible_base_count": snapshot[
+                        "profile_isolated_partial_aggregate"
+                    ]["unique_eligible_base_candidate_count"],
                     "running_wave_vm_count": snapshot["running_wave_vm_count"],
                 },
                 sort_keys=True,
