@@ -10,6 +10,15 @@ This is separate from the all-ticker overnight wave so QQQ evidence can be revie
 
 `gs://codexalpaca-control-us/research_results/qqq_365d_canonical_20260501T2250Z/`
 
+## Launch Status
+
+- Instance: `qqq-365d-canonical-20260501-2250z`
+- Zone: `us-central1-a`
+- Machine type: `e2-standard-4`
+- Status at first check: `RUNNING`
+- First observed phase: `staging_source`
+- Startup status file: `gs://codexalpaca-control-us/research_results/qqq_365d_canonical_20260501T2250Z/status/qqq_365d_status.json`
+
 ## Dataset
 
 - Stock bars: `gs://codexalpaca-data-us/research_stock_data/qqq_365d_next_trading_day_5x5_20260428/stock_ref_silver/stock_bars/`
