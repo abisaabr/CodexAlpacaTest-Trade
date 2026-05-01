@@ -10,6 +10,7 @@ from typing import Any
 
 DEFAULT_WAVE_ID = "portfolio_overnight_12h_20260501"
 DEFAULT_GCS_PREFIX = "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/"
+DEFAULT_FASTLANE_AGGREGATE_SUBDIR = "aggregate_fastlane_top40_20260501"
 
 
 def _run(args: list[str], *, timeout: int = 120) -> dict[str, Any]:
@@ -81,8 +82,19 @@ def _snapshot(*, gcloud_bin: str, wave_id: str, gcs_prefix: str) -> dict[str, An
         [gcloud_bin, "storage", "ls", f"{gcs_prefix}/aggregate/", "--recursive"],
         timeout=120,
     )
+    fastlane_aggregate_cmd = _run(
+        [
+            gcloud_bin,
+            "storage",
+            "ls",
+            f"{gcs_prefix}/{DEFAULT_FASTLANE_AGGREGATE_SUBDIR}/",
+            "--recursive",
+        ],
+        timeout=120,
+    )
     worker_artifacts = _lines_stdout(workers_cmd)
     aggregate_artifacts = _lines_stdout(aggregate_cmd)
+    fastlane_aggregate_artifacts = _lines_stdout(fastlane_aggregate_cmd)
     key_worker_artifacts = [
         line
         for line in worker_artifacts
@@ -112,12 +124,18 @@ def _snapshot(*, gcloud_bin: str, wave_id: str, gcs_prefix: str) -> dict[str, An
             "instances": vm_cmd,
             "workers": {key: value for key, value in workers_cmd.items() if key != "stdout"},
             "aggregate": {key: value for key, value in aggregate_cmd.items() if key != "stdout"},
+            "fastlane_aggregate": {
+                key: value for key, value in fastlane_aggregate_cmd.items() if key != "stdout"
+            },
         },
         "instances": _json_stdout(vm_cmd) or [],
         "worker_artifact_count": len(worker_artifacts),
         "key_worker_artifacts": key_worker_artifacts[-200:],
         "aggregate_artifact_count": len(aggregate_artifacts),
         "aggregate_artifacts": aggregate_artifacts[-200:],
+        "fastlane_aggregate_subdir": DEFAULT_FASTLANE_AGGREGATE_SUBDIR,
+        "fastlane_aggregate_artifact_count": len(fastlane_aggregate_artifacts),
+        "fastlane_aggregate_artifacts": fastlane_aggregate_artifacts[-200:],
     }
 
 
@@ -196,6 +214,9 @@ def main() -> None:
                     "instances": len(snapshot["instances"]),
                     "worker_artifact_count": snapshot["worker_artifact_count"],
                     "aggregate_artifact_count": snapshot["aggregate_artifact_count"],
+                    "fastlane_aggregate_artifact_count": snapshot[
+                        "fastlane_aggregate_artifact_count"
+                    ],
                 },
                 sort_keys=True,
             )

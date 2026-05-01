@@ -32,6 +32,14 @@ DEFAULT_PARTIAL_AGGREGATE_PORTFOLIO_REPORT_URI = (
     "aggregate_partial_profile_20260501T031218Z/portfolio_report/"
     "portfolio_overnight_12h_aggregate/research_portfolio_report.json"
 )
+DEFAULT_FASTLANE_AGGREGATE_PROMOTION_PACKET_URI = (
+    "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/"
+    "aggregate_fastlane_top40_20260501/promotion_packet/research_promotion_review_packet.json"
+)
+DEFAULT_FASTLANE_AGGREGATE_PORTFOLIO_REPORT_URI = (
+    "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/"
+    "aggregate_fastlane_top40_20260501/portfolio_report/research_portfolio_report.json"
+)
 DEFAULT_LIVE_MANIFEST = "config/strategy_manifests/multi_ticker_portfolio_live.yaml"
 DEFAULT_PAPER_CONFIG = "config/multi_ticker_paper_portfolio.yaml"
 
@@ -234,6 +242,8 @@ def build_readiness_snapshot(
     early_qqq_promotion_packet_uri: str,
     partial_aggregate_promotion_packet_uri: str,
     partial_aggregate_portfolio_report_uri: str,
+    fastlane_aggregate_promotion_packet_uri: str,
+    fastlane_aggregate_portfolio_report_uri: str,
 ) -> dict[str, Any]:
     gcs_prefix = gcs_prefix.rstrip("/")
     now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -253,8 +263,20 @@ def build_readiness_snapshot(
         gcloud_bin=gcloud_bin,
         uri=partial_aggregate_portfolio_report_uri,
     )
+    fastlane_aggregate_packet, fastlane_aggregate_command = _json_gcs(
+        gcloud_bin=gcloud_bin,
+        uri=fastlane_aggregate_promotion_packet_uri,
+    )
+    fastlane_portfolio_report, fastlane_portfolio_command = _json_gcs(
+        gcloud_bin=gcloud_bin,
+        uri=fastlane_aggregate_portfolio_report_uri,
+    )
     worker_artifacts, workers_command = _list_gcs(gcloud_bin=gcloud_bin, uri=f"{gcs_prefix}/workers/")
     aggregate_artifacts, aggregate_command = _list_gcs(gcloud_bin=gcloud_bin, uri=f"{gcs_prefix}/aggregate/")
+    fastlane_aggregate_artifacts, fastlane_artifacts_command = _list_gcs(
+        gcloud_bin=gcloud_bin,
+        uri=f"{gcs_prefix}/aggregate_fastlane_top40_20260501/",
+    )
     wave_instances, instances_command = _wave_instances(gcloud_bin=gcloud_bin, wave_id=wave_id)
     paper_vm, paper_vm_command = _paper_vm_status(
         gcloud_bin=gcloud_bin,
@@ -269,6 +291,8 @@ def build_readiness_snapshot(
     early_qqq_review_candidates = _review_candidates(early_qqq_packet)
     partial_aggregate_eligible_count = _eligible_count(partial_aggregate_packet)
     partial_aggregate_review_candidates = _review_candidates(partial_aggregate_packet)
+    fastlane_aggregate_eligible_count = _eligible_count(fastlane_aggregate_packet)
+    fastlane_aggregate_review_candidates = _review_candidates(fastlane_aggregate_packet)
     running_workers = [
         item for item in wave_instances if str(item.get("status", "")).upper() == "RUNNING"
     ]
@@ -292,6 +316,12 @@ def build_readiness_snapshot(
         and partial_aggregate_packet.get("broker_facing") is False
         and partial_aggregate_packet.get("live_manifest_effect") == "none"
         and partial_aggregate_packet.get("risk_policy_effect") == "none"
+    )
+    fastlane_aggregate_safety_ok = bool(
+        fastlane_aggregate_packet
+        and fastlane_aggregate_packet.get("broker_facing") is False
+        and fastlane_aggregate_packet.get("live_manifest_effect") == "none"
+        and fastlane_aggregate_packet.get("risk_policy_effect") == "none"
     )
     gates = [
         _gate(
@@ -382,6 +412,31 @@ def build_readiness_snapshot(
             severity="warning",
         ),
         _gate(
+            "fastlane_top40_aggregate_present",
+            fastlane_aggregate_packet is not None and fastlane_portfolio_report is not None,
+            fastlane_aggregate_promotion_packet_uri
+            if fastlane_aggregate_packet and fastlane_portfolio_report
+            else "Fastlane top-40 aggregate packet/report not both present yet.",
+            severity="warning",
+        ),
+        _gate(
+            "fastlane_top40_aggregate_has_candidates",
+            fastlane_aggregate_eligible_count > 0,
+            f"Eligible candidates in fastlane top-40 aggregate: {fastlane_aggregate_eligible_count}",
+            severity="warning",
+        ),
+        _gate(
+            "fastlane_top40_aggregate_safety_scope",
+            fastlane_aggregate_safety_ok,
+            (
+                "Fastlane aggregate is research-only, non-broker-facing, and has no "
+                "manifest/risk effect."
+            )
+            if fastlane_aggregate_safety_ok
+            else "Waiting for fastlane aggregate safety-scope check.",
+            severity="warning",
+        ),
+        _gate(
             "local_paper_config_present",
             manifest_summary["paper_config_present"] and manifest_summary["live_manifest_present"],
             f"Paper config present={manifest_summary['paper_config_present']}; live manifest present={manifest_summary['live_manifest_present']}",
@@ -419,6 +474,7 @@ def build_readiness_snapshot(
         "running_wave_vm_count": len(running_workers),
         "worker_artifact_count": len(worker_artifacts),
         "aggregate_artifact_count": len(aggregate_artifacts),
+        "fastlane_aggregate_artifact_count": len(fastlane_aggregate_artifacts),
         "promotion_packet_present": promotion_packet is not None,
         "portfolio_report_present": portfolio_report is not None,
         "eligible_for_promotion_review_count": eligible_count,
@@ -477,6 +533,46 @@ def build_readiness_snapshot(
             "safety_scope_ok": partial_aggregate_safety_ok,
             "launch_gate_effect": "evidence_only_does_not_unblock_final_aggregate_requirement",
         },
+        "fastlane_top40_aggregate": {
+            "promotion_packet_uri": fastlane_aggregate_promotion_packet_uri,
+            "portfolio_report_uri": fastlane_aggregate_portfolio_report_uri,
+            "promotion_packet_present": fastlane_aggregate_packet is not None,
+            "portfolio_report_present": fastlane_portfolio_report is not None,
+            "artifact_count": len(fastlane_aggregate_artifacts),
+            "eligible_for_promotion_review_count": fastlane_aggregate_eligible_count,
+            "unique_eligible_base_candidate_count": (
+                (
+                    fastlane_aggregate_packet.get("gate_summary", {}).get(
+                        "unique_eligible_base_candidate_count"
+                    )
+                )
+                if fastlane_aggregate_packet
+                else None
+            ),
+            "candidate_identity_mode": (
+                fastlane_aggregate_packet.get("gate_summary", {}).get("candidate_identity_mode")
+                if fastlane_aggregate_packet
+                else None
+            ),
+            "broker_facing": (
+                fastlane_aggregate_packet.get("broker_facing")
+                if fastlane_aggregate_packet
+                else None
+            ),
+            "live_manifest_effect": (
+                fastlane_aggregate_packet.get("live_manifest_effect")
+                if fastlane_aggregate_packet
+                else None
+            ),
+            "risk_policy_effect": (
+                fastlane_aggregate_packet.get("risk_policy_effect")
+                if fastlane_aggregate_packet
+                else None
+            ),
+            "review_candidates": fastlane_aggregate_review_candidates[:20],
+            "safety_scope_ok": fastlane_aggregate_safety_ok,
+            "launch_gate_effect": "evidence_only_does_not_unblock_final_aggregate_requirement",
+        },
         "manifest_summary": manifest_summary,
         "qqq_fallback": qqq_fallback,
         "readiness_gates": gates,
@@ -486,6 +582,9 @@ def build_readiness_snapshot(
             "early_qqq_promotion_packet": early_qqq_command,
             "partial_aggregate_promotion_packet": partial_aggregate_command,
             "partial_aggregate_portfolio_report": partial_portfolio_command,
+            "fastlane_aggregate_promotion_packet": fastlane_aggregate_command,
+            "fastlane_aggregate_portfolio_report": fastlane_portfolio_command,
+            "fastlane_aggregate_artifacts": fastlane_artifacts_command,
             "workers": workers_command,
             "aggregate": aggregate_command,
             "instances": instances_command,
@@ -511,6 +610,8 @@ def _write_markdown(path: Path, snapshot: dict[str, Any]) -> None:
     early_qqq_candidates = early_qqq["review_candidates"]
     partial_aggregate = snapshot["profile_isolated_partial_aggregate"]
     partial_aggregate_candidates = partial_aggregate["review_candidates"]
+    fastlane_aggregate = snapshot["fastlane_top40_aggregate"]
+    fastlane_aggregate_candidates = fastlane_aggregate["review_candidates"]
     lines = [
         "# Paper Trader Readiness Watch",
         "",
@@ -525,9 +626,14 @@ def _write_markdown(path: Path, snapshot: dict[str, Any]) -> None:
         f"`{partial_aggregate['eligible_for_promotion_review_count']}`",
         "- Profile-isolated partial unique base candidates: "
         f"`{partial_aggregate['unique_eligible_base_candidate_count']}`",
+        "- Fastlane top-40 aggregate candidates: "
+        f"`{fastlane_aggregate['eligible_for_promotion_review_count']}`",
+        "- Fastlane top-40 unique base candidates: "
+        f"`{fastlane_aggregate['unique_eligible_base_candidate_count']}`",
         f"- Running wave VMs: `{snapshot['running_wave_vm_count']}`",
         f"- Worker artifact count: `{snapshot['worker_artifact_count']}`",
         f"- Aggregate artifact count: `{snapshot['aggregate_artifact_count']}`",
+        f"- Fastlane aggregate artifact count: `{snapshot['fastlane_aggregate_artifact_count']}`",
         "",
         "## Safety",
         "",
@@ -584,6 +690,28 @@ def _write_markdown(path: Path, snapshot: dict[str, Any]) -> None:
     if not partial_aggregate_candidates:
         lines.append("- No profile-isolated partial aggregate candidates are available yet.")
     for row in partial_aggregate_candidates:
+        lines.append(
+            "- "
+            f"`{row.get('symbol')}` `{row.get('base_candidate_variant_id') or row.get('candidate_variant_id')}` "
+            f"profile `{row.get('aggregate_profile')}` "
+            f"family `{row.get('family')}` regime `{row.get('intended_regime')}` "
+            f"fill `{row.get('min_fill_coverage')}` test_pnl `{row.get('min_test_net_pnl')}`"
+        )
+    lines.extend(["", "## Fastlane Top-40 Aggregate Evidence", ""])
+    lines.append(
+        "- Packet present: "
+        f"`{fastlane_aggregate['promotion_packet_present']}`; "
+        f"portfolio report present: `{fastlane_aggregate['portfolio_report_present']}`; "
+        f"artifact count: `{fastlane_aggregate['artifact_count']}`; "
+        f"eligible candidates: `{fastlane_aggregate['eligible_for_promotion_review_count']}`; "
+        "unique base candidates: "
+        f"`{fastlane_aggregate['unique_eligible_base_candidate_count']}`; "
+        f"identity mode: `{fastlane_aggregate['candidate_identity_mode']}`; "
+        f"launch gate effect: `{fastlane_aggregate['launch_gate_effect']}`"
+    )
+    if not fastlane_aggregate_candidates:
+        lines.append("- No fastlane top-40 aggregate candidates are available yet.")
+    for row in fastlane_aggregate_candidates:
         lines.append(
             "- "
             f"`{row.get('symbol')}` `{row.get('base_candidate_variant_id') or row.get('candidate_variant_id')}` "
@@ -672,6 +800,14 @@ def parse_args() -> argparse.Namespace:
         "--partial-aggregate-portfolio-report-uri",
         default=DEFAULT_PARTIAL_AGGREGATE_PORTFOLIO_REPORT_URI,
     )
+    parser.add_argument(
+        "--fastlane-aggregate-promotion-packet-uri",
+        default=DEFAULT_FASTLANE_AGGREGATE_PROMOTION_PACKET_URI,
+    )
+    parser.add_argument(
+        "--fastlane-aggregate-portfolio-report-uri",
+        default=DEFAULT_FASTLANE_AGGREGATE_PORTFOLIO_REPORT_URI,
+    )
     parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--interval-seconds", type=int, default=900)
     parser.add_argument("--duration-hours", type=float, default=12.0)
@@ -700,6 +836,12 @@ def main() -> None:
             partial_aggregate_portfolio_report_uri=str(
                 args.partial_aggregate_portfolio_report_uri
             ),
+            fastlane_aggregate_promotion_packet_uri=str(
+                args.fastlane_aggregate_promotion_packet_uri
+            ),
+            fastlane_aggregate_portfolio_report_uri=str(
+                args.fastlane_aggregate_portfolio_report_uri
+            ),
         )
         _write_and_upload(
             snapshot=snapshot,
@@ -721,6 +863,12 @@ def main() -> None:
                     "partial_aggregate_unique_eligible_base_count": snapshot[
                         "profile_isolated_partial_aggregate"
                     ]["unique_eligible_base_candidate_count"],
+                    "fastlane_top40_unique_eligible_base_count": snapshot[
+                        "fastlane_top40_aggregate"
+                    ]["unique_eligible_base_candidate_count"],
+                    "fastlane_top40_artifact_count": snapshot[
+                        "fastlane_aggregate_artifact_count"
+                    ],
                     "running_wave_vm_count": snapshot["running_wave_vm_count"],
                 },
                 sort_keys=True,
