@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+export PYTHONUNBUFFERED=1
+
+WAVE_ID="${WAVE_ID:-ticker_365d_all_available_20260501T2300Z}"
+GCS_PREFIX="${GCS_PREFIX:-gs://codexalpaca-control-us/research_results/ticker_365d_all_available_20260501T2300Z}"
+SOURCE_ARCHIVE_URI="${SOURCE_ARCHIVE_URI:-${GCS_PREFIX}/inputs/source/codexalpaca_repo_source.tar.gz}"
+EXPECTED_SUMMARY_COUNT="${EXPECTED_SUMMARY_COUNT:-40}"
+CHECK_INTERVAL_SECONDS="${CHECK_INTERVAL_SECONDS:-900}"
+MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-43200}"
+INITIAL_CASH="${INITIAL_CASH:-25000}"
+TARGET_EQUITY="${TARGET_EQUITY:-300000}"
+
+WORKROOT="${WORKROOT:-/mnt/codexalpaca-ticker365-agg}"
+REPO_DIR="${WORKROOT}/repo"
+WORKER_OUTPUTS="${WORKROOT}/worker_outputs"
+mkdir -p "${WORKROOT}"
+exec > >(tee -a "${WORKROOT}/startup.log") 2>&1
+
+now_utc() {
+  date -u '+%Y-%m-%dT%H:%M:%SZ'
+}
+
+summary_count() {
+  gcloud storage ls --recursive "${GCS_PREFIX}/workers/**" 2>/dev/null \
+    | grep 'option_aware_candidate_summary\.json$' \
+    | grep -c . \
+    || true
+}
+
+write_status() {
+  local phase="$1"
+  local detail="${2:-}"
+  local count="${3:-0}"
+  local elapsed="${4:-0}"
+  python3 - "$phase" "$detail" "$count" "$elapsed" > "${WORKROOT}/ticker_365d_aggregate_status.json" <<'PY'
+import json
+import sys
+from datetime import UTC, datetime
+
+phase, detail, count, elapsed = sys.argv[1:5]
+print(json.dumps({
+    "generated_at_utc": datetime.now(UTC).replace(microsecond=0).isoformat(),
+    "wave_id": "__WAVE_ID__",
+    "phase": phase,
+    "detail": detail,
+    "gcs_prefix": "__GCS_PREFIX__",
+    "summary_count": int(count),
+    "expected_summary_count": int("__EXPECTED_SUMMARY_COUNT__"),
+    "elapsed_seconds": int(elapsed),
+    "broker_facing": False,
+    "paper_orders": False,
+    "live_manifest_effect": "none",
+    "risk_policy_effect": "none",
+}, indent=2, sort_keys=True))
+PY
+  sed -i \
+    -e "s|__WAVE_ID__|${WAVE_ID}|g" \
+    -e "s|__GCS_PREFIX__|${GCS_PREFIX}|g" \
+    -e "s|__EXPECTED_SUMMARY_COUNT__|${EXPECTED_SUMMARY_COUNT}|g" \
+    "${WORKROOT}/ticker_365d_aggregate_status.json"
+  gcloud storage cp "${WORKROOT}/ticker_365d_aggregate_status.json" "${GCS_PREFIX}/aggregate/status/ticker_365d_aggregate_status.json" || true
+  gcloud storage cp "${WORKROOT}/startup.log" "${GCS_PREFIX}/aggregate/status/startup.log" || true
+}
+
+echo "aggregate_watch_started_utc=$(now_utc)"
+echo "wave_id=${WAVE_ID}"
+echo "gcs_prefix=${GCS_PREFIX}"
+echo "expected_summary_count=${EXPECTED_SUMMARY_COUNT}"
+
+start_epoch="$(date -u +%s)"
+trigger_reason=""
+while true; do
+  count="$(summary_count)"
+  elapsed="$(($(date -u +%s) - start_epoch))"
+  echo "monitor_utc=$(now_utc) summary_count=${count} expected=${EXPECTED_SUMMARY_COUNT} elapsed=${elapsed}"
+  write_status "waiting_for_ticker_shards" "" "${count}" "${elapsed}"
+  if [[ "${count}" -ge "${EXPECTED_SUMMARY_COUNT}" ]]; then
+    trigger_reason="expected_summary_count_reached"
+    break
+  fi
+  if [[ "${elapsed}" -ge "${MAX_WAIT_SECONDS}" ]]; then
+    trigger_reason="max_wait_elapsed_snapshot"
+    break
+  fi
+  sleep "${CHECK_INTERVAL_SECONDS}"
+done
+
+count="$(summary_count)"
+elapsed="$(($(date -u +%s) - start_epoch))"
+write_status "aggregate_triggered" "${trigger_reason}" "${count}" "${elapsed}"
+
+apt-get update
+apt-get install -y python3 python3-venv python3-pip ca-certificates
+
+gcloud storage cp "${SOURCE_ARCHIVE_URI}" "${WORKROOT}/source.tar.gz"
+rm -rf "${REPO_DIR}" "${WORKER_OUTPUTS}"
+mkdir -p "${REPO_DIR}" "${WORKER_OUTPUTS}"
+tar -xzf "${WORKROOT}/source.tar.gz" -C "${REPO_DIR}"
+
+cd "${REPO_DIR}"
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ".[gcp]"
+
+gcloud storage cp --recursive "${GCS_PREFIX}/workers/" "${WORKER_OUTPUTS}/" || true
+
+python scripts/build_research_portfolio_report.py \
+  --replay-root "${WORKER_OUTPUTS}" \
+  --output-dir reports/research_wave/ticker_365d_all_available_portfolio_report \
+  --fill-coverage-gate 0.90 \
+  --min-option-trades 20 \
+  --min-test-net-pnl 0 \
+  --max-positions 12 \
+  --max-strategies-per-symbol 2 \
+  --max-symbol-weight 0.20 \
+  --initial-cash "${INITIAL_CASH}" \
+  --candidate-identity-mode variant_profile
+
+python scripts/build_research_promotion_review_packet.py \
+  --portfolio-report-json reports/research_wave/ticker_365d_all_available_portfolio_report/research_portfolio_report.json \
+  --output-dir reports/research_wave/ticker_365d_all_available_promotion_packet
+
+python scripts/build_portfolio_growth_projection.py \
+  --portfolio-report-json reports/research_wave/ticker_365d_all_available_portfolio_report/research_portfolio_report.json \
+  --replay-root "${WORKER_OUTPUTS}" \
+  --output-dir reports/research_wave/ticker_365d_all_available_growth_projection \
+  --initial-cash "${INITIAL_CASH}" \
+  --target-equity "${TARGET_EQUITY}" \
+  --backtest-allocation-fraction 0.05 \
+  --bootstrap-runs 2000
+
+gcloud storage cp --recursive reports/research_wave/ticker_365d_all_available_portfolio_report "${GCS_PREFIX}/aggregate/portfolio_report/"
+gcloud storage cp --recursive reports/research_wave/ticker_365d_all_available_promotion_packet "${GCS_PREFIX}/aggregate/promotion_packet/"
+gcloud storage cp --recursive reports/research_wave/ticker_365d_all_available_growth_projection "${GCS_PREFIX}/aggregate/growth_projection/"
+
+write_status "aggregate_completed" "${trigger_reason}" "${count}" "${elapsed}"
+echo "aggregate_completed_utc=$(now_utc)"
