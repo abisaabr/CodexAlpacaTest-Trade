@@ -1,0 +1,114 @@
+{
+  "wave_id": "portfolio_overnight_12h_20260501",
+  "status_updated_utc": "2026-05-01T02:18:32Z",
+  "status": "running",
+  "latest_runner_commit": "c09d48a478feec8414349d58c9adba4badda6012",
+  "branch": "codex/phase2-fill-semantics-20260430",
+  "github_pr": "https://github.com/abisaabr/CodexAlpacaTest-Trade/pull/2",
+  "gcs_prefix": "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/",
+  "gcs_inputs_prefix": "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/inputs/",
+  "safety": {
+    "broker_facing": false,
+    "paper_orders": false,
+    "live_manifest_changed": false,
+    "risk_policy_changed": false,
+    "promotion_meaning": "governed validation review only"
+  },
+  "validation": {
+    "focused_pytest": "5 passed",
+    "focused_ruff": "clean",
+    "latest_test_command": "python -m pytest -q tests\\test_build_portfolio_overnight_tournament_packet.py tests\\test_build_portfolio_overnight_research_inputs.py tests\\test_run_option_aware_research_backtest.py",
+    "latest_ruff_command": "python -m ruff check scripts\\build_portfolio_overnight_tournament_packet.py tests\\test_build_portfolio_overnight_tournament_packet.py"
+  },
+  "fleet": [
+    {
+      "name": "portfolio-overnight-12h-20260501-data-coverage-top10",
+      "role": "data_coverage",
+      "machine_type": "e2-standard-2",
+      "status": "RUNNING",
+      "last_start": "2026-04-30T18:54:21.988-07:00",
+      "artifact_status": "startup, command, source_commit, artifacts_manifest uploaded"
+    },
+    {
+      "name": "portfolio-overnight-12h-20260501-data-coverage-next10",
+      "role": "data_coverage",
+      "machine_type": "e2-standard-2",
+      "status": "RUNNING",
+      "last_start": "2026-04-30T18:54:32.763-07:00",
+      "artifact_status": "startup, command, source_commit, artifacts_manifest uploaded"
+    },
+    {
+      "name": "portfolio-overnight-12h-20260501-qqq-deep-regime-grid",
+      "role": "qqq_option_native_deep_grid",
+      "machine_type": "e2-standard-4",
+      "status": "RUNNING",
+      "last_start": "2026-04-30T18:54:45.017-07:00",
+      "artifact_status": "completed_utc=2026-05-01T01:57:32Z; three option_aware_candidate_summary.csv files uploaded"
+    },
+    {
+      "name": "portfolio-overnight-12h-20260501-option-aware-core-a",
+      "role": "option_aware_tournament",
+      "machine_type": "e2-standard-4",
+      "status": "RUNNING",
+      "last_start": "2026-04-30T19:03:57.469-07:00",
+      "symbols": ["AAPL", "AMD", "AMZN", "INTC", "IWM"],
+      "artifact_status": "long replay stage; no terminal error observed in serial log as of status time"
+    },
+    {
+      "name": "portfolio-overnight-12h-20260501-option-aware-core-b",
+      "role": "option_aware_tournament",
+      "machine_type": "e2-standard-4",
+      "status": "RUNNING",
+      "last_start": "2026-04-30T19:04:11.235-07:00",
+      "symbols": ["META", "MSFT", "NVDA", "SPY", "TSLA"],
+      "artifact_status": "long replay stage; no terminal error observed in serial log as of status time"
+    },
+    {
+      "name": "portfolio-overnight-12h-20260501-option-aware-core-c",
+      "role": "option_aware_tournament",
+      "machine_type": "e2-standard-4",
+      "status": "RUNNING",
+      "last_start": "2026-04-30T19:12:52.201-07:00",
+      "symbols": ["AVGO", "GOOGL", "MU", "NFLX", "ORCL"],
+      "artifact_status": "recreated on clean disk after pip resolver corruption on reused spot disk; package install passed earlier failure point"
+    },
+    {
+      "name": "portfolio-overnight-12h-20260501-option-aware-core-d",
+      "role": "option_aware_tournament",
+      "machine_type": "e2-standard-4",
+      "status": "RUNNING",
+      "last_start": "2026-04-30T19:04:49.876-07:00",
+      "symbols": ["PLTR", "QQQ", "TSM", "XLE", "XOM"],
+      "artifact_status": "long replay stage; no terminal error observed in serial log as of status time"
+    },
+    {
+      "name": "portfolio-overnight-12h-20260501-aggregator-promotion-rev",
+      "role": "aggregate_and_promote",
+      "machine_type": "e2-standard-2",
+      "status": "RUNNING",
+      "last_start": "2026-04-30T19:05:29.790-07:00",
+      "artifact_status": "sleeping until worker window completes, then builds portfolio report and promotion packet"
+    }
+  ],
+  "repairs_applied": [
+    {
+      "commit": "4230a2f1a90ee5a9ae52dc004a3131d06a2ab3ea",
+      "summary": "Use selected contract universes for ladder workers instead of raw contract inventory roots."
+    },
+    {
+      "commit": "c09d48a478feec8414349d58c9adba4badda6012",
+      "summary": "Make worker startup idempotent by clearing the repo and virtualenv workspace before unpack/install."
+    }
+  ],
+  "known_events": [
+    "Initial large-disk fleet exceeded SSD quota and was resized to 20GB/40GB workers.",
+    "Initial high-CPU fleet exceeded 32-vCPU quota and was resized to 26 research vCPUs plus the existing 4-vCPU paper VM.",
+    "The first option-aware worker launch used raw contract inventory for ladder datasets and failed on missing relative_strike_step; fixed by routing workers to selected_option_contracts.",
+    "option-aware-core-c restarted on a reused disk and hit a corrupted pip resolver import; fixed by idempotent startup plus clean recreate."
+  ],
+  "next_monitor_commands": [
+    "gcloud compute instances list --filter='name~portfolio-overnight-12h-20260501' --format='table(name,status,machineType,lastStartTimestamp,lastStopTimestamp)'",
+    "gcloud storage ls gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/workers/ --recursive",
+    "gcloud storage ls gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate/ --recursive"
+  ]
+}
