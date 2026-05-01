@@ -325,10 +325,14 @@ def _data_coverage_worker_lines(worker: dict[str, Any], config: dict[str, Any]) 
 
 
 def _aggregate_worker_lines(worker: dict[str, Any], config: dict[str, Any]) -> list[str]:
-    sleep_hours = int(worker.get("start_after_hours", 11))
+    sleep_seconds = int(worker.get("start_after_seconds", int(worker.get("start_after_hours", 11)) * 3600))
+    aggregate_output_subdir = str(worker.get("aggregate_output_subdir", "aggregate")).strip("/")
     gates = config["promotion_gates"]
     return [
-        f"sleep {sleep_hours * 3600}",
+        f"echo aggregate_wait_seconds={sleep_seconds}",
+        f"echo aggregate_output_subdir={_shell_quote(aggregate_output_subdir)}",
+        f"sleep {sleep_seconds}",
+        "date -u '+aggregate_started_utc=%Y-%m-%dT%H:%M:%SZ'",
         "mkdir -p ${WORKROOT}/worker_outputs",
         "gcloud storage cp --recursive ${GCS_PREFIX}/workers/ ${WORKROOT}/worker_outputs/ || true",
         "python scripts/build_research_portfolio_report.py "
@@ -344,8 +348,11 @@ def _aggregate_worker_lines(worker: dict[str, Any], config: dict[str, Any]) -> l
         "python scripts/build_research_promotion_review_packet.py "
         "--portfolio-report-json reports/research_wave/portfolio_overnight_12h_aggregate/research_portfolio_report.json "
         "--output-dir reports/research_wave/portfolio_overnight_12h_promotion_packet",
-        "gcloud storage cp --recursive reports/research_wave/portfolio_overnight_12h_aggregate ${GCS_PREFIX}/aggregate/portfolio_report/",
-        "gcloud storage cp --recursive reports/research_wave/portfolio_overnight_12h_promotion_packet ${GCS_PREFIX}/aggregate/promotion_packet/",
+        "gcloud storage cp --recursive "
+        f"reports/research_wave/portfolio_overnight_12h_aggregate ${{GCS_PREFIX}}/{aggregate_output_subdir}/portfolio_report/",
+        "gcloud storage cp --recursive "
+        f"reports/research_wave/portfolio_overnight_12h_promotion_packet ${{GCS_PREFIX}}/{aggregate_output_subdir}/promotion_packet/",
+        "date -u '+aggregate_completed_utc=%Y-%m-%dT%H:%M:%SZ'",
     ]
 
 
@@ -378,6 +385,9 @@ def _create_vm_command(
     instance_name = _slug(f"{wave_slug}-{worker_slug}")
     labels = f"wave={wave_slug},role={role_slug},worker={worker_slug}"
     boot_disk_size_gb = int(worker.get("boot_disk_size_gb", config.get("default_boot_disk_size_gb", 40)))
+    provisioning = "--provisioning-model STANDARD"
+    if bool(worker.get("spot", True)):
+        provisioning = "--provisioning-model SPOT --instance-termination-action STOP"
     return (
         "gcloud compute instances create "
         f"{instance_name} "
@@ -385,7 +395,7 @@ def _create_vm_command(
         f"--machine-type {worker['machine_type']} "
         "--image-family debian-12 --image-project debian-cloud "
         f"--service-account {config['service_account']} --scopes cloud-platform "
-        "--provisioning-model SPOT --instance-termination-action STOP "
+        f"{provisioning} "
         f"--boot-disk-size {boot_disk_size_gb}GB --boot-disk-type pd-balanced "
         f"--labels {labels} "
         f"--metadata-from-file startup-script={startup_script_arg}"

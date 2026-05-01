@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 from scripts.build_portfolio_overnight_tournament_packet import build_packet
 
 
@@ -36,6 +38,10 @@ def test_build_portfolio_overnight_tournament_packet(tmp_path: Path) -> None:
     assert "e2-standard-8" not in "\n".join(worker["create_vm_command"] for worker in packet["workers"])
     assert any("--machine-type e2-standard-2" in worker["create_vm_command"] for worker in packet["workers"])
     assert any("--machine-type e2-standard-4" in worker["create_vm_command"] for worker in packet["workers"])
+    assert all(
+        "--provisioning-model SPOT --instance-termination-action STOP" in worker["create_vm_command"]
+        for worker in packet["workers"]
+    )
     coverage_workers = [worker for worker in packet["workers"] if worker["role"] == "data_coverage"]
     assert all("for symbol in" in worker["research_command"] for worker in coverage_workers)
     assert all("gcs_data_inventory.tsv" in Path(worker["startup_script_path"]).read_text() for worker in coverage_workers)
@@ -58,3 +64,33 @@ def test_build_portfolio_overnight_tournament_packet(tmp_path: Path) -> None:
     assert (tmp_path / "portfolio_overnight_12h_tournament_packet.json").exists()
     assert (tmp_path / "portfolio_overnight_12h_tournament_packet.md").exists()
     assert (tmp_path / "startup_scripts").is_dir()
+
+
+def test_partial_aggregate_worker_can_run_immediately_to_separate_prefix(tmp_path: Path) -> None:
+    config_path = Path("config/research_tournaments/portfolio_overnight_12h_20260501.yaml")
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config["workers"] = [
+        {
+            "worker_id": "partial_aggregate_now",
+            "role": "aggregate_and_promote",
+            "machine_type": "e2-standard-2",
+            "boot_disk_size_gb": 20,
+            "zone": "us-central1-a",
+            "spot": False,
+            "start_after_seconds": 0,
+            "aggregate_output_subdir": "aggregate_partial_smoke",
+        }
+    ]
+    partial_config_path = tmp_path / "partial_aggregate_config.yaml"
+    partial_config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+
+    packet = build_packet(config_path=partial_config_path, output_dir=tmp_path / "packet")
+    worker = packet["workers"][0]
+    startup_script = Path(worker["startup_script_path"]).read_text(encoding="utf-8")
+
+    assert "--provisioning-model STANDARD" in worker["create_vm_command"]
+    assert "--instance-termination-action STOP" not in worker["create_vm_command"]
+    assert "aggregate_wait_seconds=0" in startup_script
+    assert "aggregate_output_subdir='aggregate_partial_smoke'" in startup_script
+    assert "${GCS_PREFIX}/aggregate_partial_smoke/portfolio_report/" in startup_script
+    assert "${GCS_PREFIX}/aggregate_partial_smoke/promotion_packet/" in startup_script
