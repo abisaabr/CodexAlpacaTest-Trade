@@ -139,3 +139,11 @@ gcloud storage cp --recursive reports/research_wave/ticker_365d_all_available_gr
 
 write_status "aggregate_completed" "${trigger_reason}" "${count}" "${elapsed}"
 echo "aggregate_completed_utc=$(now_utc)"
+
+INSTANCE_NAME="$(curl -fs -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/name 2>/dev/null || true)"
+INSTANCE_ZONE_PATH="$(curl -fs -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/zone 2>/dev/null || true)"
+INSTANCE_ZONE="${INSTANCE_ZONE_PATH##*/}"
+if [[ -n "${INSTANCE_NAME}" && -n "${INSTANCE_ZONE}" ]]; then
+  echo "self_stop_requested_utc=$(now_utc) instance=${INSTANCE_NAME} zone=${INSTANCE_ZONE}"
+  gcloud compute instances stop "${INSTANCE_NAME}" --zone "${INSTANCE_ZONE}" --quiet || true
+fi
