@@ -361,6 +361,7 @@ def _create_vm_command(
     role_slug = _slug(worker["role"], max_length=48)
     instance_name = _slug(f"{wave_slug}-{worker_slug}")
     labels = f"wave={wave_slug},role={role_slug},worker={worker_slug}"
+    boot_disk_size_gb = int(worker.get("boot_disk_size_gb", config.get("default_boot_disk_size_gb", 40)))
     return (
         "gcloud compute instances create "
         f"{instance_name} "
@@ -369,7 +370,7 @@ def _create_vm_command(
         "--image-family debian-12 --image-project debian-cloud "
         f"--service-account {config['service_account']} --scopes cloud-platform "
         "--provisioning-model SPOT --instance-termination-action STOP "
-        "--boot-disk-size 250GB --boot-disk-type pd-balanced "
+        f"--boot-disk-size {boot_disk_size_gb}GB --boot-disk-type pd-balanced "
         f"--labels {labels} "
         f"--metadata-from-file startup-script={startup_script_arg}"
     )
