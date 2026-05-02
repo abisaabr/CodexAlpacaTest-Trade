@@ -56,6 +56,7 @@ Operating contract:
 - Refreshes the tracked source archive and startup scripts into this GCS wave prefix.
 - Stops only completed `ticker365-*` research shards from this wave.
 - Launches the next pending ticker shards only when `CPUS_ALL_REGIONS` quota allows it.
+- Retries interrupted ticker shards up to four total VM attempts before requiring manual intervention.
 - Triggers the aggregate VM only after all expected ticker summaries land.
 - Writes JSON and Markdown status locally under ignored `reports/gcp_research/watchdog/` and mirrors them to the GCS `watchdog/` prefix.
 - Does not start trading, submit paper orders, modify live manifests, change risk policy, or lower the `fill_coverage >= 0.90` gate.

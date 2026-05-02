@@ -25,7 +25,7 @@ if (Test-Path $KeyPath) {
 $stamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 Add-WatchdogLogLine "===== ticker_365d_watchdog run $stamp ====="
 
-& $Python "scripts\watch_ticker_365d_wave.py" --gcloud $Gcloud 2>&1 |
+& $Python "scripts\watch_ticker_365d_wave.py" --gcloud $Gcloud --max-retry-attempts 4 2>&1 |
     ForEach-Object {
         $line = $_.ToString()
         Write-Output $line

@@ -84,7 +84,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--aggregate-zone", default="us-central1-a")
     parser.add_argument("--aggregate-machine-type", default="e2-standard-2")
     parser.add_argument("--max-launches-per-run", type=int, default=4)
-    parser.add_argument("--max-retry-attempts", type=int, default=2)
+    parser.add_argument("--max-retry-attempts", type=int, default=4)
     parser.add_argument("--expected-summaries", type=int, default=0)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-refresh-inputs", action="store_true")
