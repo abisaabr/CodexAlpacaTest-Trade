@@ -33,6 +33,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--projection-years", type=int, default=5)
     parser.add_argument("--bootstrap-runs", type=int, default=2000)
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument(
+        "--calendar-csv",
+        default=None,
+        help=(
+            "Optional full-period trading calendar CSV. When provided, the equity "
+            "curve carries cash through calendar days with no selected strategy trades."
+        ),
+    )
+    parser.add_argument(
+        "--calendar-date-column",
+        default="trade_date",
+        help="Date column in --calendar-csv.",
+    )
     return parser.parse_args()
 
 
@@ -101,6 +114,42 @@ def _load_trade_economics(replay_root: Path) -> pd.DataFrame:
     return trades
 
 
+def _load_projection_calendar(
+    *,
+    calendar_csv: Path | None,
+    date_column: str,
+) -> pd.DataFrame:
+    if calendar_csv is None:
+        return pd.DataFrame()
+    if not calendar_csv.exists():
+        raise FileNotFoundError(f"Calendar CSV not found: {calendar_csv}")
+    calendar = pd.read_csv(calendar_csv)
+    if date_column not in calendar.columns:
+        raise ValueError(f"Calendar CSV must include date column {date_column!r}")
+    calendar = calendar.copy()
+    calendar["trade_date"] = pd.to_datetime(calendar[date_column], errors="coerce").dt.date
+    calendar = calendar.dropna(subset=["trade_date"]).drop_duplicates(subset=["trade_date"])
+    calendar = calendar.sort_values("trade_date").reset_index(drop=True)
+    regime_column = next(
+        (
+            column
+            for column in [
+                "market_regime",
+                "calendar_regime",
+                "regime",
+                "intended_regime",
+            ]
+            if column in calendar.columns
+        ),
+        None,
+    )
+    if regime_column:
+        calendar["calendar_regime"] = calendar[regime_column].fillna("unknown").astype(str)
+    else:
+        calendar["calendar_regime"] = "unknown"
+    return calendar[["trade_date", "calendar_regime"]]
+
+
 def _capital_plan(portfolio_report: dict[str, Any]) -> list[dict[str, Any]]:
     plan = portfolio_report.get("capital_plan") or []
     if not isinstance(plan, list):
@@ -165,6 +214,27 @@ def _build_daily_equity(
     for trade_date, group in trades.groupby("trade_date", sort=True):
         start_equity = equity
         daily_pnl = 0.0
+        active_regimes = sorted(
+            {
+                str(value)
+                for value in group.get("capital_plan_regime", pd.Series(dtype=object)).dropna().unique()
+                if str(value) and str(value) != "nan"
+            }
+        )
+        active_symbols = sorted(
+            {
+                str(value)
+                for value in group.get("symbol", pd.Series(dtype=object)).dropna().unique()
+                if str(value) and str(value) != "nan"
+            }
+        )
+        active_families = sorted(
+            {
+                str(value)
+                for value in group.get("capital_plan_family", pd.Series(dtype=object)).dropna().unique()
+                if str(value) and str(value) != "nan"
+            }
+        )
         for _, row in group.iterrows():
             weight = _float(row.get("portfolio_weight"))
             dynamic_budget = start_equity * weight
@@ -201,9 +271,173 @@ def _build_daily_equity(
                 "drawdown": round(drawdown, 6),
                 "drawdown_pct": round(drawdown / peak, 10) if peak > 0 else -1.0,
                 "trade_count": int(len(group)),
+                "active_trade_day": True,
+                "active_regimes": ",".join(active_regimes),
+                "active_symbols": ",".join(active_symbols),
+                "active_families": ",".join(active_families),
             }
         )
     return pd.DataFrame(daily_rows), pd.DataFrame(trade_rows)
+
+
+def _build_full_period_equity_curve(
+    *,
+    active_daily_curve: pd.DataFrame,
+    calendar: pd.DataFrame,
+    initial_cash: float,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    if calendar.empty:
+        return active_daily_curve.copy(), {
+            "mode": "active_trade_days_only",
+            "calendar_provided": False,
+            "raw_dataset_trading_days": int(len(active_daily_curve)),
+            "strategy_active_days": int(len(active_daily_curve)),
+            "inactive_cash_days": 0,
+            "active_day_coverage_pct": 100.0 if not active_daily_curve.empty else 0.0,
+            "calendar_regime_label_source": "not_provided",
+        }
+    active_by_date = {
+        pd.to_datetime(row["trade_date"]).date(): row
+        for _, row in active_daily_curve.iterrows()
+    }
+    calendar_dates = set(calendar["trade_date"])
+    extra_active_dates = sorted(set(active_by_date) - calendar_dates)
+    rows: list[dict[str, Any]] = []
+    equity = initial_cash
+    peak = initial_cash
+    active_days = 0
+    for _, calendar_row in calendar.iterrows():
+        trade_date = calendar_row["trade_date"]
+        active = active_by_date.get(trade_date)
+        start_equity = equity
+        if active is None:
+            daily_pnl = 0.0
+            trade_count = 0
+            active_trade_day = False
+            active_regimes = ""
+            active_symbols = ""
+            active_families = ""
+        else:
+            daily_pnl = _float(active.get("daily_pnl"))
+            trade_count = int(_float(active.get("trade_count")))
+            active_trade_day = True
+            active_days += 1
+            active_regimes = str(active.get("active_regimes") or "")
+            active_symbols = str(active.get("active_symbols") or "")
+            active_families = str(active.get("active_families") or "")
+        equity = max(start_equity + daily_pnl, 0.0)
+        peak = max(peak, equity)
+        drawdown = equity - peak
+        daily_return = daily_pnl / start_equity if start_equity > 0 else -1.0
+        rows.append(
+            {
+                "trade_date": str(trade_date),
+                "calendar_regime": str(calendar_row.get("calendar_regime") or "unknown"),
+                "starting_equity": round(start_equity, 6),
+                "daily_pnl": round(daily_pnl, 6),
+                "daily_return": round(daily_return, 10),
+                "ending_equity": round(equity, 6),
+                "peak_equity": round(peak, 6),
+                "drawdown": round(drawdown, 6),
+                "drawdown_pct": round(drawdown / peak, 10) if peak > 0 else -1.0,
+                "trade_count": trade_count,
+                "active_trade_day": active_trade_day,
+                "active_regimes": active_regimes,
+                "active_symbols": active_symbols,
+                "active_families": active_families,
+            }
+        )
+    raw_days = int(len(calendar))
+    inactive_days = raw_days - active_days
+    return pd.DataFrame(rows), {
+        "mode": "full_calendar_cash_carry",
+        "calendar_provided": True,
+        "raw_dataset_trading_days": raw_days,
+        "strategy_active_days": active_days,
+        "inactive_cash_days": inactive_days,
+        "active_day_coverage_pct": (
+            round(active_days / raw_days * 100.0, 4) if raw_days else 0.0
+        ),
+        "extra_active_dates_not_in_calendar": [str(value) for value in extra_active_dates],
+        "calendar_regime_label_source": (
+            "calendar_csv" if set(calendar["calendar_regime"]) != {"unknown"} else "not_provided"
+        ),
+    }
+
+
+def _split_labels(value: object) -> list[str]:
+    if value is None:
+        return []
+    text = str(value)
+    if not text or text == "nan":
+        return []
+    return [item.strip() for item in text.split(",") if item.strip()]
+
+
+def _regime_coverage(
+    *,
+    daily_curve: pd.DataFrame,
+    scaled_trades: pd.DataFrame,
+    capital_plan: list[dict[str, Any]],
+    projection_calendar: dict[str, Any],
+) -> dict[str, Any]:
+    required_regimes = ["bull", "bear", "choppy"]
+    active_days_by_regime = {regime: 0 for regime in required_regimes}
+    if not daily_curve.empty and "active_regimes" in daily_curve.columns:
+        for _, row in daily_curve.iterrows():
+            labels = set(_split_labels(row.get("active_regimes")))
+            for regime in required_regimes:
+                if regime in labels:
+                    active_days_by_regime[regime] += 1
+    trade_count_by_regime = {regime: 0 for regime in required_regimes}
+    pnl_by_regime = {regime: 0.0 for regime in required_regimes}
+    if not scaled_trades.empty and "intended_regime" in scaled_trades.columns:
+        for regime, group in scaled_trades.groupby("intended_regime"):
+            regime_key = str(regime)
+            trade_count_by_regime[regime_key] = int(len(group))
+            pnl_by_regime[regime_key] = round(float(group["scaled_option_pnl"].sum()), 6)
+    capital_plan_count_by_regime = {regime: 0 for regime in required_regimes}
+    for row in capital_plan:
+        regime = str(row.get("intended_regime") or "")
+        if regime:
+            capital_plan_count_by_regime[regime] = capital_plan_count_by_regime.get(regime, 0) + 1
+    required_status = {
+        regime: {
+            "covered": active_days_by_regime.get(regime, 0) > 0
+            and capital_plan_count_by_regime.get(regime, 0) > 0,
+            "capital_plan_count": capital_plan_count_by_regime.get(regime, 0),
+            "active_days": active_days_by_regime.get(regime, 0),
+            "trade_count": trade_count_by_regime.get(regime, 0),
+            "scaled_pnl": round(pnl_by_regime.get(regime, 0.0), 6),
+        }
+        for regime in required_regimes
+    }
+    calendar_market_regime: dict[str, Any] = {}
+    if (
+        not daily_curve.empty
+        and "calendar_regime" in daily_curve.columns
+        and projection_calendar.get("calendar_regime_label_source") == "calendar_csv"
+    ):
+        for regime, group in daily_curve.groupby("calendar_regime"):
+            calendar_market_regime[str(regime)] = {
+                "calendar_days": int(len(group)),
+                "active_days": int(group["active_trade_day"].astype(bool).sum()),
+                "inactive_days": int((~group["active_trade_day"].astype(bool)).sum()),
+                "scaled_pnl": round(float(group["daily_pnl"].sum()), 6),
+            }
+    return {
+        "required_regimes": required_regimes,
+        "required_regime_status": required_status,
+        "all_required_regimes_covered": all(
+            item["covered"] for item in required_status.values()
+        ),
+        "active_days_by_strategy_regime": active_days_by_regime,
+        "trade_count_by_strategy_regime": trade_count_by_regime,
+        "scaled_pnl_by_strategy_regime": pnl_by_regime,
+        "capital_plan_count_by_strategy_regime": capital_plan_count_by_regime,
+        "calendar_market_regime_coverage": calendar_market_regime,
+        "projection_calendar": projection_calendar,
+    }
 
 
 def _max_drawdown_from_equity(equity_values: np.ndarray) -> float:
@@ -385,6 +619,7 @@ def _evidence_grade(
     historical: dict[str, Any],
     projection: dict[str, Any],
     capital_plan: list[dict[str, Any]],
+    regime_coverage: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     blockers: list[str] = []
     warnings: list[str] = []
@@ -392,8 +627,19 @@ def _evidence_grade(
         blockers.append("no_capital_plan")
     if daily_curve.empty:
         blockers.append("no_matched_trade_economics")
-    elif len(daily_curve) < 252:
-        warnings.append("less_than_252_trading_days")
+    elif len(daily_curve) < 250:
+        warnings.append("less_than_250_trading_days")
+    if regime_coverage:
+        projection_calendar = regime_coverage.get("projection_calendar") or {}
+        if projection_calendar.get("calendar_provided"):
+            inactive_days = int(_float(projection_calendar.get("inactive_cash_days")))
+            if inactive_days > 0:
+                warnings.append("portfolio_has_inactive_cash_days")
+        for regime, item in (regime_coverage.get("required_regime_status") or {}).items():
+            if not item.get("covered"):
+                blockers.append(f"missing_{regime}_strategy_coverage")
+        if projection_calendar.get("calendar_regime_label_source") == "not_provided":
+            warnings.append("calendar_market_regime_labels_not_provided")
     if _float(historical.get("max_drawdown_pct")) <= -50:
         warnings.append("historical_drawdown_exceeds_50pct")
     if _float(historical.get("annualized_volatility_pct")) >= 80:
@@ -425,8 +671,11 @@ def _evidence_grade(
 
 def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
     historical = packet["historical_metrics"]
+    active_historical = packet.get("active_day_historical_metrics", {})
     projection = packet["bootstrap_projection"]
     grade = packet["evidence_grade"]
+    projection_calendar = packet.get("projection_calendar", {})
+    regime_coverage = packet.get("regime_coverage", {})
     lines = [
         "# Portfolio Growth Projection",
         "",
@@ -438,6 +687,15 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         f"- Initial cash: `${packet['initial_cash']}`",
         f"- Target equity: `${packet['target_equity']}`",
         f"- Evidence grade: `{grade['grade']}`",
+        "",
+        "## Full-Year Calendar Coverage",
+        "",
+        f"- Calendar mode: `{projection_calendar.get('mode')}`",
+        f"- Raw dataset trading days: `{projection_calendar.get('raw_dataset_trading_days')}`",
+        f"- Strategy active days: `{projection_calendar.get('strategy_active_days')}`",
+        f"- Inactive cash days: `{projection_calendar.get('inactive_cash_days')}`",
+        f"- Active-day coverage: `{projection_calendar.get('active_day_coverage_pct')}%`",
+        f"- Calendar market-regime labels: `{projection_calendar.get('calendar_regime_label_source')}`",
         "",
         "## Historical Compounded Curve",
         "",
@@ -457,6 +715,42 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         "first_target_hit_date",
     ]:
         lines.append(f"- `{key}`: `{historical.get(key)}`")
+    if active_historical:
+        lines.extend(["", "## Active-Day-Only Comparison", ""])
+        for key in [
+            "starting_date",
+            "ending_date",
+            "trading_days",
+            "ending_equity",
+            "total_return_pct",
+            "cagr_pct",
+            "max_drawdown",
+            "max_drawdown_pct",
+        ]:
+            lines.append(f"- `{key}`: `{active_historical.get(key)}`")
+    lines.extend(["", "## Strategy Regime Coverage", ""])
+    required_status = regime_coverage.get("required_regime_status") or {}
+    if not required_status:
+        lines.append("- No regime coverage summary available.")
+    else:
+        lines.append("| Strategy Regime | Covered | Capital Plan Count | Active Days | Trades | Scaled PnL |")
+        lines.append("| --- | --- | ---: | ---: | ---: | ---: |")
+        for regime, row in required_status.items():
+            lines.append(
+                f"| `{regime}` | `{str(row.get('covered')).lower()}` | "
+                f"{row.get('capital_plan_count')} | {row.get('active_days')} | "
+                f"{row.get('trade_count')} | `${row.get('scaled_pnl')}` |"
+            )
+    market_regimes = regime_coverage.get("calendar_market_regime_coverage") or {}
+    if market_regimes:
+        lines.extend(["", "## Calendar Market-Regime Coverage", ""])
+        lines.append("| Market Regime | Calendar Days | Active Days | Inactive Days | Scaled PnL |")
+        lines.append("| --- | ---: | ---: | ---: | ---: |")
+        for regime, row in market_regimes.items():
+            lines.append(
+                f"| `{regime}` | {row.get('calendar_days')} | {row.get('active_days')} | "
+                f"{row.get('inactive_days')} | `${row.get('scaled_pnl')}` |"
+            )
     lines.extend(["", "## Bootstrap Projection", ""])
     for key in [
         "status",
@@ -519,24 +813,41 @@ def build_growth_projection(
     projection_years: int,
     bootstrap_runs: int,
     seed: int,
+    calendar_csv: Path | None = None,
+    calendar_date_column: str = "trade_date",
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     portfolio_report = _load_json(portfolio_report_json)
     capital_plan = _capital_plan(portfolio_report)
     trades = _load_trade_economics(replay_root)
+    calendar = _load_projection_calendar(
+        calendar_csv=calendar_csv,
+        date_column=calendar_date_column,
+    )
     selected_trades = _select_capital_plan_trades(
         trades=trades,
         capital_plan=capital_plan,
         initial_cash=initial_cash,
         backtest_allocation_fraction=backtest_allocation_fraction,
     )
-    daily_curve, scaled_trades = _build_daily_equity(
+    active_daily_curve, scaled_trades = _build_daily_equity(
         selected_trades=selected_trades,
         initial_cash=initial_cash,
         backtest_allocation_fraction=backtest_allocation_fraction,
     )
+    daily_curve, projection_calendar = _build_full_period_equity_curve(
+        active_daily_curve=active_daily_curve,
+        calendar=calendar,
+        initial_cash=initial_cash,
+    )
     historical = _historical_metrics(
         daily_curve=daily_curve,
+        initial_cash=initial_cash,
+        target_equity=target_equity,
+        annual_trading_days=annual_trading_days,
+    )
+    active_day_historical = _historical_metrics(
+        daily_curve=active_daily_curve,
         initial_cash=initial_cash,
         target_equity=target_equity,
         annual_trading_days=annual_trading_days,
@@ -550,11 +861,18 @@ def build_growth_projection(
         bootstrap_runs=bootstrap_runs,
         seed=seed,
     )
+    regime_coverage = _regime_coverage(
+        daily_curve=daily_curve,
+        scaled_trades=scaled_trades,
+        capital_plan=capital_plan,
+        projection_calendar=projection_calendar,
+    )
     evidence_grade = _evidence_grade(
         daily_curve=daily_curve,
         historical=historical,
         projection=projection,
         capital_plan=capital_plan,
+        regime_coverage=regime_coverage,
     )
     packet = {
         "generated_at": datetime.now(UTC).isoformat(),
@@ -570,8 +888,12 @@ def build_growth_projection(
         "backtest_allocation_fraction": backtest_allocation_fraction,
         "capital_plan_count": len(capital_plan),
         "matched_trade_count": int(len(selected_trades)),
-        "matched_daily_count": int(len(daily_curve)),
+        "matched_daily_count": int(len(active_daily_curve)),
+        "full_year_daily_count": int(len(daily_curve)),
+        "projection_calendar": projection_calendar,
+        "regime_coverage": regime_coverage,
         "historical_metrics": historical,
+        "active_day_historical_metrics": active_day_historical,
         "bootstrap_projection": projection,
         "evidence_grade": evidence_grade,
         "capital_plan": capital_plan,
@@ -581,6 +903,11 @@ def build_growth_projection(
     )
     if not daily_curve.empty:
         daily_curve.to_csv(output_dir / "portfolio_growth_equity_curve.csv", index=False)
+    if not active_daily_curve.empty:
+        active_daily_curve.to_csv(
+            output_dir / "portfolio_growth_active_day_equity_curve.csv",
+            index=False,
+        )
     if not scaled_trades.empty:
         scaled_trades.to_csv(output_dir / "portfolio_growth_scaled_trades.csv", index=False)
     _write_markdown(output_dir / "portfolio_growth_projection.md", packet)
@@ -600,6 +927,8 @@ def main() -> None:
         projection_years=args.projection_years,
         bootstrap_runs=args.bootstrap_runs,
         seed=args.seed,
+        calendar_csv=Path(args.calendar_csv) if args.calendar_csv else None,
+        calendar_date_column=args.calendar_date_column,
     )
     print(json.dumps(packet, indent=2, sort_keys=True))
 

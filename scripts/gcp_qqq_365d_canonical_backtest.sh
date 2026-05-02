@@ -134,6 +134,13 @@ python scripts/build_qqq_regime_labels.py \
   --symbol QQQ
 gcloud storage cp --recursive reports/research_wave/qqq_regime_labels "${GCS_PREFIX}/regime_labels/"
 
+python scripts/build_projection_calendar.py \
+  --option-bars-root "${DATA_DIR}/option_bars" \
+  --regime-labels-csv reports/research_wave/qqq_regime_labels/qqq_regime_labels.csv \
+  --output-dir reports/research_wave/qqq_projection_calendar \
+  --symbol QQQ
+gcloud storage cp --recursive reports/research_wave/qqq_projection_calendar "${GCS_PREFIX}/projection_calendar/"
+
 run_profile fixed_e330_x390_lag15_15 fixed_offset 330 390 15 15 nearest_contract
 run_profile first_common_e330_x390_lag15_15 first_common_within_cutoff 330 390 15 15 nearest_contract
 run_profile fixed_e300_x390_lag30_60 fixed_offset 300 390 30 60 nearest_contract
@@ -165,6 +172,8 @@ python scripts/build_portfolio_growth_projection.py \
   --initial-cash "${INITIAL_CASH}" \
   --target-equity "${TARGET_EQUITY}" \
   --backtest-allocation-fraction 0.05 \
+  --calendar-csv reports/research_wave/qqq_projection_calendar/projection_calendar.csv \
+  --calendar-date-column trade_date \
   --bootstrap-runs 2000
 
 gcloud storage cp --recursive reports/research_wave/qqq_365d_portfolio_report "${GCS_PREFIX}/portfolio_report/"
