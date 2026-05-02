@@ -9,6 +9,12 @@ $Gcloud = "C:\Users\rabisaab\Downloads\google-cloud-sdk-local\google-cloud-sdk\b
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 Set-Location $RepoRoot
 
+$Utf8NoBom = New-Object System.Text.UTF8Encoding $false
+function Add-WatchdogLogLine {
+    param([string]$Line)
+    [System.IO.File]::AppendAllText($LogPath, $Line + [Environment]::NewLine, $Utf8NoBom)
+}
+
 $env:CLOUDSDK_PYTHON = $Python
 $env:GOOGLE_CLOUD_PROJECT = "codexalpaca"
 $KeyPath = "C:\Users\rabisaab\Downloads\codexalpaca-7bcb9ac9a02d.json"
@@ -17,9 +23,13 @@ if (Test-Path $KeyPath) {
 }
 
 $stamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-Add-Content -Path $LogPath -Value "===== ticker_365d_watchdog run $stamp ====="
+Add-WatchdogLogLine "===== ticker_365d_watchdog run $stamp ====="
 
 & $Python "scripts\watch_ticker_365d_wave.py" --gcloud $Gcloud 2>&1 |
-    Tee-Object -FilePath $LogPath -Append
+    ForEach-Object {
+        $line = $_.ToString()
+        Write-Output $line
+        Add-WatchdogLogLine $line
+    }
 
 exit $LASTEXITCODE
