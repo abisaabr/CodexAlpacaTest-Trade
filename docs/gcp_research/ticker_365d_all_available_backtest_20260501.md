@@ -44,6 +44,22 @@ Active ticker workers were left running.
 - Aggregate promotion packet: `gs://codexalpaca-control-us/research_results/ticker_365d_all_available_20260501T2300Z/aggregate/promotion_packet/`
 - Aggregate growth projection: `gs://codexalpaca-control-us/research_results/ticker_365d_all_available_20260501T2300Z/aggregate/growth_projection/`
 - Aggregate status: `gs://codexalpaca-control-us/research_results/ticker_365d_all_available_20260501T2300Z/aggregate/status/ticker_365d_aggregate_status.json`
+- Watchdog status: `gs://codexalpaca-control-us/research_results/ticker_365d_all_available_20260501T2300Z/watchdog/ticker_365d_watch_status_20260501.json`
+
+## Watchdog Automation
+
+The local control-plane watchdog is `scripts/watch_ticker_365d_wave.py`, wrapped by `scripts/run_ticker_365d_watchdog.ps1`.
+
+Operating contract:
+
+- Runs every 30 minutes through Windows Task Scheduler task `CodexAlpacaTicker365Watchdog`.
+- Refreshes the tracked source archive and startup scripts into this GCS wave prefix.
+- Stops only completed `ticker365-*` research shards from this wave.
+- Launches the next pending ticker shards only when `CPUS_ALL_REGIONS` quota allows it.
+- Triggers the aggregate VM only after all expected ticker summaries land.
+- Writes JSON and Markdown status locally under ignored `reports/gcp_research/watchdog/` and mirrors them to the GCS `watchdog/` prefix.
+- Does not start trading, submit paper orders, modify live manifests, change risk policy, or lower the `fill_coverage >= 0.90` gate.
+- A paper-trader handoff remains blocked until the aggregate promotion packet says candidates are eligible for governed validation review.
 
 ## Hard Rules
 
