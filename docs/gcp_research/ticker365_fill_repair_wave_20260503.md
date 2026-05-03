@@ -18,8 +18,8 @@ Run a research-only timing repair wave after the all-ticker 365-day aggregate sh
 Each ticker worker reruns the option-aware backtester with:
 
 - Selectors: `nearest_contract,entry_liquidity_first_research_only`
-- Lag profiles: `10:10,15:15,30:60,60:120`
-- Top N per symbol: `80`
+- Lag profiles: `10:10,30:60`
+- Top N per symbol: `30`
 - Fill gate remains: `0.90`
 - Promotion scope remains: governed validation review only
 
@@ -28,6 +28,8 @@ This is intended to separate three cases:
 - Good economics plus short-lag fill repair: candidate can continue to governed review if the promotion packet says eligible.
 - Good economics only under very wide lags: strategy needs execution-policy redesign, not promotion.
 - Still-low fill coverage: strategy timing is structurally incompatible with the available option market data.
+
+The first live attempt used a wider `80 x 4 x 2` profile and produced no candidate summaries after several hours, so the canonical repair wave was narrowed to a faster triage pass. Wider sweeps should only run after the triage pass identifies fill-feasible candidate families.
 
 ## Safety Contract
 

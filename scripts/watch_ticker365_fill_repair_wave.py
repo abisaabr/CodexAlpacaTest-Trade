@@ -37,8 +37,8 @@ DEFAULT_GCLOUD = (
     r"C:\Users\rabisaab\Downloads\google-cloud-sdk-local\google-cloud-sdk\bin\gcloud.cmd"
 )
 DEFAULT_PYTHON = r"C:\Users\rabisaab\AppData\Local\Programs\Python\Python312\python.exe"
-DEFAULT_INSTANCE_SUFFIX = "20260503"
-DEFAULT_LAG_PROFILES = "10:10,15:15,30:60,60:120"
+DEFAULT_INSTANCE_SUFFIX = "20260503b"
+DEFAULT_LAG_PROFILES = "10:10,30:60"
 DEFAULT_SELECTORS = "nearest_contract,entry_liquidity_first_research_only"
 HARD_RULES = [
     "Do not start trading.",
@@ -95,7 +95,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-retry-attempts", type=int, default=3)
     parser.add_argument("--lag-profiles", default=DEFAULT_LAG_PROFILES)
     parser.add_argument("--selectors", default=DEFAULT_SELECTORS)
-    parser.add_argument("--top-n", type=int, default=80)
+    parser.add_argument("--top-n", type=int, default=30)
     parser.add_argument("--test-date-count", type=int, default=20)
     parser.add_argument("--initial-cash", type=float, default=25_000.0)
     parser.add_argument("--allocation-fraction", type=float, default=0.05)

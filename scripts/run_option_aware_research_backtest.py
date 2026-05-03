@@ -475,6 +475,21 @@ def _stock_trades_for_variant(
     return result.trades.copy()
 
 
+def _stock_trade_cache_key(variant: dict[str, Any]) -> str:
+    parameters = variant.get("parameters") if isinstance(variant.get("parameters"), dict) else {}
+    source = str(variant.get("source_strategy_id") or variant.get("variant_id") or "").lower()
+    direction = "bear" if any(token in source for token in ["put", "short", "bear"]) else "bull"
+    payload = {
+        "symbol": str(variant.get("symbol") or "").upper(),
+        "direction": direction,
+        "hard_exit_minute": int(parameters.get("hard_exit_minute") or 300),
+        "stop_loss_multiple": float(parameters.get("stop_loss_multiple") or 0.24),
+        "profit_target_multiple": float(parameters.get("profit_target_multiple") or 0.45),
+        "liquidity_gate": str(parameters.get("liquidity_gate") or "baseline"),
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
 def _split_trade_date(value: Any) -> str:
     return str(pd.Timestamp(value).date())
 
@@ -583,13 +598,15 @@ def _option_rows_for_candidate(
     max_entry_lag: timedelta,
     max_exit_lag: timedelta,
     contract_selection_method: str,
+    source_trades: pd.DataFrame | None = None,
 ) -> tuple[list[dict[str, Any]], int, dict[str, int]]:
-    source_trades = _stock_trades_for_variant(
-        variant=variant,
-        stock_bars=stock_bars,
-        initial_cash=initial_cash,
-        allocation_fraction=allocation_fraction,
-    )
+    if source_trades is None:
+        source_trades = _stock_trades_for_variant(
+            variant=variant,
+            stock_bars=stock_bars,
+            initial_cash=initial_cash,
+            allocation_fraction=allocation_fraction,
+        )
     option_rows: list[dict[str, Any]] = []
     missing_counts = {
         "no_selected_contract": 0,
@@ -769,6 +786,7 @@ def build_option_aware_backtest(
     )
     all_trade_rows: list[dict[str, Any]] = []
     candidate_summaries: list[dict[str, Any]] = []
+    stock_trade_cache: dict[str, pd.DataFrame] = {}
     source_queue_items = [item for item in queue.get("queue_items", []) if isinstance(item, dict)]
     filtered_queue_items = []
     for item in source_queue_items:
@@ -792,6 +810,16 @@ def build_option_aware_backtest(
                 }
             )
             continue
+        cache_key = _stock_trade_cache_key(variant)
+        source_trades = stock_trade_cache.get(cache_key)
+        if source_trades is None:
+            source_trades = _stock_trades_for_variant(
+                variant=variant,
+                stock_bars=stock_bars,
+                initial_cash=initial_cash,
+                allocation_fraction=allocation_fraction,
+            )
+            stock_trade_cache[cache_key] = source_trades
         rows, source_trade_count, missing_counts = _option_rows_for_candidate(
             queue_item=queue_item,
             variant=variant,
@@ -807,6 +835,7 @@ def build_option_aware_backtest(
             max_entry_lag=max_entry_lag,
             max_exit_lag=max_exit_lag,
             contract_selection_method=contract_selection_method,
+            source_trades=source_trades,
         )
         missing_price_count = sum(int(value) for value in missing_counts.values())
         selected_count = max(
@@ -898,6 +927,7 @@ def build_option_aware_backtest(
         "promotion_allowed": False,
         "source_queue_item_count": len(source_queue_items),
         "queue_item_count_after_filters": len(filtered_queue_items),
+        "stock_trade_cache_entry_count": len(stock_trade_cache),
         "symbol_filter": sorted(symbol_filter) if symbol_filter else [],
         "skip_blocked_queue_items": bool(skip_blocked_queue_items),
         "test_date_count": int(test_date_count),
