@@ -44,6 +44,8 @@ DEFAULT_OPTION_DATA_ROOT = (
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "reports" / "research_wave" / "option_aware_backtests"
 CONTRACT_SELECTION_NEAREST = "nearest_contract"
 CONTRACT_SELECTION_LIQUIDITY_FIRST = "entry_liquidity_first_research_only"
+ENTRY_LOOKUP_AT_OR_AFTER = "first_bar_at_or_after_entry_within_lag"
+ENTRY_LOOKUP_AT_OR_AFTER_OR_ASOF = "first_bar_at_or_after_or_asof_entry_within_lag"
 REGIME_TOKENS = {"bull", "bear", "choppy"}
 
 
@@ -76,6 +78,17 @@ def parse_args() -> argparse.Namespace:
         help="Skip queue items carrying blockers such as missing selected contracts.",
     )
     parser.add_argument("--max-entry-lag-minutes", type=float, default=10.0)
+    parser.add_argument(
+        "--entry-bar-lookup-mode",
+        choices=[ENTRY_LOOKUP_AT_OR_AFTER, ENTRY_LOOKUP_AT_OR_AFTER_OR_ASOF],
+        default=ENTRY_LOOKUP_AT_OR_AFTER,
+        help=(
+            "Entry lookup semantics. The default uses the first option bar at or after "
+            "the stock signal. The as-of mode is research-only and falls back to the "
+            "latest known prior option bar within --max-entry-staleness-minutes."
+        ),
+    )
+    parser.add_argument("--max-entry-staleness-minutes", type=float, default=5.0)
     parser.add_argument("--max-exit-lag-minutes", type=float, default=10.0)
     parser.add_argument(
         "--test-date-count",
@@ -356,6 +369,8 @@ def _choose_entry_liquidity_first_contract(
     trade_date: Any,
     entry_time: pd.Timestamp,
     max_lag: timedelta,
+    entry_lookup_mode: str,
+    max_entry_staleness: timedelta,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str]:
     frame = (
         _candidate_contracts_from_index(
@@ -378,12 +393,14 @@ def _choose_entry_liquidity_first_contract(
     choices: list[tuple[tuple[float, ...], str, dict[str, Any], dict[str, Any]]] = []
     for contract in frame.to_dict("records"):
         contract_symbol = str(contract["symbol"])
-        entry_bar = _first_option_bar(
+        entry_bar = _entry_option_bar(
             option_bars=option_bars,
             option_index=option_index,
             contract_symbol=contract_symbol,
             timestamp=entry_time,
             max_lag=max_lag,
+            lookup_mode=entry_lookup_mode,
+            max_staleness=max_entry_staleness,
         )
         if not entry_bar:
             continue
@@ -437,6 +454,102 @@ def _first_option_bar(
     if frame.empty:
         return None
     return frame.iloc[0].to_dict()
+
+
+def _previous_option_bar(
+    *,
+    option_bars: pd.DataFrame,
+    option_index: OptionResearchIndex | None = None,
+    contract_symbol: str,
+    timestamp: pd.Timestamp,
+    max_staleness: timedelta,
+) -> dict[str, Any] | None:
+    earliest = timestamp - max_staleness
+    if option_index:
+        frame = option_index.bars_by_symbol.get(contract_symbol)
+        if frame is None or frame.empty:
+            return None
+        timestamps = frame["timestamp"]
+        position = int(timestamps.searchsorted(timestamp, side="right")) - 1
+        if position < 0:
+            return None
+        row = frame.iloc[position].to_dict()
+        if pd.Timestamp(row["timestamp"]) >= earliest:
+            return row
+        return None
+
+    frame = option_bars[
+        (option_bars["symbol"].astype(str) == contract_symbol)
+        & (option_bars["timestamp"] >= earliest)
+        & (option_bars["timestamp"] <= timestamp)
+    ].sort_values("timestamp")
+    if frame.empty:
+        return None
+    return frame.iloc[-1].to_dict()
+
+
+def _entry_option_bar(
+    *,
+    option_bars: pd.DataFrame,
+    option_index: OptionResearchIndex | None = None,
+    contract_symbol: str,
+    timestamp: pd.Timestamp,
+    max_lag: timedelta,
+    lookup_mode: str,
+    max_staleness: timedelta,
+) -> dict[str, Any] | None:
+    forward_bar = _first_option_bar(
+        option_bars=option_bars,
+        option_index=option_index,
+        contract_symbol=contract_symbol,
+        timestamp=timestamp,
+        max_lag=max_lag,
+    )
+    if forward_bar:
+        return forward_bar
+    if lookup_mode != ENTRY_LOOKUP_AT_OR_AFTER_OR_ASOF:
+        return None
+    return _previous_option_bar(
+        option_bars=option_bars,
+        option_index=option_index,
+        contract_symbol=contract_symbol,
+        timestamp=timestamp,
+        max_staleness=max_staleness,
+    )
+
+
+def _nearest_bar_context(
+    *,
+    option_bars: pd.DataFrame,
+    option_index: OptionResearchIndex | None = None,
+    contract_symbol: str | None,
+    timestamp: pd.Timestamp,
+) -> dict[str, Any]:
+    if not contract_symbol:
+        return {}
+    if option_index:
+        frame = option_index.bars_by_symbol.get(contract_symbol)
+    else:
+        frame = option_bars[
+            option_bars["symbol"].astype(str) == str(contract_symbol)
+        ].sort_values("timestamp")
+    if frame is None or frame.empty:
+        return {"nearest_bar_status": "no_bars_for_contract"}
+    timestamps = frame["timestamp"]
+    next_pos = int(timestamps.searchsorted(timestamp, side="left"))
+    previous_pos = next_pos - 1
+    context: dict[str, Any] = {"nearest_bar_status": "bars_found"}
+    if previous_pos >= 0:
+        previous_time = pd.Timestamp(frame.iloc[previous_pos]["timestamp"])
+        context["previous_bar_time"] = str(previous_time)
+        context["previous_bar_age_minutes"] = round(
+            (timestamp - previous_time).total_seconds() / 60.0, 4
+        )
+    if next_pos < len(frame):
+        next_time = pd.Timestamp(frame.iloc[next_pos]["timestamp"])
+        context["next_bar_time"] = str(next_time)
+        context["next_bar_lag_minutes"] = round((next_time - timestamp).total_seconds() / 60.0, 4)
+    return context
 
 
 def _exit_option_bar(
@@ -655,10 +768,12 @@ def _option_rows_for_candidate(
     slippage_bps: float,
     fee_per_contract: float,
     max_entry_lag: timedelta,
+    entry_lookup_mode: str,
+    max_entry_staleness: timedelta,
     max_exit_lag: timedelta,
     contract_selection_method: str,
     source_trades: pd.DataFrame | None = None,
-) -> tuple[list[dict[str, Any]], int, dict[str, int]]:
+) -> tuple[list[dict[str, Any]], int, dict[str, int], list[dict[str, Any]]]:
     if source_trades is None:
         source_trades = _stock_trades_for_variant(
             variant=variant,
@@ -676,6 +791,51 @@ def _option_rows_for_candidate(
     option_type = str(queue_item.get("directional_option_type") or "").lower()
     symbol = str(queue_item.get("symbol") or "").upper()
     identity = _candidate_identity(queue_item, variant)
+    failure_rows: list[dict[str, Any]] = []
+
+    def failure_row(
+        *,
+        reason: str,
+        trade: dict[str, Any],
+        contract_symbol: str | None = None,
+        lookup_time: pd.Timestamp | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        entry_time = pd.Timestamp(trade["entry_time"])
+        exit_time = pd.Timestamp(trade["exit_time"])
+        row = {
+            "candidate_variant_id": queue_item.get("candidate_variant_id"),
+            **identity,
+            "source_strategy_id": queue_item.get("source_strategy_id"),
+            "symbol": symbol,
+            "option_type": option_type,
+            "contract_symbol": contract_symbol,
+            "failure_reason": reason,
+            "trade_date": str(entry_time.date()),
+            "stock_entry_time": str(entry_time),
+            "stock_exit_time": str(exit_time),
+            "lookup_time": str(lookup_time) if lookup_time is not None else "",
+            "entry_lookup_mode": entry_lookup_mode,
+            "max_entry_lag_minutes": round(max_entry_lag.total_seconds() / 60.0, 4),
+            "max_entry_staleness_minutes": round(
+                max_entry_staleness.total_seconds() / 60.0, 4
+            ),
+            "max_exit_lag_minutes": round(max_exit_lag.total_seconds() / 60.0, 4),
+            "contract_selection_method": contract_selection_method,
+        }
+        if lookup_time is not None:
+            row.update(
+                _nearest_bar_context(
+                    option_bars=option_bars,
+                    option_index=option_index,
+                    contract_symbol=contract_symbol,
+                    timestamp=lookup_time,
+                )
+            )
+        if extra:
+            row.update(extra)
+        return row
+
     for trade in source_trades.to_dict("records"):
         entry_time = pd.Timestamp(trade["entry_time"])
         exit_time = pd.Timestamp(trade["exit_time"])
@@ -691,9 +851,18 @@ def _option_rows_for_candidate(
                 trade_date=trade_date,
                 entry_time=entry_time,
                 max_lag=max_entry_lag,
+                entry_lookup_mode=entry_lookup_mode,
+                max_entry_staleness=max_entry_staleness,
             )
             if status != "selected" or not contract or not entry_bar:
                 missing_counts[status] = missing_counts.get(status, 0) + 1
+                failure_rows.append(
+                    failure_row(
+                        reason=status,
+                        trade=trade,
+                        lookup_time=entry_time,
+                    )
+                )
                 continue
         else:
             contract = _choose_contract(
@@ -705,17 +874,34 @@ def _option_rows_for_candidate(
             )
             if not contract:
                 missing_counts["no_selected_contract"] += 1
+                failure_rows.append(
+                    failure_row(
+                        reason="no_selected_contract",
+                        trade=trade,
+                        lookup_time=entry_time,
+                    )
+                )
                 continue
             contract_symbol = str(contract["symbol"])
-            entry_bar = _first_option_bar(
+            entry_bar = _entry_option_bar(
                 option_bars=option_bars,
                 option_index=option_index,
                 contract_symbol=contract_symbol,
                 timestamp=entry_time,
                 max_lag=max_entry_lag,
+                lookup_mode=entry_lookup_mode,
+                max_staleness=max_entry_staleness,
             )
             if not entry_bar:
                 missing_counts["no_entry_bar"] += 1
+                failure_rows.append(
+                    failure_row(
+                        reason="no_entry_bar",
+                        trade=trade,
+                        contract_symbol=contract_symbol,
+                        lookup_time=entry_time,
+                    )
+                )
                 continue
 
         contract_symbol = str(contract["symbol"])
@@ -728,6 +914,15 @@ def _option_rows_for_candidate(
         )
         if not exit_bar:
             missing_counts["no_exit_bar"] += 1
+            failure_rows.append(
+                failure_row(
+                    reason="no_exit_bar",
+                    trade=trade,
+                    contract_symbol=contract_symbol,
+                    lookup_time=exit_time,
+                    extra={"option_entry_time": str(entry_bar["timestamp"])},
+                )
+            )
             continue
         raw_entry = float(entry_bar["close"])
         raw_exit = float(exit_bar["close"])
@@ -737,6 +932,15 @@ def _option_rows_for_candidate(
         quantity = math.floor(budget / (entry_price * 100.0))
         if quantity < 1:
             missing_counts["too_expensive"] += 1
+            failure_rows.append(
+                failure_row(
+                    reason="too_expensive",
+                    trade=trade,
+                    contract_symbol=contract_symbol,
+                    lookup_time=entry_time,
+                    extra={"raw_entry": raw_entry, "budget": budget},
+                )
+            )
             continue
         fees = fee_per_contract * quantity * 2.0
         pnl = (exit_price - entry_price) * quantity * 100.0 - fees
@@ -782,7 +986,7 @@ def _option_rows_for_candidate(
                 ),
             }
         )
-    return option_rows, int(len(source_trades)), missing_counts
+    return option_rows, int(len(source_trades)), missing_counts, failure_rows
 
 
 def _split_summary(rows: list[dict[str, Any]], *, test_date_count: int) -> dict[str, Any]:
@@ -823,11 +1027,16 @@ def build_option_aware_backtest(
     fee_per_contract: float,
     max_entry_lag: timedelta,
     max_exit_lag: timedelta,
+    entry_lookup_mode: str = ENTRY_LOOKUP_AT_OR_AFTER,
+    max_entry_staleness: timedelta | None = None,
     symbol_filter: set[str] | None = None,
     skip_blocked_queue_items: bool = False,
     test_date_count: int = 1,
     contract_selection_method: str = CONTRACT_SELECTION_NEAREST,
 ) -> dict[str, Any]:
+    if max_entry_staleness is None:
+        max_entry_staleness = timedelta(minutes=5)
+
     queue = _load_json(queue_json)
     variants = _variant_map(variants_jsonl)
     stock_bars = _load_stock_bars(stock_bars_path, symbol_filter=symbol_filter)
@@ -844,6 +1053,7 @@ def build_option_aware_backtest(
         option_trades=option_trades,
     )
     all_trade_rows: list[dict[str, Any]] = []
+    all_failure_rows: list[dict[str, Any]] = []
     candidate_summaries: list[dict[str, Any]] = []
     stock_trade_cache: dict[str, pd.DataFrame] = {}
     source_queue_items = [item for item in queue.get("queue_items", []) if isinstance(item, dict)]
@@ -879,7 +1089,7 @@ def build_option_aware_backtest(
                 allocation_fraction=allocation_fraction,
             )
             stock_trade_cache[cache_key] = source_trades
-        rows, source_trade_count, missing_counts = _option_rows_for_candidate(
+        rows, source_trade_count, missing_counts, failure_rows = _option_rows_for_candidate(
             queue_item=queue_item,
             variant=variant,
             stock_bars=stock_bars,
@@ -892,6 +1102,8 @@ def build_option_aware_backtest(
             slippage_bps=slippage_bps,
             fee_per_contract=fee_per_contract,
             max_entry_lag=max_entry_lag,
+            entry_lookup_mode=entry_lookup_mode,
+            max_entry_staleness=max_entry_staleness,
             max_exit_lag=max_exit_lag,
             contract_selection_method=contract_selection_method,
             source_trades=source_trades,
@@ -916,6 +1128,7 @@ def build_option_aware_backtest(
             round(filled_order_count / entry_fill_count, 4) if entry_fill_count else 0.0
         )
         all_trade_rows.extend(rows)
+        all_failure_rows.extend(failure_rows)
         economics = _summarize_trade_rows(rows)
         split = _split_summary(rows, test_date_count=test_date_count)
         summary = {
@@ -945,7 +1158,8 @@ def build_option_aware_backtest(
                 "Strategy-level fill coverage, not raw option data coverage. "
                 "Current engine models one directional option contract per source stock trade."
             ),
-            "entry_lookup_mode": "first_bar_at_or_after_entry_within_lag",
+            "entry_lookup_mode": entry_lookup_mode,
+            "max_entry_staleness_minutes": round(max_entry_staleness.total_seconds() / 60.0, 4),
             "exit_lookup_mode": "first_bar_after_or_last_bar_before_exit_within_lag",
             **economics,
             **split,
@@ -1012,10 +1226,12 @@ def build_option_aware_backtest(
         ),
         "candidate_count": len(candidate_summaries),
         "option_trade_count": len(all_trade_rows),
+        "fill_failure_row_count": len(all_failure_rows),
         "recommendation_counts": dict(sorted(recommendation_counts.items())),
         "fill_failure_counts": dict(sorted(fill_failure_counts.items())),
         "candidate_summaries": ranked,
         "trade_rows": all_trade_rows,
+        "fill_failure_rows": all_failure_rows,
         "top_research_followups": ranked[:10],
         "next_step_contract": [
             "Keep these results out of deployment and promotion.",
@@ -1039,6 +1255,9 @@ def write_json(path: Path, payload: Any) -> None:
 
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    if not rows:
+        path.write_text("", encoding="utf-8")
+        return
     fieldnames = sorted({key for row in rows for key in row})
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -1094,17 +1313,26 @@ def write_artifacts(output_dir: Path, run_id: str, payload: dict[str, Any]) -> d
         "manifest_md": run_dir / "option_aware_research_run_manifest.md",
         "trade_economics": run_dir / "option_aware_trade_economics.csv",
         "trade_economics_json": run_dir / "option_aware_trade_economics.json",
+        "fill_failures": run_dir / "option_aware_fill_failures.csv",
+        "fill_failures_json": run_dir / "option_aware_fill_failures.json",
         "candidate_summary": run_dir / "option_aware_candidate_summary.csv",
         "candidate_summary_json": run_dir / "option_aware_candidate_summary.json",
         "recommendation_packet": run_dir / "option_aware_recommendation_packet.json",
         "recommendation_packet_md": run_dir / "option_aware_recommendation_packet.md",
     }
     write_json(
-        artifacts["manifest"], {key: value for key, value in payload.items() if key != "trade_rows"}
+        artifacts["manifest"],
+        {
+            key: value
+            for key, value in payload.items()
+            if key not in {"trade_rows", "fill_failure_rows"}
+        },
     )
     write_markdown(artifacts["manifest_md"], payload)
     write_csv(artifacts["trade_economics"], payload["trade_rows"])
     write_json(artifacts["trade_economics_json"], payload["trade_rows"])
+    write_csv(artifacts["fill_failures"], payload.get("fill_failure_rows", []))
+    write_json(artifacts["fill_failures_json"], payload.get("fill_failure_rows", []))
     write_csv(artifacts["candidate_summary"], payload["candidate_summaries"])
     write_json(artifacts["candidate_summary_json"], payload["candidate_summaries"])
     recommendation = {
@@ -1146,6 +1374,8 @@ def main() -> None:
         slippage_bps=args.slippage_bps,
         fee_per_contract=args.fee_per_contract,
         max_entry_lag=timedelta(minutes=args.max_entry_lag_minutes),
+        entry_lookup_mode=args.entry_bar_lookup_mode,
+        max_entry_staleness=timedelta(minutes=args.max_entry_staleness_minutes),
         max_exit_lag=timedelta(minutes=args.max_exit_lag_minutes),
         test_date_count=args.test_date_count,
         contract_selection_method=args.contract_selection_method,
@@ -1153,7 +1383,14 @@ def main() -> None:
     payload["run_id"] = run_id
     payload["artifacts"] = write_artifacts(Path(args.output_dir), run_id, payload)
     print(
-        json.dumps({key: value for key, value in payload.items() if key != "trade_rows"}, indent=2)
+        json.dumps(
+            {
+                key: value
+                for key, value in payload.items()
+                if key not in {"trade_rows", "fill_failure_rows"}
+            },
+            indent=2,
+        )
     )
 
 

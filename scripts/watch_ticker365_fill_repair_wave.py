@@ -107,6 +107,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-retry-attempts", type=int, default=3)
     parser.add_argument("--lag-profiles", default=DEFAULT_LAG_PROFILES)
     parser.add_argument("--selectors", default=DEFAULT_SELECTORS)
+    parser.add_argument(
+        "--entry-bar-lookup-mode",
+        default="first_bar_at_or_after_entry_within_lag",
+        choices=[
+            "first_bar_at_or_after_entry_within_lag",
+            "first_bar_at_or_after_or_asof_entry_within_lag",
+        ],
+    )
+    parser.add_argument("--max-entry-staleness-minutes", type=float, default=5.0)
     parser.add_argument("--top-n", type=int, default=30)
     parser.add_argument("--test-date-count", type=int, default=20)
     parser.add_argument("--initial-cash", type=float, default=25_000.0)
@@ -480,6 +489,8 @@ def launch_worker(
         "fee_per_contract": f"{args.fee_per_contract:g}",
         "selectors": args.selectors.replace(",", ";"),
         "lag_profiles": args.lag_profiles.replace(",", ";"),
+        "entry_bar_lookup_mode": args.entry_bar_lookup_mode,
+        "max_entry_staleness_minutes": f"{args.max_entry_staleness_minutes:g}",
     }
     dataset_label = str(row.get("dataset_id", "unknown")).replace("_", "-")[:32]
     labels = (
@@ -865,6 +876,8 @@ def build_status(
         "hard_rules": HARD_RULES,
         "lag_profiles": args.lag_profiles,
         "selectors": args.selectors,
+        "entry_bar_lookup_mode": args.entry_bar_lookup_mode,
+        "max_entry_staleness_minutes": args.max_entry_staleness_minutes,
         "top_n": args.top_n,
         "quota": quota,
         "summary_counts": {"total": summary_count, "expected": expected_total},
