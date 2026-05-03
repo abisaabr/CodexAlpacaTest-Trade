@@ -139,6 +139,10 @@ def gcloud(args: argparse.Namespace, *parts: str) -> list[str]:
     return [args.gcloud, *parts]
 
 
+def metadata_arg(metadata: dict[str, str]) -> str:
+    return "^|^" + "|".join(f"{key}={value}" for key, value in metadata.items())
+
+
 def _csv_count(value: str) -> int:
     return len([item for item in value.split(",") if item.strip()])
 
@@ -445,7 +449,6 @@ def launch_worker(args: argparse.Namespace, row: dict[str, Any], instance_name: 
         "selectors": args.selectors,
         "lag_profiles": args.lag_profiles,
     }
-    metadata_arg = ",".join(f"{key}={value}" for key, value in metadata.items())
     dataset_label = str(row.get("dataset_id", "unknown")).replace("_", "-")[:32]
     labels = (
         f"wave=ticker365-fillrepair,role=ticker365-repair,"
@@ -483,7 +486,7 @@ def launch_worker(args: argparse.Namespace, row: dict[str, Any], instance_name: 
         "--labels",
         labels,
         "--metadata",
-        metadata_arg,
+        metadata_arg(metadata),
         "--metadata-from-file",
         f"startup-script={startup_script}",
     )
@@ -596,7 +599,6 @@ def launch_aggregate_if_ready(
         "check_interval_seconds": "900",
         "max_wait_seconds": "43200",
     }
-    metadata_arg = ",".join(f"{key}={value}" for key, value in metadata.items())
     startup_script = str(REPO_ROOT / "scripts" / "gcp_ticker_365d_aggregate_watch.sh")
     command = gcloud(
         args,
@@ -629,7 +631,7 @@ def launch_aggregate_if_ready(
         "--labels",
         "wave=ticker365-fillrepair,role=ticker365-repair-aggregate",
         "--metadata",
-        metadata_arg,
+        metadata_arg(metadata),
         "--metadata-from-file",
         f"startup-script={startup_script}",
     )
