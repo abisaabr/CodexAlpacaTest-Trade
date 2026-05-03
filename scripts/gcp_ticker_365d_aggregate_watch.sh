@@ -4,14 +4,22 @@ set -Eeuo pipefail
 export DEBIAN_FRONTEND=noninteractive
 export PYTHONUNBUFFERED=1
 
-WAVE_ID="${WAVE_ID:-ticker_365d_all_available_20260501T2300Z}"
-GCS_PREFIX="${GCS_PREFIX:-gs://codexalpaca-control-us/research_results/ticker_365d_all_available_20260501T2300Z}"
-SOURCE_ARCHIVE_URI="${SOURCE_ARCHIVE_URI:-${GCS_PREFIX}/inputs/source/codexalpaca_repo_source.tar.gz}"
-EXPECTED_SUMMARY_COUNT="${EXPECTED_SUMMARY_COUNT:-40}"
-CHECK_INTERVAL_SECONDS="${CHECK_INTERVAL_SECONDS:-900}"
-MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-43200}"
-INITIAL_CASH="${INITIAL_CASH:-25000}"
-TARGET_EQUITY="${TARGET_EQUITY:-300000}"
+metadata_value() {
+  local key="$1"
+  local default_value="${2:-}"
+  curl -fs -H "Metadata-Flavor: Google" \
+    "http://metadata.google.internal/computeMetadata/v1/instance/attributes/${key}" \
+    2>/dev/null || printf '%s' "${default_value}"
+}
+
+WAVE_ID="${WAVE_ID:-$(metadata_value wave_id ticker_365d_all_available_20260501T2300Z)}"
+GCS_PREFIX="${GCS_PREFIX:-$(metadata_value gcs_prefix gs://codexalpaca-control-us/research_results/ticker_365d_all_available_20260501T2300Z)}"
+SOURCE_ARCHIVE_URI="${SOURCE_ARCHIVE_URI:-$(metadata_value source_archive_uri "${GCS_PREFIX}/inputs/source/codexalpaca_repo_source.tar.gz")}"
+EXPECTED_SUMMARY_COUNT="${EXPECTED_SUMMARY_COUNT:-$(metadata_value expected_summary_count 40)}"
+CHECK_INTERVAL_SECONDS="${CHECK_INTERVAL_SECONDS:-$(metadata_value check_interval_seconds 900)}"
+MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-$(metadata_value max_wait_seconds 43200)}"
+INITIAL_CASH="${INITIAL_CASH:-$(metadata_value initial_cash 25000)}"
+TARGET_EQUITY="${TARGET_EQUITY:-$(metadata_value target_equity 300000)}"
 
 WORKROOT="${WORKROOT:-/mnt/codexalpaca-ticker365-agg}"
 REPO_DIR="${WORKROOT}/repo"

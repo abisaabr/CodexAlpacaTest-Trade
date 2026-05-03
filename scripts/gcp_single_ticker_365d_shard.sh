@@ -23,6 +23,13 @@ STOCK_URI="$(metadata_value stock_uri)"
 CONTRACTS_URI="$(metadata_value contracts_uri)"
 BARS_URI="$(metadata_value bars_uri)"
 INITIAL_CASH="$(metadata_value initial_cash 25000)"
+TOP_N="$(metadata_value top_n 40)"
+TEST_DATE_COUNT="$(metadata_value test_date_count 20)"
+ALLOCATION_FRACTION="$(metadata_value allocation_fraction 0.05)"
+SLIPPAGE_BPS="$(metadata_value slippage_bps 10)"
+FEE_PER_CONTRACT="$(metadata_value fee_per_contract 0.65)"
+SELECTORS_CSV="$(metadata_value selectors "nearest_contract,entry_liquidity_first_research_only")"
+LAG_PROFILES_CSV="$(metadata_value lag_profiles "10:10")"
 
 if [[ -z "${SYMBOL}" || -z "${STOCK_URI}" || -z "${CONTRACTS_URI}" || -z "${BARS_URI}" ]]; then
   echo "missing_required_metadata symbol=${SYMBOL} stock_uri=${STOCK_URI} contracts_uri=${CONTRACTS_URI} bars_uri=${BARS_URI}" >&2
@@ -77,9 +84,23 @@ PY
   gcloud storage cp "${WORKROOT}/startup.log" "${WORKER_PREFIX}/startup.log" || true
 }
 
+safe_slug() {
+  local value="$1"
+  value="${value//[^A-Za-z0-9]/_}"
+  printf '%s' "${value}"
+}
+
 run_selector() {
   local selector="$1"
-  local run_id="${WORKER_ID}_${SYMBOL,,}_${selector}"
+  local entry_lag="$2"
+  local exit_lag="$3"
+  local selector_slug
+  local entry_slug
+  local exit_slug
+  selector_slug="$(safe_slug "${selector}")"
+  entry_slug="$(safe_slug "${entry_lag}")"
+  exit_slug="$(safe_slug "${exit_lag}")"
+  local run_id="${WORKER_ID}_${SYMBOL,,}_e${entry_slug}_x${exit_slug}_${selector_slug}"
   local output_dir="reports/research_wave/${run_id}"
   local command=(
     python -u scripts/run_option_aware_research_backtest.py
@@ -91,15 +112,15 @@ run_selector() {
     --option-trades-root "${EMPTY_OPTION_TRADES}"
     --output-dir "${output_dir}"
     --run-id "${run_id}"
-    --top-n 40
+    --top-n "${TOP_N}"
     --symbol-filter "${SYMBOL}"
-    --max-entry-lag-minutes 10
-    --max-exit-lag-minutes 10
-    --test-date-count 20
+    --max-entry-lag-minutes "${entry_lag}"
+    --max-exit-lag-minutes "${exit_lag}"
+    --test-date-count "${TEST_DATE_COUNT}"
     --initial-cash "${INITIAL_CASH}"
-    --allocation-fraction 0.05
-    --slippage-bps 10
-    --fee-per-contract 0.65
+    --allocation-fraction "${ALLOCATION_FRACTION}"
+    --slippage-bps "${SLIPPAGE_BPS}"
+    --fee-per-contract "${FEE_PER_CONTRACT}"
     --contract-selection-method "${selector}"
   )
   printf '%q ' "${command[@]}" >> "${WORKROOT}/command.txt"
@@ -116,6 +137,11 @@ echo "wave_id=${WAVE_ID}"
 echo "worker_id=${WORKER_ID}"
 echo "symbol=${SYMBOL}"
 echo "gcs_prefix=${GCS_PREFIX}"
+echo "top_n=${TOP_N}"
+echo "test_date_count=${TEST_DATE_COUNT}"
+echo "allocation_fraction=${ALLOCATION_FRACTION}"
+echo "selectors=${SELECTORS_CSV}"
+echo "lag_profiles=${LAG_PROFILES_CSV}"
 write_status "startup" "installing_dependencies"
 
 apt-get update
@@ -142,20 +168,45 @@ gcloud storage cp --recursive "${STOCK_URI}" "${DATA_DIR}/stock/"
 gcloud storage cp --recursive "${CONTRACTS_URI}" "${DATA_DIR}/contracts/"
 gcloud storage cp --recursive "${BARS_URI}" "${DATA_DIR}/option_bars/"
 
-write_status "running_selectors" "nearest_contract_and_entry_liquidity"
-run_selector nearest_contract &
-nearest_pid=$!
-run_selector entry_liquidity_first_research_only &
-liquidity_pid=$!
-
-nearest_status=0
-liquidity_status=0
-wait "${nearest_pid}" || nearest_status=$?
-wait "${liquidity_pid}" || liquidity_status=$?
-if [[ "${nearest_status}" -ne 0 || "${liquidity_status}" -ne 0 ]]; then
-  write_status "failed" "nearest_status=${nearest_status} liquidity_status=${liquidity_status}"
-  exit 1
-fi
+write_status "running_selectors" "selectors=${SELECTORS_CSV} lag_profiles=${LAG_PROFILES_CSV}"
+IFS=',' read -r -a SELECTORS <<< "${SELECTORS_CSV}"
+IFS=',' read -r -a LAG_PROFILES <<< "${LAG_PROFILES_CSV}"
+for lag_profile in "${LAG_PROFILES[@]}"; do
+  lag_profile="$(echo "${lag_profile}" | xargs)"
+  if [[ -z "${lag_profile}" ]]; then
+    continue
+  fi
+  if [[ "${lag_profile}" != *:* ]]; then
+    write_status "failed" "invalid_lag_profile=${lag_profile}"
+    exit 2
+  fi
+  entry_lag="${lag_profile%%:*}"
+  exit_lag="${lag_profile##*:}"
+  echo "lag_profile_started=${lag_profile} entry=${entry_lag} exit=${exit_lag} utc=$(now_utc)"
+  pids=()
+  labels=()
+  for selector in "${SELECTORS[@]}"; do
+    selector="$(echo "${selector}" | xargs)"
+    if [[ -z "${selector}" ]]; then
+      continue
+    fi
+    run_selector "${selector}" "${entry_lag}" "${exit_lag}" &
+    pids+=("$!")
+    labels+=("${selector}")
+  done
+  profile_status=0
+  for index in "${!pids[@]}"; do
+    if ! wait "${pids[$index]}"; then
+      echo "selector_failed selector=${labels[$index]} lag_profile=${lag_profile}"
+      profile_status=1
+    fi
+  done
+  if [[ "${profile_status}" -ne 0 ]]; then
+    write_status "failed" "lag_profile=${lag_profile}"
+    exit 1
+  fi
+  echo "lag_profile_completed=${lag_profile} utc=$(now_utc)"
+done
 
 write_status "building_symbol_report" "selectors_complete"
 python scripts/build_research_portfolio_report.py \
