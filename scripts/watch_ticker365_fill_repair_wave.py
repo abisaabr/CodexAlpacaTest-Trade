@@ -90,6 +90,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--boot-disk-size-gb", type=int, default=40)
     parser.add_argument("--boot-disk-type", default="pd-standard")
     parser.add_argument("--aggregate-zone", default="us-central1-a")
+    parser.add_argument(
+        "--aggregate-fallback-zones",
+        default=DEFAULT_FALLBACK_ZONES,
+        help="Comma-separated aggregate launch fallback zones used when the primary zone is quota-blocked.",
+    )
     parser.add_argument("--aggregate-machine-type", default="e2-standard-2")
     parser.add_argument("--instance-suffix", default=DEFAULT_INSTANCE_SUFFIX)
     parser.add_argument("--fallback-zones", default=DEFAULT_FALLBACK_ZONES)
@@ -111,6 +116,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target-equity", type=float, default=300_000.0)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-refresh-inputs", action="store_true")
+    parser.add_argument(
+        "--delete-completed-worker-instances",
+        action="store_true",
+        help=(
+            "Delete only completed, stopped worker VMs for this exact wave suffix after "
+            "their GCS artifacts are confirmed. This frees regional instance quota for "
+            "the aggregate builder without touching live/paper infrastructure."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -544,6 +558,51 @@ def stop_completed_instances(
     return stopped
 
 
+def delete_completed_worker_instances(
+    args: argparse.Namespace,
+    rows: list[dict[str, Any]],
+    instances_by_symbol: dict[str, list[dict[str, Any]]],
+    statuses: dict[str, dict[str, Any]],
+    counts_by_worker: dict[str, dict[str, int]],
+) -> list[dict[str, str]]:
+    if not args.delete_completed_worker_instances:
+        return []
+    deleted: list[dict[str, str]] = []
+    expected = expected_per_worker(args)
+    valid_symbols = {str(row["symbol"]).upper() for row in rows}
+    expected_suffix = f"-{args.instance_suffix}"
+    for row in rows:
+        symbol = str(row["symbol"]).upper()
+        wid = worker_id(symbol)
+        phase = str(statuses.get(wid, {}).get("phase", "unknown"))
+        counts = counts_by_worker.get(wid, {})
+        if not completed_worker(phase, counts, expected):
+            continue
+        for instance in instances_by_symbol.get(symbol, []):
+            name = str(instance.get("name", ""))
+            status = str(instance.get("status", ""))
+            labels = instance.get("labels") or {}
+            if symbol not in valid_symbols:
+                continue
+            if status != "TERMINATED":
+                continue
+            if labels.get("role") != "ticker365-repair":
+                continue
+            if not name.startswith(f"ticker365-repair-{symbol.lower()}-"):
+                continue
+            if not name.endswith(expected_suffix):
+                continue
+            zone = instance_zone(instance)
+            log(f"deleting_completed_fill_repair_worker symbol={symbol} instance={name} zone={zone}")
+            if not args.dry_run:
+                run_command(
+                    gcloud(args, "compute", "instances", "delete", name, "--zone", zone, "--quiet"),
+                    timeout=900,
+                )
+            deleted.append({"symbol": symbol, "instance": name, "zone": zone})
+    return deleted
+
+
 def launch_pending_workers(
     args: argparse.Namespace,
     rows: list[dict[str, Any]],
@@ -634,16 +693,16 @@ def launch_aggregate_if_ready(
     summary_count: int,
     expected_count: int,
     quota: dict[str, Any],
-) -> list[dict[str, str]]:
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     if aggregate.get("promotion_packet_uris"):
-        return []
+        return [], []
     if summary_count < expected_count:
-        return []
+        return [], []
     if aggregate_instance_exists(args, instances):
-        return []
+        return [], []
     cpus_required = machine_type_cpus(args.aggregate_machine_type)
     if int(quota.get("free", 0)) < cpus_required:
-        return []
+        return [], []
     name = aggregate_instance_name(args)
     metadata = {
         "wave_id": args.wave_id,
@@ -656,45 +715,59 @@ def launch_aggregate_if_ready(
         "max_wait_seconds": "43200",
     }
     startup_script = str(REPO_ROOT / "scripts" / "gcp_ticker_365d_aggregate_watch.sh")
-    command = gcloud(
-        args,
-        "compute",
-        "instances",
-        "create",
-        name,
-        "--project",
-        args.project,
-        "--zone",
-        args.aggregate_zone,
-        "--machine-type",
-        args.aggregate_machine_type,
-        "--image-family",
-        "debian-12",
-        "--image-project",
-        "debian-cloud",
-        "--service-account",
-        args.service_account,
-        "--scopes",
-        "cloud-platform",
-        "--provisioning-model",
-        "SPOT",
-        "--instance-termination-action",
-        "STOP",
-        "--boot-disk-size",
-        "40GB",
-        "--boot-disk-type",
-        args.boot_disk_type,
-        "--labels",
-        "wave=ticker365-fillrepair,role=ticker365-repair-aggregate",
-        "--metadata",
-        metadata_arg(metadata),
-        "--metadata-from-file",
-        f"startup-script={startup_script}",
-    )
-    log(f"launching_fill_repair_aggregate instance={name} zone={args.aggregate_zone}")
-    if not args.dry_run:
-        run_command(command, timeout=900)
-    return [{"instance": name, "zone": args.aggregate_zone}]
+    zones = [args.aggregate_zone]
+    zones.extend(zone for zone in _csv_values(args.aggregate_fallback_zones) if zone not in zones)
+    launch_errors: list[dict[str, str]] = []
+    for zone in zones:
+        command = gcloud(
+            args,
+            "compute",
+            "instances",
+            "create",
+            name,
+            "--project",
+            args.project,
+            "--zone",
+            zone,
+            "--machine-type",
+            args.aggregate_machine_type,
+            "--image-family",
+            "debian-12",
+            "--image-project",
+            "debian-cloud",
+            "--service-account",
+            args.service_account,
+            "--scopes",
+            "cloud-platform",
+            "--provisioning-model",
+            "SPOT",
+            "--instance-termination-action",
+            "STOP",
+            "--boot-disk-size",
+            "40GB",
+            "--boot-disk-type",
+            args.boot_disk_type,
+            "--labels",
+            "wave=ticker365-fillrepair,role=ticker365-repair-aggregate",
+            "--metadata",
+            metadata_arg(metadata),
+            "--metadata-from-file",
+            f"startup-script={startup_script}",
+        )
+        log(f"launching_fill_repair_aggregate instance={name} zone={zone}")
+        if args.dry_run:
+            return [{"instance": name, "zone": zone}], launch_errors
+        try:
+            run_command(command, timeout=900)
+        except CommandError as exc:
+            message = exc.output.strip().splitlines()[-1] if exc.output.strip() else str(exc)
+            if "already exists" in message:
+                return [{"instance": name, "zone": zone}], launch_errors
+            log(f"fill_repair_aggregate_launch_failed instance={name} zone={zone} error={message}")
+            launch_errors.append({"instance": name, "zone": zone, "error": message})
+            continue
+        return [{"instance": name, "zone": zone}], launch_errors
+    return [], launch_errors
 
 
 def paper_handoff(aggregate: dict[str, Any]) -> dict[str, Any]:
@@ -838,10 +911,21 @@ def write_status(args: argparse.Namespace, status: dict[str, Any]) -> tuple[Path
         "",
     ]
     actions = status["actions"]
-    if not actions["stopped_instances"] and not actions["launched_instances"] and not actions["launched_aggregate_instances"] and not actions.get("launch_errors"):
+    if (
+        not actions["stopped_instances"]
+        and not actions.get("deleted_instances")
+        and not actions["launched_instances"]
+        and not actions["launched_aggregate_instances"]
+        and not actions.get("launch_errors")
+        and not actions.get("aggregate_launch_errors")
+    ):
         lines.append("- No VM changes were needed this run.")
     for item in actions["stopped_instances"]:
         lines.append(f"- Stopped completed worker `{item['instance']}` for `{item['symbol']}`.")
+    for item in actions.get("deleted_instances", []):
+        lines.append(
+            f"- Deleted completed stopped worker `{item['instance']}` for `{item['symbol']}` after GCS artifacts were confirmed."
+        )
     for item in actions["launched_instances"]:
         lines.append(f"- Launched fill-repair worker `{item['instance']}` for `{item['symbol']}`.")
     for item in actions.get("launch_errors", []):
@@ -850,6 +934,10 @@ def write_status(args: argparse.Namespace, status: dict[str, Any]) -> tuple[Path
         )
     for item in actions["launched_aggregate_instances"]:
         lines.append(f"- Launched aggregate VM `{item['instance']}`.")
+    for item in actions.get("aggregate_launch_errors", []):
+        lines.append(
+            f"- Aggregate launch retry failed on `{item['zone']}` for `{item['instance']}`: `{item['error']}`."
+        )
     lines.extend(["", "## Worker State", ""])
     lines.append("| Symbol | Phase | Candidate Summaries | Reports | Packets | Instances |")
     lines.append("| --- | --- | ---: | ---: | ---: | --- |")
@@ -904,6 +992,13 @@ def main() -> int:
         instances_by_symbol = repair_instances(args, instances)
         quota = quota_snapshot(args, instances)
 
+    deleted = delete_completed_worker_instances(args, rows, instances_by_symbol, statuses, counts)
+    if deleted and not args.dry_run:
+        time.sleep(10)
+        instances = list_instances(args)
+        instances_by_symbol = repair_instances(args, instances)
+        quota = quota_snapshot(args, instances)
+
     launched, launch_errors = launch_pending_workers(
         args, rows, instances_by_symbol, statuses, counts, quota
     )
@@ -917,7 +1012,7 @@ def main() -> int:
         worker_counts.get("candidate_summary_count", 0) for worker_counts in counts.values()
     )
     expected_total = expected_summary_count(args, len(rows))
-    launched_aggregate = launch_aggregate_if_ready(
+    launched_aggregate, aggregate_launch_errors = launch_aggregate_if_ready(
         args, instances, aggregate, summary_count, expected_total, quota
     )
     if launched_aggregate and not args.dry_run:
@@ -928,9 +1023,11 @@ def main() -> int:
 
     actions = {
         "stopped_instances": stopped,
+        "deleted_instances": deleted,
         "launched_instances": launched,
         "launch_errors": launch_errors,
         "launched_aggregate_instances": launched_aggregate,
+        "aggregate_launch_errors": aggregate_launch_errors,
     }
     status = build_status(
         args,
@@ -949,7 +1046,7 @@ def main() -> int:
         "ticker365_fill_repair_watchdog_complete "
         f"summaries={status['summary_counts']['total']}/{status['summary_counts']['expected']} "
         f"running={status['worker_counts']['running']} launched={len(launched)} "
-        f"stopped={len(stopped)} aggregate_launched={len(launched_aggregate)}"
+        f"stopped={len(stopped)} deleted={len(deleted)} aggregate_launched={len(launched_aggregate)}"
     )
     print(json.dumps(status, indent=2, sort_keys=True))
     return 0

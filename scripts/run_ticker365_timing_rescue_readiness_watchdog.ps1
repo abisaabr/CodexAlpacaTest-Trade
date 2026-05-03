@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $LogDir = Join-Path $RepoRoot "logs"
 $LogPath = Join-Path $LogDir "ticker365_timing_rescue_readiness_watchdog.log"
+$LockPath = Join-Path $LogDir "ticker365_timing_rescue_readiness_watchdog.lock"
 $Python = "C:\Users\rabisaab\AppData\Local\Programs\Python\Python312\python.exe"
 $Gcloud = "C:\Users\rabisaab\Downloads\google-cloud-sdk-local\google-cloud-sdk\bin\gcloud.cmd"
 $GcsPrefix = "gs://codexalpaca-control-us/research_results/ticker365_timing_rescue_20260503T1906Z"
@@ -10,6 +11,14 @@ $OutputDir = "reports/gcp_research/ticker365_timing_rescue_paper_readiness_20260
 
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 Set-Location $RepoRoot
+
+try {
+    $LockHandle = [System.IO.File]::Open($LockPath, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+} catch {
+    $stamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    "===== ticker365_timing_rescue_readiness_watchdog skipped_locked $stamp =====" | Out-File -FilePath $LogPath -Append -Encoding utf8
+    exit 0
+}
 
 $Utf8NoBom = New-Object System.Text.UTF8Encoding $false
 function Add-WatchdogLogLine {
@@ -38,4 +47,5 @@ Add-WatchdogLogLine "===== ticker365_timing_rescue_readiness_watchdog run $stamp
         Add-WatchdogLogLine $line
     }
 
+$LockHandle.Close()
 exit $LASTEXITCODE

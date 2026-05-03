@@ -52,3 +52,47 @@ If this wave finds eligible candidates, build a no-order paper launch handoff fo
 operator review. If it still has zero eligible candidates, classify blockers by
 symbol/family and run a narrower strategy-design wave rather than widening the
 execution tolerance again.
+
+## Automation State - 2026-05-03 19:45 ET
+
+- `160/160` ticker timing-rescue candidate summaries are present in GCS.
+- All 20 ticker workers completed successfully, including `QQQ`.
+- The completed current-wave worker VMs with suffix `20260503c` were deleted
+  after GCS artifact confirmation to free regional instance quota for the
+  aggregate builder.
+- Aggregate VM `ticker365-repair-agg-20260503c` is running in `us-central1-a`.
+- Active local automations:
+  - `CodexAlpacaTicker365TimingRescueWatchdog`, every 15 minutes.
+  - `CodexAlpacaTicker365TimingRescueReadinessWatchdog`, every 15 minutes.
+- Both active wrappers use local lock files under `logs/` so scheduled runs do
+  not overlap.
+- Stale older-wave local automations were disabled to avoid duplicate launch
+  loops and confusing readiness reports:
+  - `CodexAlpacaTicker365Watchdog`
+  - `CodexAlpacaTicker365FillRepairWatchdog`
+  - `CodexAlpacaTicker365FillRepairReadinessWatchdog`
+  - `CodexAlpacaTicker365PaperReadinessWatchdog`
+
+## Recovery Behavior
+
+- `scripts/watch_ticker365_fill_repair_wave.py` can now try aggregate fallback
+  zones if the primary aggregate zone is quota-blocked.
+- The timing-rescue watchdog wrapper passes
+  `--delete-completed-worker-instances`, which only deletes completed, stopped
+  worker VMs for the exact active wave suffix after per-worker GCS artifacts are
+  confirmed.
+- The cleanup intentionally does not touch paper-runner infrastructure, live
+  manifests, risk policy, or any non-matching VM.
+
+## Next Gate
+
+Wait for the aggregate VM to publish:
+
+- `aggregate/portfolio_report/ticker_365d_all_available_portfolio_report/research_portfolio_report.json`
+- `aggregate/promotion_packet/ticker_365d_all_available_promotion_packet/research_promotion_review_packet.json`
+- `aggregate/growth_projection/ticker_365d_all_available_growth_projection/portfolio_growth_projection.json`
+
+If the generated promotion packet has eligible candidates and the growth
+projection is institutionally acceptable, stage a no-order paper-runner handoff
+for operator review. If not, run a targeted strategy-design wave by regime and
+symbol; do not lower the `fill_coverage >= 0.90` gate.
