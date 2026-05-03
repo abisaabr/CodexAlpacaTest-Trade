@@ -35,20 +35,28 @@ write_status() {
   local detail="${2:-}"
   local count="${3:-0}"
   local elapsed="${4:-0}"
-  python3 - "$phase" "$detail" "$count" "$elapsed" > "${WORKROOT}/ticker_365d_aggregate_status.json" <<'PY'
+  python3 - \
+    "$phase" \
+    "$detail" \
+    "$count" \
+    "$elapsed" \
+    "$WAVE_ID" \
+    "$GCS_PREFIX" \
+    "$EXPECTED_SUMMARY_COUNT" \
+    > "${WORKROOT}/ticker_365d_aggregate_status.json" <<'PY'
 import json
 import sys
 from datetime import UTC, datetime
 
-phase, detail, count, elapsed = sys.argv[1:5]
+phase, detail, count, elapsed, wave_id, gcs_prefix, expected_summary_count = sys.argv[1:8]
 print(json.dumps({
     "generated_at_utc": datetime.now(UTC).replace(microsecond=0).isoformat(),
-    "wave_id": "__WAVE_ID__",
+    "wave_id": wave_id,
     "phase": phase,
     "detail": detail,
-    "gcs_prefix": "__GCS_PREFIX__",
+    "gcs_prefix": gcs_prefix,
     "summary_count": int(count),
-    "expected_summary_count": int("__EXPECTED_SUMMARY_COUNT__"),
+    "expected_summary_count": int(expected_summary_count),
     "elapsed_seconds": int(elapsed),
     "broker_facing": False,
     "paper_orders": False,
@@ -56,11 +64,6 @@ print(json.dumps({
     "risk_policy_effect": "none",
 }, indent=2, sort_keys=True))
 PY
-  sed -i \
-    -e "s|__WAVE_ID__|${WAVE_ID}|g" \
-    -e "s|__GCS_PREFIX__|${GCS_PREFIX}|g" \
-    -e "s|__EXPECTED_SUMMARY_COUNT__|${EXPECTED_SUMMARY_COUNT}|g" \
-    "${WORKROOT}/ticker_365d_aggregate_status.json"
   gcloud storage cp "${WORKROOT}/ticker_365d_aggregate_status.json" "${GCS_PREFIX}/aggregate/status/ticker_365d_aggregate_status.json" || true
   gcloud storage cp "${WORKROOT}/startup.log" "${GCS_PREFIX}/aggregate/status/startup.log" || true
 }
