@@ -36,6 +36,8 @@ Add-WatchdogLogLine "===== ticker365_timing_rescue_watchdog run $stamp ====="
     --top-n 40 `
     --lag-profiles "30:120,60:180,120:240,180:390" `
     --selectors "nearest_contract,entry_liquidity_first_research_only" `
+    --fallback-zones "us-central1-a,us-east1-b,us-west1-a,us-east4-a" `
+    --prefer-fallback-zones `
     --max-launches-per-run 8 2>&1 |
     ForEach-Object {
         $line = $_.ToString()

@@ -93,6 +93,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--aggregate-machine-type", default="e2-standard-2")
     parser.add_argument("--instance-suffix", default=DEFAULT_INSTANCE_SUFFIX)
     parser.add_argument("--fallback-zones", default=DEFAULT_FALLBACK_ZONES)
+    parser.add_argument(
+        "--prefer-fallback-zones",
+        action="store_true",
+        help="Try fallback zones before each launch row's preferred zone.",
+    )
     parser.add_argument("--max-launches-per-run", type=int, default=8)
     parser.add_argument("--max-retry-attempts", type=int, default=3)
     parser.add_argument("--lag-profiles", default=DEFAULT_LAG_PROFILES)
@@ -572,8 +577,13 @@ def launch_pending_workers(
             continue
         name = next_instance_name(args, symbol, existing)
         preferred_zone = str(row["zone"])
-        zones = [preferred_zone]
-        zones.extend(zone for zone in _csv_values(args.fallback_zones) if zone not in zones)
+        if args.prefer_fallback_zones:
+            zones = _csv_values(args.fallback_zones)
+            if preferred_zone not in zones:
+                zones.append(preferred_zone)
+        else:
+            zones = [preferred_zone]
+            zones.extend(zone for zone in _csv_values(args.fallback_zones) if zone not in zones)
         launched_row = None
         for zone in zones:
             try:

@@ -21,6 +21,8 @@ windows instead of downloading more raw option bars first.
 - Top N per ticker: `40`
 - Selectors: `nearest_contract,entry_liquidity_first_research_only`
 - Lag profiles: `30:120,60:180,120:240,180:390`
+- Launch preference: try `us-central1-a` and `us-east1-b` before the
+  launch-row zone because east4/west1 quota was failing during kickoff.
 
 ## Code Repairs Included
 
