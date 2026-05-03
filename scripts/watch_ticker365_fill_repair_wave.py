@@ -140,7 +140,7 @@ def gcloud(args: argparse.Namespace, *parts: str) -> list[str]:
 
 
 def metadata_arg(metadata: dict[str, str]) -> str:
-    return "^|^" + "|".join(f"{key}={value}" for key, value in metadata.items())
+    return "^~^" + "~".join(f"{key}={value}" for key, value in metadata.items())
 
 
 def _csv_count(value: str) -> int:
