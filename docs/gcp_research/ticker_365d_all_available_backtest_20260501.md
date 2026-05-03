@@ -42,9 +42,23 @@ Active ticker workers were left running.
 - Worker outputs: `gs://codexalpaca-control-us/research_results/ticker_365d_all_available_20260501T2300Z/workers/`
 - Aggregate portfolio report: `gs://codexalpaca-control-us/research_results/ticker_365d_all_available_20260501T2300Z/aggregate/portfolio_report/`
 - Aggregate promotion packet: `gs://codexalpaca-control-us/research_results/ticker_365d_all_available_20260501T2300Z/aggregate/promotion_packet/`
+- Aggregate full-year projection calendar: `gs://codexalpaca-control-us/research_results/ticker_365d_all_available_20260501T2300Z/aggregate/projection_calendar/`
 - Aggregate growth projection: `gs://codexalpaca-control-us/research_results/ticker_365d_all_available_20260501T2300Z/aggregate/growth_projection/`
 - Aggregate status: `gs://codexalpaca-control-us/research_results/ticker_365d_all_available_20260501T2300Z/aggregate/status/ticker_365d_aggregate_status.json`
 - Watchdog status: `gs://codexalpaca-control-us/research_results/ticker_365d_all_available_20260501T2300Z/watchdog/ticker_365d_watch_status_20260501.json`
+
+## Full-Year Projection Patch
+
+The aggregate VM now builds `projection_calendar.csv` from the union of all launch-row GCS option-bar `trade_date=YYYY-MM-DD` partitions before running `build_portfolio_growth_projection.py`.
+
+This prevents the all-ticker portfolio projection from overstating performance by measuring only active strategy days. The growth packet should show:
+
+- `projection_calendar.mode = full_calendar_cash_carry`
+- raw dataset trading days
+- strategy active days
+- inactive cash days
+- active-day-only comparison
+- `calendar_market_regime_labels_not_provided` until a cross-ticker market-regime label calendar is added
 
 ## Watchdog Automation
 

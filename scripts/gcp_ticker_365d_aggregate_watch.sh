@@ -108,6 +108,15 @@ python -m pip install -e ".[gcp]"
 
 gcloud storage cp --recursive "${GCS_PREFIX}/workers/" "${WORKER_OUTPUTS}/" || true
 
+PROJECTION_CALENDAR_DIR="reports/research_wave/ticker_365d_all_available_projection_calendar"
+mkdir -p "${PROJECTION_CALENDAR_DIR}"
+gcloud storage cp \
+  "${GCS_PREFIX}/inputs/ticker_365d_all_available_launch_rows.json" \
+  "${PROJECTION_CALENDAR_DIR}/launch_rows.json"
+python scripts/build_gcs_projection_calendar.py \
+  --launch-rows-json "${PROJECTION_CALENDAR_DIR}/launch_rows.json" \
+  --output-dir "${PROJECTION_CALENDAR_DIR}"
+
 python scripts/build_research_portfolio_report.py \
   --replay-root "${WORKER_OUTPUTS}" \
   --output-dir reports/research_wave/ticker_365d_all_available_portfolio_report \
@@ -128,11 +137,14 @@ python scripts/build_portfolio_growth_projection.py \
   --portfolio-report-json reports/research_wave/ticker_365d_all_available_portfolio_report/research_portfolio_report.json \
   --replay-root "${WORKER_OUTPUTS}" \
   --output-dir reports/research_wave/ticker_365d_all_available_growth_projection \
+  --calendar-csv "${PROJECTION_CALENDAR_DIR}/projection_calendar.csv" \
+  --calendar-date-column trade_date \
   --initial-cash "${INITIAL_CASH}" \
   --target-equity "${TARGET_EQUITY}" \
   --backtest-allocation-fraction 0.05 \
   --bootstrap-runs 2000
 
+gcloud storage cp --recursive "${PROJECTION_CALENDAR_DIR}" "${GCS_PREFIX}/aggregate/projection_calendar/"
 gcloud storage cp --recursive reports/research_wave/ticker_365d_all_available_portfolio_report "${GCS_PREFIX}/aggregate/portfolio_report/"
 gcloud storage cp --recursive reports/research_wave/ticker_365d_all_available_promotion_packet "${GCS_PREFIX}/aggregate/promotion_packet/"
 gcloud storage cp --recursive reports/research_wave/ticker_365d_all_available_growth_projection "${GCS_PREFIX}/aggregate/growth_projection/"
