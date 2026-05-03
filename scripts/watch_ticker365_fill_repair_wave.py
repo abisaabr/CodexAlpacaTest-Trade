@@ -534,12 +534,13 @@ def launch_pending_workers(
     statuses: dict[str, dict[str, Any]],
     counts_by_worker: dict[str, dict[str, int]],
     quota: dict[str, Any],
-) -> list[dict[str, str]]:
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     cpus_per_worker = machine_type_cpus(args.machine_type)
     capacity = min(args.max_launches_per_run, int(quota.get("free", 0)) // cpus_per_worker)
     launched: list[dict[str, str]] = []
+    launch_errors: list[dict[str, str]] = []
     if capacity <= 0:
-        return launched
+        return launched, launch_errors
     expected = expected_per_worker(args)
     for row in rows:
         if len(launched) >= capacity:
@@ -558,9 +559,22 @@ def launch_pending_workers(
         if len(existing) >= args.max_retry_attempts:
             continue
         name = next_instance_name(args, symbol, existing)
-        launch_worker(args, row, name)
+        try:
+            launch_worker(args, row, name)
+        except CommandError as exc:
+            message = exc.output.strip().splitlines()[-1] if exc.output.strip() else str(exc)
+            log(f"fill_repair_launch_failed symbol={symbol} instance={name} error={message}")
+            launch_errors.append(
+                {
+                    "symbol": symbol,
+                    "instance": name,
+                    "zone": str(row["zone"]),
+                    "error": message,
+                }
+            )
+            continue
         launched.append({"symbol": symbol, "instance": name, "zone": str(row["zone"])})
-    return launched
+    return launched, launch_errors
 
 
 def aggregate_instance_exists(args: argparse.Namespace, instances: list[dict[str, Any]]) -> bool:
@@ -783,12 +797,16 @@ def write_status(args: argparse.Namespace, status: dict[str, Any]) -> tuple[Path
         "",
     ]
     actions = status["actions"]
-    if not actions["stopped_instances"] and not actions["launched_instances"] and not actions["launched_aggregate_instances"]:
+    if not actions["stopped_instances"] and not actions["launched_instances"] and not actions["launched_aggregate_instances"] and not actions.get("launch_errors"):
         lines.append("- No VM changes were needed this run.")
     for item in actions["stopped_instances"]:
         lines.append(f"- Stopped completed worker `{item['instance']}` for `{item['symbol']}`.")
     for item in actions["launched_instances"]:
         lines.append(f"- Launched fill-repair worker `{item['instance']}` for `{item['symbol']}`.")
+    for item in actions.get("launch_errors", []):
+        lines.append(
+            f"- Launch retry for `{item['symbol']}` failed on `{item['instance']}`: `{item['error']}`."
+        )
     for item in actions["launched_aggregate_instances"]:
         lines.append(f"- Launched aggregate VM `{item['instance']}`.")
     lines.extend(["", "## Worker State", ""])
@@ -845,7 +863,9 @@ def main() -> int:
         instances_by_symbol = repair_instances(args, instances)
         quota = quota_snapshot(args, instances)
 
-    launched = launch_pending_workers(args, rows, instances_by_symbol, statuses, counts, quota)
+    launched, launch_errors = launch_pending_workers(
+        args, rows, instances_by_symbol, statuses, counts, quota
+    )
     if launched and not args.dry_run:
         time.sleep(10)
         instances = list_instances(args)
@@ -868,6 +888,7 @@ def main() -> int:
     actions = {
         "stopped_instances": stopped,
         "launched_instances": launched,
+        "launch_errors": launch_errors,
         "launched_aggregate_instances": launched_aggregate,
     }
     status = build_status(
