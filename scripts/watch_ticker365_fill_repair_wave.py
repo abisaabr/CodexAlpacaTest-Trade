@@ -87,6 +87,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--launch-rows-uri", default=DEFAULT_LAUNCH_ROWS_URI)
     parser.add_argument("--machine-type", default="e2-standard-4")
     parser.add_argument("--boot-disk-size-gb", type=int, default=40)
+    parser.add_argument("--boot-disk-type", default="pd-standard")
     parser.add_argument("--aggregate-zone", default="us-central1-a")
     parser.add_argument("--aggregate-machine-type", default="e2-standard-2")
     parser.add_argument("--instance-suffix", default=DEFAULT_INSTANCE_SUFFIX)
@@ -482,7 +483,7 @@ def launch_worker(args: argparse.Namespace, row: dict[str, Any], instance_name: 
         "--boot-disk-size",
         f"{args.boot_disk_size_gb}GB",
         "--boot-disk-type",
-        "pd-balanced",
+        args.boot_disk_type,
         "--labels",
         labels,
         "--metadata",
@@ -627,7 +628,7 @@ def launch_aggregate_if_ready(
         "--boot-disk-size",
         "40GB",
         "--boot-disk-type",
-        "pd-balanced",
+        args.boot_disk_type,
         "--labels",
         "wave=ticker365-fillrepair,role=ticker365-repair-aggregate",
         "--metadata",
