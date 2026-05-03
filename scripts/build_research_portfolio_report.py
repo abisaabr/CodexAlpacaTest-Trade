@@ -75,6 +75,15 @@ def _identity_slug(value: object) -> str:
     return slug or "unknown"
 
 
+def _infer_intended_regime(*values: object) -> str:
+    for value in values:
+        tokens = re.split(r"[^a-z0-9]+", str(value or "").lower())
+        for token in tokens:
+            if token in {"bull", "bear", "choppy"}:
+                return token
+    return ""
+
+
 def _candidate_score(row: dict[str, Any]) -> float:
     drawdown_penalty = abs(min(_float(row["worst_drawdown"]), 0.0))
     fill_bonus = 1_000.0 * _float(row["min_fill_coverage"])
@@ -176,7 +185,13 @@ def summarize_candidates(
             or _first_text(first, "source_strategy_id"),
             "source_strategy_id": str(first.get("source_strategy_id")),
             "family": _first_text(first, "family"),
-            "intended_regime": _first_text(first, "intended_regime"),
+            "intended_regime": _first_text(first, "intended_regime")
+            or _infer_intended_regime(
+                first.get("strategy_id"),
+                first.get("source_strategy_id"),
+                first.get("candidate_variant_id"),
+                base_candidate_id,
+            ),
             "parameter_set": _first_text(first, "parameter_set"),
             "directional_option_type": str(first.get("directional_option_type")),
             "profile_count": int(group["profile"].nunique()),

@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import math
+import re
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -43,6 +44,7 @@ DEFAULT_OPTION_DATA_ROOT = (
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "reports" / "research_wave" / "option_aware_backtests"
 CONTRACT_SELECTION_NEAREST = "nearest_contract"
 CONTRACT_SELECTION_LIQUIDITY_FIRST = "entry_liquidity_first_research_only"
+REGIME_TOKENS = {"bull", "bear", "choppy"}
 
 
 @dataclass(frozen=True)
@@ -201,6 +203,15 @@ def _metadata_json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
 
+def _infer_intended_regime(*values: object) -> str:
+    for value in values:
+        tokens = re.split(r"[^a-z0-9]+", str(value or "").lower())
+        for token in tokens:
+            if token in REGIME_TOKENS:
+                return token
+    return ""
+
+
 def _candidate_identity(queue_item: dict[str, Any], variant: dict[str, Any]) -> dict[str, str]:
     parameters = (
         queue_item.get("parameter_set")
@@ -215,9 +226,15 @@ def _candidate_identity(queue_item: dict[str, Any], variant: dict[str, Any]) -> 
         or variant.get("source_strategy_id")
         or ""
     )
+    candidate_id = queue_item.get("candidate_variant_id") or variant.get("variant_id") or ""
     return {
         "strategy_id": str(strategy_id),
         "family": str(queue_item.get("family") or variant.get("family") or ""),
+        "intended_regime": str(
+            queue_item.get("intended_regime")
+            or variant.get("intended_regime")
+            or _infer_intended_regime(strategy_id, candidate_id)
+        ),
         "parameter_set": _metadata_json(parameters),
     }
 
@@ -420,6 +437,48 @@ def _first_option_bar(
     if frame.empty:
         return None
     return frame.iloc[0].to_dict()
+
+
+def _exit_option_bar(
+    *,
+    option_bars: pd.DataFrame,
+    option_index: OptionResearchIndex | None = None,
+    contract_symbol: str,
+    timestamp: pd.Timestamp,
+    max_lag: timedelta,
+) -> dict[str, Any] | None:
+    forward_bar = _first_option_bar(
+        option_bars=option_bars,
+        option_index=option_index,
+        contract_symbol=contract_symbol,
+        timestamp=timestamp,
+        max_lag=max_lag,
+    )
+    if forward_bar:
+        return forward_bar
+
+    earliest = timestamp - max_lag
+    if option_index:
+        frame = option_index.bars_by_symbol.get(contract_symbol)
+        if frame is None or frame.empty:
+            return None
+        timestamps = frame["timestamp"]
+        position = int(timestamps.searchsorted(timestamp, side="right")) - 1
+        if position < 0:
+            return None
+        row = frame.iloc[position].to_dict()
+        if pd.Timestamp(row["timestamp"]) >= earliest:
+            return row
+        return None
+
+    frame = option_bars[
+        (option_bars["symbol"].astype(str) == contract_symbol)
+        & (option_bars["timestamp"] >= earliest)
+        & (option_bars["timestamp"] <= timestamp)
+    ].sort_values("timestamp")
+    if frame.empty:
+        return None
+    return frame.iloc[-1].to_dict()
 
 
 def _trade_print_count(
@@ -660,7 +719,7 @@ def _option_rows_for_candidate(
                 continue
 
         contract_symbol = str(contract["symbol"])
-        exit_bar = _first_option_bar(
+        exit_bar = _exit_option_bar(
             option_bars=option_bars,
             option_index=option_index,
             contract_symbol=contract_symbol,
@@ -886,6 +945,8 @@ def build_option_aware_backtest(
                 "Strategy-level fill coverage, not raw option data coverage. "
                 "Current engine models one directional option contract per source stock trade."
             ),
+            "entry_lookup_mode": "first_bar_at_or_after_entry_within_lag",
+            "exit_lookup_mode": "first_bar_after_or_last_bar_before_exit_within_lag",
             **economics,
             **split,
             "promotion_allowed": False,
