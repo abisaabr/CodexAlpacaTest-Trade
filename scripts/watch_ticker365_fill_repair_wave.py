@@ -580,6 +580,13 @@ def launch_pending_workers(
                 launch_worker(args, row, name, zone=zone)
             except CommandError as exc:
                 message = exc.output.strip().splitlines()[-1] if exc.output.strip() else str(exc)
+                if "already exists" in message:
+                    log(
+                        "fill_repair_launch_already_exists "
+                        f"symbol={symbol} instance={name} zone={zone}"
+                    )
+                    launched_row = {"symbol": symbol, "instance": name, "zone": zone}
+                    break
                 log(
                     "fill_repair_launch_failed "
                     f"symbol={symbol} instance={name} zone={zone} error={message}"
