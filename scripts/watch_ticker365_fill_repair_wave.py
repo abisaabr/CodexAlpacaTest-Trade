@@ -40,6 +40,7 @@ DEFAULT_PYTHON = r"C:\Users\rabisaab\AppData\Local\Programs\Python\Python312\pyt
 DEFAULT_INSTANCE_SUFFIX = "20260503b"
 DEFAULT_LAG_PROFILES = "10:10,30:60"
 DEFAULT_SELECTORS = "nearest_contract,entry_liquidity_first_research_only"
+DEFAULT_FALLBACK_ZONES = "us-west1-a,us-central1-a,us-east1-b,us-east4-a"
 HARD_RULES = [
     "Do not start trading.",
     "Do not submit paper orders.",
@@ -91,6 +92,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--aggregate-zone", default="us-central1-a")
     parser.add_argument("--aggregate-machine-type", default="e2-standard-2")
     parser.add_argument("--instance-suffix", default=DEFAULT_INSTANCE_SUFFIX)
+    parser.add_argument("--fallback-zones", default=DEFAULT_FALLBACK_ZONES)
     parser.add_argument("--max-launches-per-run", type=int, default=8)
     parser.add_argument("--max-retry-attempts", type=int, default=3)
     parser.add_argument("--lag-profiles", default=DEFAULT_LAG_PROFILES)
@@ -146,6 +148,10 @@ def metadata_arg(metadata: dict[str, str]) -> str:
 
 def _csv_count(value: str) -> int:
     return len([item for item in value.split(",") if item.strip()])
+
+
+def _csv_values(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 def expected_summary_count(args: argparse.Namespace, row_count: int) -> int:
@@ -428,7 +434,13 @@ def next_instance_name(args: argparse.Namespace, symbol: str, existing: list[dic
     return f"{base}-r{retry + 1}"
 
 
-def launch_worker(args: argparse.Namespace, row: dict[str, Any], instance_name: str) -> None:
+def launch_worker(
+    args: argparse.Namespace,
+    row: dict[str, Any],
+    instance_name: str,
+    *,
+    zone: str,
+) -> None:
     symbol = str(row["symbol"]).upper()
     metadata = {
         "symbol": symbol,
@@ -465,7 +477,7 @@ def launch_worker(args: argparse.Namespace, row: dict[str, Any], instance_name: 
         "--project",
         args.project,
         "--zone",
-        str(row["zone"]),
+        zone,
         "--machine-type",
         args.machine_type,
         "--image-family",
@@ -491,7 +503,7 @@ def launch_worker(args: argparse.Namespace, row: dict[str, Any], instance_name: 
         "--metadata-from-file",
         f"startup-script={startup_script}",
     )
-    log(f"launching_fill_repair_worker symbol={symbol} instance={instance_name} zone={row['zone']}")
+    log(f"launching_fill_repair_worker symbol={symbol} instance={instance_name} zone={zone}")
     if not args.dry_run:
         run_command(command, timeout=900)
 
@@ -559,21 +571,33 @@ def launch_pending_workers(
         if len(existing) >= args.max_retry_attempts:
             continue
         name = next_instance_name(args, symbol, existing)
-        try:
-            launch_worker(args, row, name)
-        except CommandError as exc:
-            message = exc.output.strip().splitlines()[-1] if exc.output.strip() else str(exc)
-            log(f"fill_repair_launch_failed symbol={symbol} instance={name} error={message}")
-            launch_errors.append(
-                {
-                    "symbol": symbol,
-                    "instance": name,
-                    "zone": str(row["zone"]),
-                    "error": message,
-                }
-            )
+        preferred_zone = str(row["zone"])
+        zones = [preferred_zone]
+        zones.extend(zone for zone in _csv_values(args.fallback_zones) if zone not in zones)
+        launched_row = None
+        for zone in zones:
+            try:
+                launch_worker(args, row, name, zone=zone)
+            except CommandError as exc:
+                message = exc.output.strip().splitlines()[-1] if exc.output.strip() else str(exc)
+                log(
+                    "fill_repair_launch_failed "
+                    f"symbol={symbol} instance={name} zone={zone} error={message}"
+                )
+                launch_errors.append(
+                    {
+                        "symbol": symbol,
+                        "instance": name,
+                        "zone": zone,
+                        "error": message,
+                    }
+                )
+                continue
+            launched_row = {"symbol": symbol, "instance": name, "zone": zone}
+            break
+        if launched_row is None:
             continue
-        launched.append({"symbol": symbol, "instance": name, "zone": str(row["zone"])})
+        launched.append(launched_row)
     return launched, launch_errors
 
 
