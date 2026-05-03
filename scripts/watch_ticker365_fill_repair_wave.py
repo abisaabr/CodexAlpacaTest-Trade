@@ -140,7 +140,7 @@ def gcloud(args: argparse.Namespace, *parts: str) -> list[str]:
 
 
 def metadata_arg(metadata: dict[str, str]) -> str:
-    return "^~^" + "~".join(f"{key}={value}" for key, value in metadata.items())
+    return ",".join(f"{key}={value}" for key, value in metadata.items())
 
 
 def _csv_count(value: str) -> int:
@@ -446,8 +446,8 @@ def launch_worker(args: argparse.Namespace, row: dict[str, Any], instance_name: 
         "allocation_fraction": f"{args.allocation_fraction:g}",
         "slippage_bps": f"{args.slippage_bps:g}",
         "fee_per_contract": f"{args.fee_per_contract:g}",
-        "selectors": args.selectors,
-        "lag_profiles": args.lag_profiles,
+        "selectors": args.selectors.replace(",", ";"),
+        "lag_profiles": args.lag_profiles.replace(",", ";"),
     }
     dataset_label = str(row.get("dataset_id", "unknown")).replace("_", "-")[:32]
     labels = (

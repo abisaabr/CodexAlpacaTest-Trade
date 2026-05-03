@@ -30,6 +30,8 @@ SLIPPAGE_BPS="$(metadata_value slippage_bps 10)"
 FEE_PER_CONTRACT="$(metadata_value fee_per_contract 0.65)"
 SELECTORS_CSV="$(metadata_value selectors "nearest_contract,entry_liquidity_first_research_only")"
 LAG_PROFILES_CSV="$(metadata_value lag_profiles "10:10")"
+SELECTORS_CSV="${SELECTORS_CSV//;/,}"
+LAG_PROFILES_CSV="${LAG_PROFILES_CSV//;/,}"
 
 if [[ -z "${SYMBOL}" || -z "${STOCK_URI}" || -z "${CONTRACTS_URI}" || -z "${BARS_URI}" ]]; then
   echo "missing_required_metadata symbol=${SYMBOL} stock_uri=${STOCK_URI} contracts_uri=${CONTRACTS_URI} bars_uri=${BARS_URI}" >&2
