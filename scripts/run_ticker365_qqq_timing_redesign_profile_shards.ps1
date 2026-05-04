@@ -46,12 +46,18 @@ function Add-LogLine {
 
 function Invoke-GcloudLogged {
     param([string[]]$Arguments)
-    & $Gcloud @Arguments 2>&1 | ForEach-Object {
-        $line = $_.ToString()
-        Write-Output $line
-        Add-LogLine $line
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $Gcloud @Arguments 2>&1 | ForEach-Object {
+            $line = $_.ToString()
+            Write-Output $line
+            Add-LogLine $line
+        }
+        return $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
     }
-    return $LASTEXITCODE
 }
 
 function ConvertTo-MetadataArg {
@@ -61,20 +67,36 @@ function ConvertTo-MetadataArg {
 
 function Test-GcsObject {
     param([string]$Uri)
-    & $Gcloud storage ls $Uri --project $Project *> $null
-    return ($LASTEXITCODE -eq 0)
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $Gcloud storage ls $Uri --project $Project 2>$null | Out-Null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
 }
 
 function Get-InstanceRows {
     param([string]$InstanceName)
-    $rows = & $Gcloud compute instances list `
-        --project $Project `
-        --filter "name=$InstanceName" `
-        --format "csv[no-heading](name,zone.basename(),status)" 2>$null
-    if ($LASTEXITCODE -ne 0 -or $null -eq $rows) {
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $rows = & $Gcloud compute instances list `
+            --project $Project `
+            --filter "name=$InstanceName" `
+            --format "csv[no-heading](name,zone.basename(),status)" 2>$null
+        if ($LASTEXITCODE -ne 0 -or $null -eq $rows) {
+            return @()
+        }
+        return @($rows | Where-Object { $_ -and $_.Trim() })
+    } catch {
         return @()
+    } finally {
+        $ErrorActionPreference = $previousPreference
     }
-    return @($rows | Where-Object { $_ -and $_.Trim() })
 }
 
 function Test-ShardComplete {
