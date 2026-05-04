@@ -208,7 +208,7 @@ function Start-ShardWorker {
             "--provisioning-model", "SPOT",
             "--instance-termination-action", "STOP",
             "--boot-disk-size", "200GB",
-            "--boot-disk-type", "pd-ssd",
+            "--boot-disk-type", "pd-standard",
             "--labels", $labels,
             "--metadata", $metadataArg,
             "--metadata-from-file", "startup-script=$StartupScript"
