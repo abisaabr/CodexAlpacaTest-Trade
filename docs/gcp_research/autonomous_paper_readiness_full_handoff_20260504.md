@@ -85,9 +85,9 @@ The other machine should not re-enable them unless intentionally taking control 
 
 ## Live Research State
 
-Latest direct GCS count at handoff collection:
+Latest direct GCS count at final handoff verification:
 
-- QQQ micro summaries: `70 / 72`
+- QQQ micro summaries: `72 / 72`
 - QQQ full expansion summaries: `0`
 - Active/recent GCP research instances:
 - `paper-ready-controller-20260504qa`
@@ -104,7 +104,7 @@ Last controller-published status artifact may lag direct GCS counts by one contr
 - Live manifest effect: `none`
 - Risk policy effect: `none`
 
-If the direct GCS count and controller status disagree, trust the direct GCS count for latest progress and wait for the next controller pass to publish the reconciled status.
+If the direct GCS count and controller status disagree, trust the direct GCS count for latest progress and wait for the next controller pass to publish the reconciled status. At final handoff verification, direct GCS count had reached `72 / 72`, while the last controller artifact still showed `68 / 72`.
 
 ## Canonical GCS Paths
 
@@ -218,15 +218,15 @@ If duplicate controller VMs exist, keep only one `paper-ready-controller-*` inst
 
 ## Known Open Work
 
-- QQQ micro wave still needed the final summaries at handoff collection.
-- Full QQQ `126` expansion had not started yet.
+- QQQ micro wave reached `72 / 72` by final direct GCS verification.
+- Full QQQ `126` expansion had not started yet at final direct verification.
 - No strategy was eligible for paper promotion yet.
 - No paper runner was armed.
 - Independent reproduction and runner preflight are still downstream gates.
 
 ## What To Do When Micro Reaches 72/72
 
-The controller should automatically:
+At final handoff verification, the micro count had reached `72 / 72`. On the next controller pass, it should automatically:
 
 1. Build the heatmap.
 2. Select the best legitimate strict profile.
