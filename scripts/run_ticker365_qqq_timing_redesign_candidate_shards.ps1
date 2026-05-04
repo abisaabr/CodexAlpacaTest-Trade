@@ -114,6 +114,35 @@ function Get-InstanceRows {
     }
 }
 
+function Get-RunningCpuUsage {
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $rows = & $Gcloud compute instances list `
+            --project $Project `
+            --filter "status=RUNNING" `
+            --format "csv[no-heading](machineType.basename())" 2>$null
+        if ($LASTEXITCODE -ne 0 -or $null -eq $rows) {
+            return 0
+        }
+        $total = 0
+        foreach ($row in @($rows | Where-Object { $_ -and $_.Trim() })) {
+            if ($row -match "-standard-(\d+)$" -or $row -match "-highmem-(\d+)$" -or $row -match "-highcpu-(\d+)$") {
+                $total += [int]$Matches[1]
+            } elseif ($row -match "-micro$" -or $row -match "-small$") {
+                $total += 1
+            } else {
+                $total += 2
+            }
+        }
+        return $total
+    } catch {
+        return 0
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+}
+
 function Test-CandidateShardComplete {
     param([string]$WorkerId, [string]$LagProfile)
     $entry = ($LagProfile).Split(":")[0]
@@ -275,6 +304,11 @@ if (-not $PrepareOnly) {
     foreach ($chunk in $CandidateChunks) {
         foreach ($lagShard in $LagShards) {
             if ($launched -ge $MaxLaunches) {
+                break
+            }
+            $freeCpu = 32 - (Get-RunningCpuUsage)
+            if ($freeCpu -lt 4) {
+                Add-LogLine "candidate_shard_launch_paused quota_free_cpu=$freeCpu"
                 break
             }
             if (Start-CandidateShardWorker $lagShard $chunk) {
