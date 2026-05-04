@@ -150,8 +150,18 @@ function Test-CandidateShardComplete {
     foreach ($selector in $Selectors) {
         $selectorSlug = ($selector -replace "[^A-Za-z0-9]", "_")
         $runId = "${WorkerId}_qqq_e${entry}_x${exit}_${selectorSlug}"
-        $summaryUri = "$GcsPrefix/workers/$WorkerId/reports/research_wave/$runId/option_aware_candidate_summary.json"
-        if (-not (Test-GcsObject $summaryUri)) {
+        $summaryUris = @(
+            "$GcsPrefix/workers/$WorkerId/reports/research_wave/$runId/option_aware_candidate_summary.json",
+            "$GcsPrefix/workers/$WorkerId/reports/research_wave/$runId/**/option_aware_candidate_summary.json"
+        )
+        $found = $false
+        foreach ($summaryUri in $summaryUris) {
+            if (Test-GcsObject $summaryUri) {
+                $found = $true
+                break
+            }
+        }
+        if (-not $found) {
             return $false
         }
     }
