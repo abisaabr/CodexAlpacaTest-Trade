@@ -48,6 +48,7 @@ WORKER_PREFIX="${GCS_PREFIX}/workers/${WORKER_ID}"
 
 mkdir -p "${WORKROOT}" "${DATA_DIR}/stock" "${DATA_DIR}/contracts" "${DATA_DIR}/option_bars" "${EMPTY_OPTION_TRADES}"
 exec > >(tee -a "${WORKROOT}/startup.log") 2>&1
+MONITOR_PID=""
 
 now_utc() {
   date -u '+%Y-%m-%dT%H:%M:%SZ'
@@ -87,6 +88,37 @@ PY
   gcloud storage cp "${WORKROOT}/ticker_365d_status.json" "${WORKER_PREFIX}/ticker_365d_status.json" || true
   gcloud storage cp "${WORKROOT}/startup.log" "${WORKER_PREFIX}/startup.log" || true
 }
+
+start_runtime_monitor() {
+  (
+    while true; do
+      {
+        echo "monitor_utc=$(now_utc)"
+        echo "--- ps ---"
+        ps -eo pid,ppid,pcpu,pmem,etime,cmd --sort=-pcpu | head -30 || true
+        echo "--- memory ---"
+        free -h || true
+        echo "--- disk ---"
+        df -h "${WORKROOT}" || true
+        echo "--- report_files ---"
+        if [[ -d "${REPO_DIR}/reports/research_wave" ]]; then
+          find "${REPO_DIR}/reports/research_wave" -maxdepth 4 -type f | head -80 || true
+        fi
+        echo
+      } >> "${WORKROOT}/runtime_monitor.log"
+      gcloud storage cp "${WORKROOT}/runtime_monitor.log" "${WORKER_PREFIX}/runtime_monitor.log" || true
+      sleep 120
+    done
+  ) &
+  MONITOR_PID="$!"
+}
+
+cleanup_runtime_monitor() {
+  if [[ -n "${MONITOR_PID}" ]]; then
+    kill "${MONITOR_PID}" 2>/dev/null || true
+  fi
+}
+trap cleanup_runtime_monitor EXIT
 
 safe_slug() {
   local value="$1"
@@ -150,6 +182,7 @@ echo "selectors=${SELECTORS_CSV}"
 echo "lag_profiles=${LAG_PROFILES_CSV}"
 echo "entry_bar_lookup_mode=${ENTRY_BAR_LOOKUP_MODE}"
 echo "max_entry_staleness_minutes=${MAX_ENTRY_STALENESS_MINUTES}"
+start_runtime_monitor
 write_status "startup" "installing_dependencies"
 
 apt-get update

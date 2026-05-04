@@ -1053,10 +1053,23 @@ def build_option_aware_backtest(
         option_trades_root=option_trades_root,
         symbol_filter=symbol_filter,
     )
+    print(
+        "option_aware_inputs_loaded "
+        f"stock_rows={len(stock_bars)} contract_rows={len(contracts)} "
+        f"option_bar_rows={len(option_bars)} option_trade_rows={len(option_trades)}",
+        flush=True,
+    )
     option_index = _build_option_research_index(
         contracts=contracts,
         option_bars=option_bars,
         option_trades=option_trades,
+    )
+    print(
+        "option_aware_index_built "
+        f"contract_keys={len(option_index.contracts_by_key)} "
+        f"bar_symbols={len(option_index.bars_by_symbol)} "
+        f"trade_symbols={len(option_index.trade_timestamps_by_symbol)}",
+        flush=True,
     )
     all_trade_rows: list[dict[str, Any]] = []
     all_failure_rows: list[dict[str, Any]] = []
@@ -1070,10 +1083,23 @@ def build_option_aware_backtest(
         if skip_blocked_queue_items and item.get("blockers"):
             continue
         filtered_queue_items.append(item)
-    for queue_item in filtered_queue_items[:top_n]:
+    selected_queue_items = filtered_queue_items[:top_n]
+    print(
+        "option_aware_candidate_loop_start "
+        f"selected={len(selected_queue_items)} filtered={len(filtered_queue_items)} "
+        f"top_n={top_n} contract_selection_method={contract_selection_method}",
+        flush=True,
+    )
+    for index, queue_item in enumerate(selected_queue_items, start=1):
         if not isinstance(queue_item, dict):
             continue
         variant_id = str(queue_item.get("candidate_variant_id") or "")
+        if index == 1 or index % 5 == 0 or index == len(selected_queue_items):
+            print(
+                "option_aware_candidate_started "
+                f"index={index}/{len(selected_queue_items)} variant_id={variant_id}",
+                flush=True,
+            )
         variant = variants.get(variant_id)
         if not variant:
             candidate_summaries.append(
@@ -1184,6 +1210,14 @@ def build_option_aware_backtest(
         summary["fill_failure_reason"] = _fill_failure_reason(summary)
         summary["recommendation"] = _recommendation(summary)
         candidate_summaries.append(summary)
+        if index == 1 or index % 5 == 0 or index == len(selected_queue_items):
+            print(
+                "option_aware_candidate_completed "
+                f"index={index}/{len(selected_queue_items)} variant_id={variant_id} "
+                f"source_trades={source_trade_count} filled={filled_order_count} "
+                f"fill_coverage={strategy_fill_coverage}",
+                flush=True,
+            )
     recommendation_counts: dict[str, int] = {}
     fill_failure_counts: dict[str, int] = {}
     for row in candidate_summaries:
