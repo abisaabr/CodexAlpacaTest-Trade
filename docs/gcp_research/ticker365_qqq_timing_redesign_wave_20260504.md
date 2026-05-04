@@ -54,8 +54,17 @@ Canonical chunked QQQ wave:
 - Selectors: `nearest_contract`, `entry_liquidity_first_research_only`
 - Expected summary files: `30`
 - Launcher: `scripts/run_ticker365_qqq_timing_redesign_candidate_shards.ps1`
+- Scheduled task: `CodexAlpacaTicker365QQQTimingRedesignCandidateShardWatchdog`
 
 This is still research-only. It does not trade, does not alter live manifests, and does not lower the `0.90` fill gate.
+
+Operational state after the chunked launch:
+
+- Old proof-shard relaunch task `CodexAlpacaTicker365QQQTimingRedesignProfileShardWatchdog` is disabled.
+- The first failed chunked launch exposed and fixed a startup status placeholder bug.
+- The current chunked launcher has a CPU-quota guard, so it pauses rather than spamming launch failures when the project is fully allocated.
+- The active chunked wave reached `32/32` project CPUs with QQQ-only research workers.
+- The scheduled chunked watchdog should launch remaining chunks as completed workers self-stop and free quota.
 
 ## Wave Configuration
 
