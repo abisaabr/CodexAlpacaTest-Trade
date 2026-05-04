@@ -24,6 +24,8 @@ CONTRACTS_URI="$(metadata_value contracts_uri)"
 BARS_URI="$(metadata_value bars_uri)"
 INITIAL_CASH="$(metadata_value initial_cash 25000)"
 TOP_N="$(metadata_value top_n 40)"
+CANDIDATE_START_INDEX="$(metadata_value candidate_start_index 1)"
+CANDIDATE_COUNT="$(metadata_value candidate_count)"
 TEST_DATE_COUNT="$(metadata_value test_date_count 20)"
 ALLOCATION_FRACTION="$(metadata_value allocation_fraction 0.05)"
 SLIPPAGE_BPS="$(metadata_value slippage_bps 10)"
@@ -74,6 +76,11 @@ print(json.dumps({
     "detail": detail,
     "gcs_prefix": "__GCS_PREFIX__",
     "worker_prefix": "__WORKER_PREFIX__",
+    "selectors": "__SELECTORS__",
+    "lag_profiles": "__LAG_PROFILES__",
+    "candidate_start_index": int("__CANDIDATE_START_INDEX__"),
+    "candidate_count": int("__CANDIDATE_COUNT__") if "__CANDIDATE_COUNT__" else None,
+    "expected_candidate_summary_count": len([item for item in "__SELECTORS__".replace(";", ",").split(",") if item.strip()]) * len([item for item in "__LAG_PROFILES__".replace(";", ",").split(",") if item.strip()]),
     "broker_facing": False,
     "paper_orders": False,
     "live_manifest_effect": "none",
@@ -86,6 +93,10 @@ PY
     -e "s|__SYMBOL__|${SYMBOL}|g" \
     -e "s|__GCS_PREFIX__|${GCS_PREFIX}|g" \
     -e "s|__WORKER_PREFIX__|${WORKER_PREFIX}|g" \
+    -e "s|__SELECTORS__|${SELECTORS_CSV}|g" \
+    -e "s|__LAG_PROFILES__|${LAG_PROFILES_CSV}|g" \
+    -e "s|__CANDIDATE_START_INDEX__|${CANDIDATE_START_INDEX}|g" \
+    -e "s|__CANDIDATE_COUNT__|${CANDIDATE_COUNT}|g" \
     "${WORKROOT}/ticker_365d_status.json"
   gcloud storage cp "${WORKROOT}/ticker_365d_status.json" "${WORKER_PREFIX}/ticker_365d_status.json" || true
   gcloud storage cp "${WORKROOT}/startup.log" "${WORKER_PREFIX}/startup.log" || true
@@ -152,6 +163,7 @@ run_selector() {
     --output-dir "${output_dir}"
     --run-id "${run_id}"
     --top-n "${TOP_N}"
+    --candidate-start-index "${CANDIDATE_START_INDEX}"
     --symbol-filter "${SYMBOL}"
     --max-entry-lag-minutes "${entry_lag}"
     --entry-bar-lookup-mode "${ENTRY_BAR_LOOKUP_MODE}"
@@ -166,6 +178,9 @@ run_selector() {
     --fee-per-contract "${FEE_PER_CONTRACT}"
     --contract-selection-method "${selector}"
   )
+  if [[ -n "${CANDIDATE_COUNT}" ]]; then
+    command+=(--candidate-count "${CANDIDATE_COUNT}")
+  fi
   printf '%q ' "${command[@]}" >> "${WORKROOT}/command.txt"
   printf '\n' >> "${WORKROOT}/command.txt"
   echo "run_started_utc=${run_id}:$(now_utc)"
@@ -181,6 +196,8 @@ echo "worker_id=${WORKER_ID}"
 echo "symbol=${SYMBOL}"
 echo "gcs_prefix=${GCS_PREFIX}"
 echo "top_n=${TOP_N}"
+echo "candidate_start_index=${CANDIDATE_START_INDEX}"
+echo "candidate_count=${CANDIDATE_COUNT}"
 echo "test_date_count=${TEST_DATE_COUNT}"
 echo "allocation_fraction=${ALLOCATION_FRACTION}"
 echo "selectors=${SELECTORS_CSV}"

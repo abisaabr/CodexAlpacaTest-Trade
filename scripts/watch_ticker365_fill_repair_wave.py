@@ -125,6 +125,15 @@ def parse_args() -> argparse.Namespace:
         ],
     )
     parser.add_argument("--top-n", type=int, default=30)
+    parser.add_argument(
+        "--expected-summary-count-override",
+        type=int,
+        default=None,
+        help=(
+            "Override aggregate readiness summary count for manually sharded waves, "
+            "for example QQQ candidate-window shards."
+        ),
+    )
     parser.add_argument("--test-date-count", type=int, default=20)
     parser.add_argument("--initial-cash", type=float, default=25_000.0)
     parser.add_argument("--allocation-fraction", type=float, default=0.05)
@@ -396,6 +405,10 @@ def _profile_shard_suffix(canonical_worker_id: str, worker_id_value: str) -> str
     return ""
 
 
+def _slug(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+
+
 def _instances_for_profile_shard(
     *,
     instances: list[dict[str, Any]],
@@ -405,12 +418,31 @@ def _instances_for_profile_shard(
     suffix = _profile_shard_suffix(canonical_worker_id, profile_worker_id)
     if not suffix:
         return []
-    needle = f"-{suffix.lower()}-"
+    needle = f"-{_slug(suffix)}-"
     return [
         instance
         for instance in instances
-        if needle in str(instance.get("name", "")).lower()
+        if needle in f"-{_slug(str(instance.get('name', '')))}-"
     ]
+
+
+def _count_from_status_list(value: Any, default_value: str) -> int:
+    text = str(value or default_value).replace(";", ",")
+    return _csv_count(text)
+
+
+def _expected_for_profile_worker(
+    args: argparse.Namespace, payload: dict[str, Any]
+) -> int:
+    explicit = payload.get("expected_candidate_summary_count")
+    if explicit not in (None, ""):
+        try:
+            return max(1, int(explicit))
+        except (TypeError, ValueError):
+            pass
+    return _count_from_status_list(payload.get("selectors"), args.selectors) * _count_from_status_list(
+        payload.get("lag_profiles"), args.lag_profiles
+    )
 
 
 def profile_shard_status(
@@ -422,7 +454,6 @@ def profile_shard_status(
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     canonical_worker_ids = {worker_id(str(row["symbol"]).upper()) for row in rows}
     extra_worker_ids = sorted((set(statuses) | set(counts_by_worker)) - canonical_worker_ids)
-    expected_profile_worker = _csv_count(args.selectors)
     profile_workers: list[dict[str, Any]] = []
     completed = failed = running = pending = 0
 
@@ -432,6 +463,7 @@ def profile_shard_status(
         canonical_worker_id = worker_id(symbol) if symbol else ""
         counts = counts_by_worker.get(wid, {})
         phase = str(payload.get("phase", "not_started"))
+        expected_profile_worker = _expected_for_profile_worker(args, payload)
         instances = _instances_for_profile_shard(
             instances=instances_by_symbol.get(symbol, []),
             canonical_worker_id=canonical_worker_id,
@@ -983,7 +1015,7 @@ def build_status(
         worker_counts.get("candidate_summary_count", 0)
         for worker_counts in counts_by_worker.values()
     )
-    expected_total = expected_summary_count(args, len(rows))
+    expected_total = args.expected_summary_count_override or expected_summary_count(args, len(rows))
     if aggregate.get("promotion_packet_uris"):
         next_action = "Review repair aggregate promotion packet; stage no-order paper handoff only if eligible."
     elif summary_count >= expected_total:
@@ -1010,6 +1042,7 @@ def build_status(
         "exit_bar_lookup_mode": args.exit_bar_lookup_mode,
         "stock_session_filter": args.stock_session_filter,
         "top_n": args.top_n,
+        "expected_summary_count_override": args.expected_summary_count_override,
         "quota": quota,
         "summary_counts": {"total": summary_count, "expected": expected_total},
         "worker_counts": {
@@ -1176,7 +1209,7 @@ def main() -> int:
     summary_count = sum(
         worker_counts.get("candidate_summary_count", 0) for worker_counts in counts.values()
     )
-    expected_total = expected_summary_count(args, len(rows))
+    expected_total = args.expected_summary_count_override or expected_summary_count(args, len(rows))
     launched_aggregate, aggregate_launch_errors = launch_aggregate_if_ready(
         args, instances, aggregate, summary_count, expected_total, quota
     )

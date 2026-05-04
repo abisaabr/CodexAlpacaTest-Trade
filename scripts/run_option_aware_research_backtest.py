@@ -82,6 +82,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-id", default=None)
     parser.add_argument("--top-n", type=int, default=25)
     parser.add_argument(
+        "--candidate-start-index",
+        type=int,
+        default=1,
+        help=(
+            "One-based start index inside the filtered top-N queue. Used only for "
+            "research sharding; default preserves the original full top-N run."
+        ),
+    )
+    parser.add_argument(
+        "--candidate-count",
+        type=int,
+        default=None,
+        help=(
+            "Optional number of candidates to replay from --candidate-start-index. "
+            "When omitted, replay runs through the end of the filtered top-N queue."
+        ),
+    )
+    parser.add_argument(
         "--symbol-filter", default=None, help="Optional comma-separated symbol allowlist."
     )
     parser.add_argument(
@@ -755,6 +773,24 @@ def _symbol_filter(value: str | None) -> set[str] | None:
     return symbols or None
 
 
+def _candidate_window(
+    filtered_queue_items: list[dict[str, Any]],
+    *,
+    top_n: int,
+    candidate_start_index: int = 1,
+    candidate_count: int | None = None,
+) -> tuple[list[dict[str, Any]], int, int, int]:
+    top_queue_items = filtered_queue_items[:top_n] if top_n > 0 else filtered_queue_items
+    start_offset = max(int(candidate_start_index or 1), 1) - 1
+    if candidate_count is None or int(candidate_count) <= 0:
+        candidate_end_index = len(top_queue_items)
+        selected_queue_items = top_queue_items[start_offset:]
+    else:
+        candidate_end_index = min(start_offset + int(candidate_count), len(top_queue_items))
+        selected_queue_items = top_queue_items[start_offset:candidate_end_index]
+    return selected_queue_items, start_offset, candidate_end_index, len(top_queue_items)
+
+
 def _summarize_trade_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     if not rows:
         return {
@@ -1120,6 +1156,8 @@ def build_option_aware_backtest(
     skip_blocked_queue_items: bool = False,
     test_date_count: int = 1,
     contract_selection_method: str = CONTRACT_SELECTION_NEAREST,
+    candidate_start_index: int = 1,
+    candidate_count: int | None = None,
 ) -> dict[str, Any]:
     if max_entry_staleness is None:
         max_entry_staleness = timedelta(minutes=5)
@@ -1164,11 +1202,24 @@ def build_option_aware_backtest(
         if skip_blocked_queue_items and item.get("blockers"):
             continue
         filtered_queue_items.append(item)
-    selected_queue_items = filtered_queue_items[:top_n]
+    (
+        selected_queue_items,
+        start_offset,
+        candidate_end_index,
+        candidate_scope_count,
+    ) = _candidate_window(
+        filtered_queue_items,
+        top_n=top_n,
+        candidate_start_index=candidate_start_index,
+        candidate_count=candidate_count,
+    )
     print(
         "option_aware_candidate_loop_start "
         f"selected={len(selected_queue_items)} filtered={len(filtered_queue_items)} "
-        f"top_n={top_n} contract_selection_method={contract_selection_method}",
+        f"top_n={top_n} candidate_start_index={start_offset + 1} "
+        f"candidate_count={candidate_count or ''} "
+        f"candidate_scope_count={candidate_scope_count} "
+        f"contract_selection_method={contract_selection_method}",
         flush=True,
     )
     for index, queue_item in enumerate(selected_queue_items, start=1):
@@ -1176,9 +1227,11 @@ def build_option_aware_backtest(
             continue
         variant_id = str(queue_item.get("candidate_variant_id") or "")
         if index == 1 or index % 5 == 0 or index == len(selected_queue_items):
+            absolute_index = start_offset + index
             print(
                 "option_aware_candidate_started "
-                f"index={index}/{len(selected_queue_items)} variant_id={variant_id}",
+                f"index={absolute_index}/{candidate_scope_count} "
+                f"window_index={index}/{len(selected_queue_items)} variant_id={variant_id}",
                 flush=True,
             )
         variant = variants.get(variant_id)
@@ -1306,9 +1359,11 @@ def build_option_aware_backtest(
         summary["recommendation"] = _recommendation(summary)
         candidate_summaries.append(summary)
         if index == 1 or index % 5 == 0 or index == len(selected_queue_items):
+            absolute_index = start_offset + index
             print(
                 "option_aware_candidate_completed "
-                f"index={index}/{len(selected_queue_items)} variant_id={variant_id} "
+                f"index={absolute_index}/{candidate_scope_count} "
+                f"window_index={index}/{len(selected_queue_items)} variant_id={variant_id} "
                 f"source_trades={source_trade_count} filled={filled_order_count} "
                 f"fill_coverage={strategy_fill_coverage}",
                 flush=True,
@@ -1337,6 +1392,10 @@ def build_option_aware_backtest(
         "promotion_allowed": False,
         "source_queue_item_count": len(source_queue_items),
         "queue_item_count_after_filters": len(filtered_queue_items),
+        "candidate_scope_count": candidate_scope_count,
+        "candidate_start_index": start_offset + 1,
+        "candidate_end_index": candidate_end_index,
+        "candidate_count_requested": candidate_count,
         "stock_trade_cache_entry_count": len(stock_trade_cache),
         "symbol_filter": sorted(symbol_filter) if symbol_filter else [],
         "skip_blocked_queue_items": bool(skip_blocked_queue_items),
@@ -1510,6 +1569,8 @@ def main() -> None:
         option_bars_root=Path(args.option_bars_root) if args.option_bars_root else None,
         option_trades_root=Path(args.option_trades_root) if args.option_trades_root else None,
         top_n=args.top_n,
+        candidate_start_index=args.candidate_start_index,
+        candidate_count=args.candidate_count,
         symbol_filter=_symbol_filter(args.symbol_filter),
         skip_blocked_queue_items=args.skip_blocked_queue_items,
         initial_cash=args.initial_cash,

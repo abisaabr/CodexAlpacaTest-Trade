@@ -34,6 +34,29 @@ Early first-candidate evidence after relaunch:
 - One zero-entry-lag profile remained below gate at `0.8492`, so the full profile-shard run must finish before any promotion decision.
 - This is evidence that QQQ's primary blocker was non-option-session source-trade timing in the denominator, not missing raw QQQ option bars.
 
+## 2026-05-04 Candidate-Shard Acceleration
+
+The first post-filter QQQ profile shards proved the semantic fix, but each VM still had to replay all `126` QQQ candidates per selector. At observed speed, that makes QQQ-first iteration unnecessarily slow.
+
+The backtester now supports non-overlapping candidate windows:
+
+- `--candidate-start-index`
+- `--candidate-count`
+
+The GCP shard script passes those values through metadata, and the watchdog can use `--expected-summary-count-override` for manually chunked waves. This lets QQQ run as profile plus candidate chunks without changing any research gate.
+
+Canonical chunked QQQ wave:
+
+- Wave ID: `ticker365_qqq_timing_redesign_chunked_20260504T1600Z`
+- GCS prefix: `gs://codexalpaca-control-us/research_results/ticker365_qqq_timing_redesign_chunked_20260504T1600Z`
+- Candidate chunks: `1-42`, `43-84`, `85-126`
+- Lag profiles: `0:60`, `15:120`, `30:180`, `60:240`, `120:390`
+- Selectors: `nearest_contract`, `entry_liquidity_first_research_only`
+- Expected summary files: `30`
+- Launcher: `scripts/run_ticker365_qqq_timing_redesign_candidate_shards.ps1`
+
+This is still research-only. It does not trade, does not alter live manifests, and does not lower the `0.90` fill gate.
+
 ## Wave Configuration
 
 - Wave ID: `ticker365_qqq_timing_redesign_20260504T1245Z`

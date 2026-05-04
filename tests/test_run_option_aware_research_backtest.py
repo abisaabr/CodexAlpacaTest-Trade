@@ -12,6 +12,7 @@ from scripts.run_option_aware_research_backtest import (
     EXIT_LOOKUP_AT_OR_AFTER_OR_PRIOR,
     STOCK_SESSION_FILTER_OPTION_RTH_SAME_DAY,
     STRATEGY_FILL_COVERAGE_GATE,
+    _candidate_window,
     _exit_option_bar,
     _filter_stock_trades_for_option_session,
     _path_matches_symbol_filter,
@@ -28,6 +29,22 @@ def _write_json(path: Path, payload: object) -> None:
 def _write_variants(path: Path, rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+
+def test_candidate_window_supports_non_overlapping_gcp_shards() -> None:
+    rows = [{"candidate_variant_id": f"v{index}"} for index in range(1, 8)]
+
+    selected, start_offset, end_index, scope_count = _candidate_window(
+        rows,
+        top_n=6,
+        candidate_start_index=3,
+        candidate_count=2,
+    )
+
+    assert [row["candidate_variant_id"] for row in selected] == ["v3", "v4"]
+    assert start_offset == 2
+    assert end_index == 4
+    assert scope_count == 6
 
 
 def test_option_aware_backtest_prices_stock_signal_windows_against_options(
