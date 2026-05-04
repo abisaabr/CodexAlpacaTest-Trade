@@ -27,6 +27,7 @@ $Selectors = @("nearest_contract", "entry_liquidity_first_research_only")
 $SelectorMetadata = ($Selectors -join ";")
 $FallbackZones = @("us-east1-b", "us-central1-a", "us-west1-a", "us-east4-a")
 $ExpectedSummaryCount = 30
+$LaunchMutexName = "Global\CodexAlpacaTicker365QQQTimingRedesignCandidateShardWatchdog"
 
 $LagShards = @(
     [PSCustomObject]@{ Name = "e0x60"; LagProfile = "0:60"; PreferredZone = "us-east1-b" },
@@ -112,6 +113,18 @@ function Get-InstanceRows {
     } finally {
         $ErrorActionPreference = $previousPreference
     }
+}
+
+function Get-ActiveInstanceRows {
+    param([string]$InstanceName)
+    $activeRows = @()
+    foreach ($row in Get-InstanceRows $InstanceName) {
+        $parts = $row.Split(",")
+        if ($parts.Count -ge 3 -and $parts[2] -ne "TERMINATED") {
+            $activeRows += $row
+        }
+    }
+    return $activeRows
 }
 
 function Get-RunningCpuUsage {
@@ -231,19 +244,13 @@ function Start-CandidateShardWorker {
         return $false
     }
 
+    $activeRows = @(Get-ActiveInstanceRows $instanceName)
+    if ($activeRows.Count -gt 0) {
+        Add-LogLine "candidate_shard_instance_exists instance=$instanceName rows=$($activeRows -join ';')"
+        return $false
+    }
     $existingRows = Get-InstanceRows $instanceName
     if ($existingRows.Count -gt 0) {
-        $activeRows = @()
-        foreach ($row in $existingRows) {
-            $parts = $row.Split(",")
-            if ($parts.Count -ge 3 -and $parts[2] -ne "TERMINATED") {
-                $activeRows += $row
-            }
-        }
-        if ($activeRows.Count -gt 0) {
-            Add-LogLine "candidate_shard_instance_exists instance=$instanceName rows=$($activeRows -join ';')"
-            return $false
-        }
         Remove-TerminatedInstance $instanceName
     }
 
@@ -278,6 +285,11 @@ function Start-CandidateShardWorker {
     $zones = @($LagShard.PreferredZone) + ($FallbackZones | Where-Object { $_ -ne $LagShard.PreferredZone })
 
     foreach ($zone in $zones) {
+        $latestActiveRows = @(Get-ActiveInstanceRows $instanceName)
+        if ($latestActiveRows.Count -gt 0) {
+            Add-LogLine "candidate_shard_instance_exists_after_recheck instance=$instanceName rows=$($latestActiveRows -join ';')"
+            return $false
+        }
         Add-LogLine "launching_candidate_shard worker_id=$workerId instance=$instanceName zone=$zone lag=$($LagShard.LagProfile) chunk=$chunkSlug"
         $args = @(
             "compute", "instances", "create", $instanceName,
@@ -305,6 +317,13 @@ function Start-CandidateShardWorker {
     return $false
 }
 
+$LaunchMutex = New-Object System.Threading.Mutex($false, $LaunchMutexName)
+if (-not $LaunchMutex.WaitOne(0)) {
+    Add-LogLine "candidate_shard_launch_skipped mutex_held=$LaunchMutexName"
+    exit 0
+}
+
+try {
 $stamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 Add-LogLine "===== ticker365_qqq_timing_redesign_candidate_shards run $stamp max_launches=$MaxLaunches prepare_only=$PrepareOnly ====="
 Sync-InputsAndSource
@@ -360,3 +379,7 @@ if (-not $PrepareOnly) {
         Write-Output $line
         Add-LogLine $line
     }
+} finally {
+    $LaunchMutex.ReleaseMutex()
+    $LaunchMutex.Dispose()
+}
