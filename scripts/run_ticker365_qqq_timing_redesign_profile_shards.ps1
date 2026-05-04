@@ -190,6 +190,7 @@ function Start-ShardWorker {
         entry_bar_lookup_mode = "first_bar_at_or_after_entry_within_lag"
         max_entry_staleness_minutes = "0"
         exit_bar_lookup_mode = "first_bar_at_or_after_exit_within_lag"
+        stock_session_filter = "option_rth_same_day"
     }
     $metadataArg = ConvertTo-MetadataArg $metadata
     $labels = "wave=ticker365-fillrepair,role=ticker365-repair,symbol=qqq,dataset=qqq-dense-365d"
@@ -241,6 +242,8 @@ foreach ($shard in $Shards) {
     --lag-profiles "0:60,15:120,30:180,60:240,120:390" `
     --selectors "nearest_contract,entry_liquidity_first_research_only" `
     --entry-bar-lookup-mode "first_bar_at_or_after_entry_within_lag" `
+    --exit-bar-lookup-mode "first_bar_at_or_after_exit_within_lag" `
+    --stock-session-filter "option_rth_same_day" `
     --max-entry-staleness-minutes 0 `
     --fallback-zones "us-east1-b,us-central1-a,us-west1-a,us-east4-a" `
     --aggregate-fallback-zones "us-east1-b,us-central1-a,us-west1-a,us-east4-a" `

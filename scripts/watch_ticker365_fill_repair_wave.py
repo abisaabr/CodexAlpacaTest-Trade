@@ -130,6 +130,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--allocation-fraction", type=float, default=0.05)
     parser.add_argument("--slippage-bps", type=float, default=10.0)
     parser.add_argument("--fee-per-contract", type=float, default=0.65)
+    parser.add_argument(
+        "--stock-session-filter",
+        default="option_rth_same_day",
+        choices=["none", "option_rth_same_day"],
+    )
     parser.add_argument("--target-equity", type=float, default=300_000.0)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-refresh-inputs", action="store_true")
@@ -604,6 +609,7 @@ def launch_worker(
         "entry_bar_lookup_mode": args.entry_bar_lookup_mode,
         "max_entry_staleness_minutes": f"{args.max_entry_staleness_minutes:g}",
         "exit_bar_lookup_mode": args.exit_bar_lookup_mode,
+        "stock_session_filter": args.stock_session_filter,
     }
     dataset_label = str(row.get("dataset_id", "unknown")).replace("_", "-")[:32]
     labels = (
@@ -1002,6 +1008,7 @@ def build_status(
         "entry_bar_lookup_mode": args.entry_bar_lookup_mode,
         "max_entry_staleness_minutes": args.max_entry_staleness_minutes,
         "exit_bar_lookup_mode": args.exit_bar_lookup_mode,
+        "stock_session_filter": args.stock_session_filter,
         "top_n": args.top_n,
         "quota": quota,
         "summary_counts": {"total": summary_count, "expected": expected_total},
@@ -1039,6 +1046,7 @@ def write_status(args: argparse.Namespace, status: dict[str, Any]) -> tuple[Path
         f"- Selectors: `{status['selectors']}`",
         f"- Entry lookup mode: `{status['entry_bar_lookup_mode']}`",
         f"- Exit lookup mode: `{status['exit_bar_lookup_mode']}`",
+        f"- Stock session filter: `{status['stock_session_filter']}`",
         f"- Top N per symbol: `{status['top_n']}`",
         f"- Quota: `{status['quota']['usage']}/{status['quota']['limit']}` CPUs, free `{status['quota']['free']}`",
         f"- Candidate summaries: `{status['summary_counts']['total']}/{status['summary_counts']['expected']}`",

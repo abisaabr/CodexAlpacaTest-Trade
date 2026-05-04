@@ -10,8 +10,10 @@ from scripts.run_option_aware_research_backtest import (
     CONTRACT_SELECTION_LIQUIDITY_FIRST,
     EXIT_LOOKUP_AT_OR_AFTER,
     EXIT_LOOKUP_AT_OR_AFTER_OR_PRIOR,
+    STOCK_SESSION_FILTER_OPTION_RTH_SAME_DAY,
     STRATEGY_FILL_COVERAGE_GATE,
     _exit_option_bar,
+    _filter_stock_trades_for_option_session,
     _path_matches_symbol_filter,
     _recommendation,
     build_option_aware_backtest,
@@ -228,6 +230,40 @@ def test_exit_lookup_defaults_to_strict_at_or_after() -> None:
         max_lag=timedelta(minutes=5),
         lookup_mode=EXIT_LOOKUP_AT_OR_AFTER_OR_PRIOR,
     )["close"] == 2.50
+
+
+def test_stock_session_filter_keeps_only_same_day_option_rth_trades() -> None:
+    trades = pd.DataFrame(
+        {
+            "entry_time": pd.to_datetime(
+                [
+                    "2026-05-01T13:40:00Z",
+                    "2026-05-01T12:00:00Z",
+                    "2026-05-01T19:50:00Z",
+                    "2026-05-01T19:50:00Z",
+                ],
+                utc=True,
+            ),
+            "exit_time": pd.to_datetime(
+                [
+                    "2026-05-01T15:00:00Z",
+                    "2026-05-01T15:00:00Z",
+                    "2026-05-01T20:30:00Z",
+                    "2026-05-04T14:00:00Z",
+                ],
+                utc=True,
+            ),
+        }
+    )
+
+    filtered = _filter_stock_trades_for_option_session(
+        trades,
+        stock_session_filter=STOCK_SESSION_FILTER_OPTION_RTH_SAME_DAY,
+    )
+
+    assert len(filtered) == 1
+    assert filtered.attrs["raw_source_stock_trade_count"] == 4
+    assert filtered.attrs["source_session_dropped_count"] == 3
 
 
 def test_liquidity_first_selector_uses_entry_window_without_future_bars(

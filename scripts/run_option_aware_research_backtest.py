@@ -7,7 +7,7 @@ import math
 import re
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +52,11 @@ ENTRY_LOOKUP_AT_OR_AFTER = "first_bar_at_or_after_entry_within_lag"
 ENTRY_LOOKUP_AT_OR_AFTER_OR_ASOF = "first_bar_at_or_after_or_asof_entry_within_lag"
 EXIT_LOOKUP_AT_OR_AFTER = "first_bar_at_or_after_exit_within_lag"
 EXIT_LOOKUP_AT_OR_AFTER_OR_PRIOR = "first_bar_at_or_after_or_prior_exit_within_lag"
+STOCK_SESSION_FILTER_NONE = "none"
+STOCK_SESSION_FILTER_OPTION_RTH_SAME_DAY = "option_rth_same_day"
+OPTION_SESSION_TIMEZONE = "America/New_York"
+OPTION_SESSION_START = "09:35"
+OPTION_SESSION_END = "15:55"
 STRATEGY_FILL_COVERAGE_GATE = 0.90
 REGIME_TOKENS = {"bull", "bear", "choppy"}
 
@@ -116,6 +121,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--allocation-fraction", type=float, default=0.10)
     parser.add_argument("--slippage-bps", type=float, default=10.0)
     parser.add_argument("--fee-per-contract", type=float, default=0.65)
+    parser.add_argument(
+        "--stock-session-filter",
+        choices=[STOCK_SESSION_FILTER_NONE, STOCK_SESSION_FILTER_OPTION_RTH_SAME_DAY],
+        default=STOCK_SESSION_FILTER_OPTION_RTH_SAME_DAY,
+        help=(
+            "Filter source stock-proxy trades before option replay. The default keeps "
+            "same-day trades whose entry and exit are inside the option RTH window."
+        ),
+    )
     parser.add_argument(
         "--contract-selection-method",
         choices=[CONTRACT_SELECTION_NEAREST, CONTRACT_SELECTION_LIQUIDITY_FIRST],
@@ -639,12 +653,55 @@ def _trade_print_count(
     return int(len(frame))
 
 
+def _parse_hhmm(value: str) -> time:
+    return datetime.strptime(value, "%H:%M").time()
+
+
+def _local_time_series(series: pd.Series) -> pd.Series:
+    return pd.to_datetime(series, utc=True).dt.tz_convert(OPTION_SESSION_TIMEZONE)
+
+
+def _filter_stock_trades_for_option_session(
+    trades: pd.DataFrame,
+    *,
+    stock_session_filter: str,
+) -> pd.DataFrame:
+    raw_count = int(len(trades))
+    if trades.empty or stock_session_filter == STOCK_SESSION_FILTER_NONE:
+        filtered = trades.copy()
+        filtered.attrs["raw_source_stock_trade_count"] = raw_count
+        filtered.attrs["source_session_filter"] = stock_session_filter
+        filtered.attrs["source_session_dropped_count"] = 0
+        return filtered
+
+    if stock_session_filter != STOCK_SESSION_FILTER_OPTION_RTH_SAME_DAY:
+        raise ValueError(f"Unsupported stock_session_filter={stock_session_filter}")
+
+    entry_local = _local_time_series(trades["entry_time"])
+    exit_local = _local_time_series(trades["exit_time"])
+    session_start = _parse_hhmm(OPTION_SESSION_START)
+    session_end = _parse_hhmm(OPTION_SESSION_END)
+    mask = (
+        entry_local.dt.date.eq(exit_local.dt.date)
+        & entry_local.dt.time.ge(session_start)
+        & entry_local.dt.time.le(session_end)
+        & exit_local.dt.time.ge(session_start)
+        & exit_local.dt.time.le(session_end)
+    )
+    filtered = trades.loc[mask].copy()
+    filtered.attrs["raw_source_stock_trade_count"] = raw_count
+    filtered.attrs["source_session_filter"] = stock_session_filter
+    filtered.attrs["source_session_dropped_count"] = raw_count - int(len(filtered))
+    return filtered
+
+
 def _stock_trades_for_variant(
     *,
     variant: dict[str, Any],
     stock_bars: pd.DataFrame,
     initial_cash: float,
     allocation_fraction: float,
+    stock_session_filter: str,
 ) -> pd.DataFrame:
     symbol = str(variant.get("symbol") or "").upper()
     if stock_bars.empty:
@@ -663,10 +720,13 @@ def _stock_trades_for_variant(
         cost_model=LinearCostModel(slippage_bps=5.0, fee_per_unit=0.01),
         position_sizer=FixedFractionSizer(base_allocation_fraction=allocation_fraction),
     )
-    return result.trades.copy()
+    return _filter_stock_trades_for_option_session(
+        result.trades.copy(),
+        stock_session_filter=stock_session_filter,
+    )
 
 
-def _stock_trade_cache_key(variant: dict[str, Any]) -> str:
+def _stock_trade_cache_key(variant: dict[str, Any], *, stock_session_filter: str) -> str:
     parameters = variant.get("parameters") if isinstance(variant.get("parameters"), dict) else {}
     timing = variant_timing_parameters(parameters)
     source = str(variant.get("source_strategy_id") or variant.get("variant_id") or "").lower()
@@ -679,6 +739,7 @@ def _stock_trade_cache_key(variant: dict[str, Any]) -> str:
         "stop_loss_multiple": float(timing["stop_loss_multiple"]),
         "profit_target_multiple": float(timing["profit_target_multiple"]),
         "liquidity_gate": str(timing["liquidity_gate"]),
+        "stock_session_filter": stock_session_filter,
     }
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
@@ -1053,6 +1114,7 @@ def build_option_aware_backtest(
     max_exit_lag: timedelta,
     entry_lookup_mode: str = ENTRY_LOOKUP_AT_OR_AFTER,
     exit_lookup_mode: str = EXIT_LOOKUP_AT_OR_AFTER,
+    stock_session_filter: str = STOCK_SESSION_FILTER_OPTION_RTH_SAME_DAY,
     max_entry_staleness: timedelta | None = None,
     symbol_filter: set[str] | None = None,
     skip_blocked_queue_items: bool = False,
@@ -1130,7 +1192,9 @@ def build_option_aware_backtest(
                 }
             )
             continue
-        cache_key = _stock_trade_cache_key(variant)
+        cache_key = _stock_trade_cache_key(
+            variant, stock_session_filter=stock_session_filter
+        )
         source_trades = stock_trade_cache.get(cache_key)
         if source_trades is None:
             source_trades = _stock_trades_for_variant(
@@ -1138,8 +1202,15 @@ def build_option_aware_backtest(
                 stock_bars=stock_bars,
                 initial_cash=initial_cash,
                 allocation_fraction=allocation_fraction,
+                stock_session_filter=stock_session_filter,
             )
             stock_trade_cache[cache_key] = source_trades
+        raw_source_trade_count = int(
+            source_trades.attrs.get("raw_source_stock_trade_count", len(source_trades))
+        )
+        source_session_dropped_count = int(
+            source_trades.attrs.get("source_session_dropped_count", 0)
+        )
         rows, source_trade_count, missing_counts, failure_rows = _option_rows_for_candidate(
             queue_item=queue_item,
             variant=variant,
@@ -1189,6 +1260,9 @@ def build_option_aware_backtest(
             **_candidate_identity(queue_item, variant),
             "source_strategy_id": queue_item.get("source_strategy_id"),
             "directional_option_type": queue_item.get("directional_option_type"),
+            "raw_source_stock_trade_count": raw_source_trade_count,
+            "source_session_filter": stock_session_filter,
+            "source_session_dropped_count": source_session_dropped_count,
             "source_stock_trade_count": source_trade_count,
             "missing_option_price_count": missing_price_count,
             "missing_no_selected_contract": int(missing_counts.get("no_selected_contract", 0)),
@@ -1267,6 +1341,12 @@ def build_option_aware_backtest(
         "symbol_filter": sorted(symbol_filter) if symbol_filter else [],
         "skip_blocked_queue_items": bool(skip_blocked_queue_items),
         "test_date_count": int(test_date_count),
+        "stock_session_filter": stock_session_filter,
+        "stock_session_filter_window": {
+            "timezone": OPTION_SESSION_TIMEZONE,
+            "start": OPTION_SESSION_START,
+            "end": OPTION_SESSION_END,
+        },
         "contract_selection_method": contract_selection_method,
         "option_lookup_mode": "indexed_by_contract_and_symbol",
         "fill_coverage_unit": "filled_single_contract_option_orders_per_source_stock_trade",
@@ -1441,6 +1521,7 @@ def main() -> None:
         max_entry_staleness=timedelta(minutes=args.max_entry_staleness_minutes),
         max_exit_lag=timedelta(minutes=args.max_exit_lag_minutes),
         exit_lookup_mode=args.exit_bar_lookup_mode,
+        stock_session_filter=args.stock_session_filter,
         test_date_count=args.test_date_count,
         contract_selection_method=args.contract_selection_method,
     )
