@@ -1,6 +1,7 @@
 param(
     [int]$MaxLaunches = 8,
-    [switch]$PrepareOnly
+    [switch]$PrepareOnly,
+    [switch]$RunBothSelectors
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,13 +29,14 @@ $StartupScript = Join-Path $RepoRoot "scripts\gcp_single_ticker_365d_shard.sh"
 $InputDir = Join-Path $RepoRoot "docs\gcp_research\qqq_timing_redesign_20260504\inputs"
 $HeatmapDir = Join-Path $RepoRoot "reports\gcp_research\qqq_fill_squash_micro_20260504"
 $HeatmapCsv = Join-Path $HeatmapDir "qqq_fill_squash_heatmap.csv"
-$Selectors = @("nearest_contract", "entry_liquidity_first_research_only")
-$SelectorMetadata = ($Selectors -join ";")
-$SelectorsCsv = ($Selectors -join ",")
+$AllSelectors = @("nearest_contract", "entry_liquidity_first_research_only")
+$Selectors = @()
+$SelectorMetadata = ""
+$SelectorsCsv = ""
 $FallbackZones = @("us-east1-b", "us-central1-a", "us-west1-a", "us-east4-a")
 $TopN = 126
 $ChunkSize = 7
-$ExpectedSummaryCount = 36
+$ExpectedSummaryCount = 0
 $MachineType = "e2-standard-2"
 $MachineCpu = 2
 $LaunchMutexName = "Global\CodexAlpacaTicker365QQQFillSquashFull126Expansion"
@@ -165,6 +167,18 @@ function Get-CandidateChunks {
     return $chunks
 }
 
+function Set-ActiveSelectors {
+    param([string[]]$SelectedSelectors)
+    $script:Selectors = @($SelectedSelectors | Where-Object { $_ -and $_.Trim() })
+    if ($script:Selectors.Count -eq 0) {
+        throw "No active selectors were selected for full126 expansion"
+    }
+    $script:SelectorMetadata = ($script:Selectors -join ";")
+    $script:SelectorsCsv = ($script:Selectors -join ",")
+    $script:ExpectedSummaryCount = (Get-CandidateChunks).Count * $script:Selectors.Count
+    Add-LogLine "full126_active_selectors selectors=$script:SelectorsCsv expected_summary_count=$script:ExpectedSummaryCount"
+}
+
 function Get-StrictProfileMap {
     return @{
         strict_e0x60 = [PSCustomObject]@{
@@ -230,6 +244,11 @@ function Select-BestStrictProfile {
         throw "Selected strict profile $($best.profile) has no expansion profile map"
     }
     $profile = $map[$best.profile]
+    $selectedSelectors = @($best.contract_selection_method)
+    if ($RunBothSelectors) {
+        $selectedSelectors = @($AllSelectors)
+    }
+    Set-ActiveSelectors $selectedSelectors
     $selection = [PSCustomObject]@{
         generated_at_utc = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
         micro_wave_id = $MicroWaveId
@@ -237,6 +256,9 @@ function Select-BestStrictProfile {
         selected_profile = $profile.Name
         selected_profile_slug = $profile.Slug
         selected_micro_selector = $best.contract_selection_method
+        selected_expansion_selectors = $Selectors
+        run_both_selectors = [bool]$RunBothSelectors
+        expected_summary_count = $ExpectedSummaryCount
         lag_profile = $profile.LagProfile
         entry_bar_lookup_mode = $profile.EntryMode
         max_entry_staleness_minutes = $profile.EntryStaleness

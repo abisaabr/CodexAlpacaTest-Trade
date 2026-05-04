@@ -1,6 +1,6 @@
 param(
     [int]$MinMicroSummariesForExpansion = 72,
-    [int]$MaxExpansionLaunches = 8
+    [int]$MaxExpansionLaunches = 16
 )
 
 $ErrorActionPreference = "Stop"

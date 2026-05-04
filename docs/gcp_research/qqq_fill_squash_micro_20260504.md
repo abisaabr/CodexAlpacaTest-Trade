@@ -61,18 +61,19 @@ Controller:
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File scripts\run_ticker365_qqq_fill_squash_controller.ps1 `
   -MinMicroSummariesForExpansion 72 `
-  -MaxExpansionLaunches 8
+  -MaxExpansionLaunches 16
 ```
 
 The controller rebuilds the heatmap, mirrors it to GCS, and only launches the full-126 expansion after the micro-wave reaches the configured summary threshold.
 
 Expansion wave:
 - Wave ID: `ticker365_qqq_fill_squash_full126_20260504T1900Z`
-- Expected summary files: `36`
+- Expected summary files: `18` by default, or `36` if `-RunBothSelectors` is explicitly used.
 - Candidate scope: top `126`
 - Chunk size: `7`
-- Selectors: `nearest_contract`, `entry_liquidity_first_research_only`
+- Selectors: defaults to the winning micro selector only. Use `-RunBothSelectors` only for an explicit diagnostic rerun.
 - Machine type: `e2-standard-2`
+- Default launch breadth: up to `16` shards per controller pass, bounded by available GCP CPU quota.
 
 Strict profile selection:
 - Include only profiles whose name starts with `strict_`.
