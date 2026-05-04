@@ -1339,8 +1339,10 @@ def build_option_aware_backtest(
                 "Current engine models one directional option contract per source stock trade."
             ),
             "entry_lookup_mode": entry_lookup_mode,
+            "max_entry_lag_minutes": round(max_entry_lag.total_seconds() / 60.0, 4),
             "max_entry_staleness_minutes": round(max_entry_staleness.total_seconds() / 60.0, 4),
             "exit_lookup_mode": exit_lookup_mode,
+            "max_exit_lag_minutes": round(max_exit_lag.total_seconds() / 60.0, 4),
             **economics,
             **split,
             "promotion_allowed": False,

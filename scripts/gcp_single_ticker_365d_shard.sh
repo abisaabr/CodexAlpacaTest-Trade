@@ -14,6 +14,7 @@ metadata_value() {
 
 SYMBOL="$(metadata_value symbol)"
 WORKER_ID="$(metadata_value worker_id "ticker365_${SYMBOL,,}")"
+PROFILE_NAME="$(metadata_value profile_name "default")"
 WAVE_ID="$(metadata_value wave_id ticker_365d_all_available_20260501T2300Z)"
 GCS_PREFIX="$(metadata_value gcs_prefix gs://codexalpaca-control-us/research_results/ticker_365d_all_available_20260501T2300Z)"
 SOURCE_ARCHIVE_URI="$(metadata_value source_archive_uri "${GCS_PREFIX}/inputs/source/codexalpaca_repo_source.tar.gz")"
@@ -93,6 +94,11 @@ print(json.dumps({
     "worker_prefix": "__WORKER_PREFIX__",
     "selectors": "__SELECTORS__",
     "lag_profiles": "__LAG_PROFILES__",
+    "profile_name": "__PROFILE_NAME__",
+    "entry_bar_lookup_mode": "__ENTRY_BAR_LOOKUP_MODE__",
+    "max_entry_staleness_minutes": "__MAX_ENTRY_STALENESS_MINUTES__",
+    "exit_bar_lookup_mode": "__EXIT_BAR_LOOKUP_MODE__",
+    "stock_session_filter": "__STOCK_SESSION_FILTER__",
     "candidate_start_index": "__CANDIDATE_START_INDEX__",
     "candidate_count": "__CANDIDATE_COUNT__",
     "expected_candidate_summary_count": "__EXPECTED_CANDIDATE_SUMMARY_COUNT__",
@@ -110,6 +116,11 @@ PY
     -e "s|__WORKER_PREFIX__|${WORKER_PREFIX}|g" \
     -e "s|__SELECTORS__|${SELECTORS_CSV}|g" \
     -e "s|__LAG_PROFILES__|${LAG_PROFILES_CSV}|g" \
+    -e "s|__PROFILE_NAME__|${PROFILE_NAME}|g" \
+    -e "s|__ENTRY_BAR_LOOKUP_MODE__|${ENTRY_BAR_LOOKUP_MODE}|g" \
+    -e "s|__MAX_ENTRY_STALENESS_MINUTES__|${MAX_ENTRY_STALENESS_MINUTES}|g" \
+    -e "s|__EXIT_BAR_LOOKUP_MODE__|${EXIT_BAR_LOOKUP_MODE}|g" \
+    -e "s|__STOCK_SESSION_FILTER__|${STOCK_SESSION_FILTER}|g" \
     -e "s|__CANDIDATE_START_INDEX__|${CANDIDATE_START_INDEX}|g" \
     -e "s|__CANDIDATE_COUNT__|${CANDIDATE_COUNT}|g" \
     -e "s|__EXPECTED_CANDIDATE_SUMMARY_COUNT__|${EXPECTED_CANDIDATE_SUMMARY_COUNT}|g" \
@@ -209,6 +220,7 @@ run_selector() {
 echo "startup_utc=$(now_utc)"
 echo "wave_id=${WAVE_ID}"
 echo "worker_id=${WORKER_ID}"
+echo "profile_name=${PROFILE_NAME}"
 echo "symbol=${SYMBOL}"
 echo "gcs_prefix=${GCS_PREFIX}"
 echo "top_n=${TOP_N}"
