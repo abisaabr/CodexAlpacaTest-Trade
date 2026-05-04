@@ -51,13 +51,14 @@ function Invoke-GcloudLogged {
     try {
         & $Gcloud @Arguments 2>&1 | ForEach-Object {
             $line = $_.ToString()
-            Write-Output $line
+            [Console]::Out.WriteLine($line)
             Add-LogLine $line
         }
-        return $LASTEXITCODE
+        $exitCode = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $previousPreference
     }
+    return [int]$exitCode
 }
 
 function ConvertTo-MetadataArg {
