@@ -203,7 +203,7 @@ run_selector() {
   "${command[@]}"
   echo "run_completed_utc=${run_id}:$(now_utc)"
   echo "completed_run_id=${run_id}"
-  gcloud storage cp --recursive "${output_dir}" "${WORKER_PREFIX}/reports/research_wave/${run_id}/" || true
+  gcloud storage rsync --recursive "${output_dir}" "${WORKER_PREFIX}/reports/research_wave/${run_id}" || true
 }
 
 echo "startup_utc=$(now_utc)"
