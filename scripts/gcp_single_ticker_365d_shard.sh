@@ -39,6 +39,21 @@ STOCK_SESSION_FILTER="$(metadata_value stock_session_filter "option_rth_same_day
 SELECTORS_CSV="${SELECTORS_CSV//;/,}"
 LAG_PROFILES_CSV="${LAG_PROFILES_CSV//;/,}"
 
+count_csv_values() {
+  local value="${1//;/,}"
+  local count=0
+  IFS=',' read -r -a parts <<< "${value}"
+  for part in "${parts[@]}"; do
+    part="$(echo "${part}" | xargs)"
+    if [[ -n "${part}" ]]; then
+      count=$((count + 1))
+    fi
+  done
+  echo "${count}"
+}
+
+EXPECTED_CANDIDATE_SUMMARY_COUNT="$(( $(count_csv_values "${SELECTORS_CSV}") * $(count_csv_values "${LAG_PROFILES_CSV}") ))"
+
 if [[ -z "${SYMBOL}" || -z "${STOCK_URI}" || -z "${CONTRACTS_URI}" || -z "${BARS_URI}" ]]; then
   echo "missing_required_metadata symbol=${SYMBOL} stock_uri=${STOCK_URI} contracts_uri=${CONTRACTS_URI} bars_uri=${BARS_URI}" >&2
   exit 2
@@ -78,9 +93,9 @@ print(json.dumps({
     "worker_prefix": "__WORKER_PREFIX__",
     "selectors": "__SELECTORS__",
     "lag_profiles": "__LAG_PROFILES__",
-    "candidate_start_index": int("__CANDIDATE_START_INDEX__"),
-    "candidate_count": int("__CANDIDATE_COUNT__") if "__CANDIDATE_COUNT__" else None,
-    "expected_candidate_summary_count": len([item for item in "__SELECTORS__".replace(";", ",").split(",") if item.strip()]) * len([item for item in "__LAG_PROFILES__".replace(";", ",").split(",") if item.strip()]),
+    "candidate_start_index": "__CANDIDATE_START_INDEX__",
+    "candidate_count": "__CANDIDATE_COUNT__",
+    "expected_candidate_summary_count": "__EXPECTED_CANDIDATE_SUMMARY_COUNT__",
     "broker_facing": False,
     "paper_orders": False,
     "live_manifest_effect": "none",
@@ -97,6 +112,7 @@ PY
     -e "s|__LAG_PROFILES__|${LAG_PROFILES_CSV}|g" \
     -e "s|__CANDIDATE_START_INDEX__|${CANDIDATE_START_INDEX}|g" \
     -e "s|__CANDIDATE_COUNT__|${CANDIDATE_COUNT}|g" \
+    -e "s|__EXPECTED_CANDIDATE_SUMMARY_COUNT__|${EXPECTED_CANDIDATE_SUMMARY_COUNT}|g" \
     "${WORKROOT}/ticker_365d_status.json"
   gcloud storage cp "${WORKROOT}/ticker_365d_status.json" "${WORKER_PREFIX}/ticker_365d_status.json" || true
   gcloud storage cp "${WORKROOT}/startup.log" "${WORKER_PREFIX}/startup.log" || true
