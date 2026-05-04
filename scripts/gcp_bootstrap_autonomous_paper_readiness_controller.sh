@@ -58,6 +58,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e ".[gcp]"
+sha256sum pyproject.toml > "${WORKROOT}/last_pyproject.sha256"
 
 publish_log
 while true; do
@@ -66,6 +67,11 @@ while true; do
     git reset --hard "origin/${BRANCH}" || true
   fi
   source .venv/bin/activate
+  if ! sha256sum --check --status "${WORKROOT}/last_pyproject.sha256"; then
+    echo "dependency_fingerprint_changed_utc=$(now_utc)"
+    python -m pip install -e ".[gcp]"
+    sha256sum pyproject.toml > "${WORKROOT}/last_pyproject.sha256"
+  fi
   echo "controller_loop_started_utc=$(now_utc)"
   # shellcheck disable=SC2086
   python -u scripts/gcp_autonomous_paper_readiness_controller.py \
