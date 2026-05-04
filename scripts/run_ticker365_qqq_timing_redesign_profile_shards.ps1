@@ -144,8 +144,28 @@ function Start-ShardWorker {
 
     $existingRows = Get-InstanceRows $instanceName
     if ($existingRows.Count -gt 0) {
-        Add-LogLine "profile_shard_instance_exists instance=$instanceName rows=$($existingRows -join ';')"
-        return
+        $activeRows = @()
+        foreach ($row in $existingRows) {
+            $parts = $row.Split(",")
+            if ($parts.Count -lt 3) {
+                continue
+            }
+            if ($parts[2] -ne "TERMINATED") {
+                $activeRows += $row
+            }
+        }
+        if ($activeRows.Count -gt 0) {
+            Add-LogLine "profile_shard_instance_exists instance=$instanceName rows=$($activeRows -join ';')"
+            return
+        }
+        foreach ($row in $existingRows) {
+            $parts = $row.Split(",")
+            if ($parts.Count -lt 3) {
+                continue
+            }
+            Add-LogLine "deleting_incomplete_terminated_profile_shard instance=$instanceName zone=$($parts[1])"
+            Invoke-GcloudLogged @("compute", "instances", "delete", $instanceName, "--project", $Project, "--zone", $parts[1], "--quiet") | Out-Null
+        }
     }
 
     $metadata = @{
