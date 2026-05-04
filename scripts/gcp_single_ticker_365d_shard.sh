@@ -146,6 +146,9 @@ start_runtime_monitor() {
         fi
         echo
       } >> "${WORKROOT}/runtime_monitor.log"
+      if [[ -d "${WORKROOT}/progress" ]]; then
+        gcloud storage rsync --recursive "${WORKROOT}/progress" "${WORKER_PREFIX}/progress" || true
+      fi
       gcloud storage cp "${WORKROOT}/runtime_monitor.log" "${WORKER_PREFIX}/runtime_monitor.log" || true
       gcloud storage cp "${WORKROOT}/startup.log" "${WORKER_PREFIX}/startup.log" || true
       sleep 120
@@ -189,6 +192,7 @@ run_selector() {
     --option-trades-root "${EMPTY_OPTION_TRADES}"
     --output-dir "${output_dir}"
     --run-id "${run_id}"
+    --progress-dir "${WORKROOT}/progress/${run_id}"
     --top-n "${TOP_N}"
     --candidate-start-index "${CANDIDATE_START_INDEX}"
     --symbol-filter "${SYMBOL}"

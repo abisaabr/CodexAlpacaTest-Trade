@@ -80,6 +80,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--option-trades-root", default=None)
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--run-id", default=None)
+    parser.add_argument(
+        "--progress-dir",
+        default=None,
+        help=(
+            "Optional directory for append-only per-candidate progress JSONL. "
+            "Useful for long GCP shards where final artifacts are written at completion."
+        ),
+    )
     parser.add_argument("--top-n", type=int, default=25)
     parser.add_argument(
         "--candidate-start-index",
@@ -1158,6 +1166,7 @@ def build_option_aware_backtest(
     contract_selection_method: str = CONTRACT_SELECTION_NEAREST,
     candidate_start_index: int = 1,
     candidate_count: int | None = None,
+    progress_dir: Path | None = None,
 ) -> dict[str, Any]:
     if max_entry_staleness is None:
         max_entry_staleness = timedelta(minutes=5)
@@ -1360,6 +1369,10 @@ def build_option_aware_backtest(
         summary["fill_failure_reason"] = _fill_failure_reason(summary)
         summary["recommendation"] = _recommendation(summary)
         candidate_summaries.append(summary)
+        if progress_dir is not None:
+            append_jsonl(progress_dir / "candidate_summary_progress.jsonl", summary)
+            for failure_row in failure_rows:
+                append_jsonl(progress_dir / "fill_failure_progress.jsonl", failure_row)
         if index == 1 or index % 5 == 0 or index == len(selected_queue_items):
             absolute_index = start_offset + index
             print(
@@ -1455,6 +1468,12 @@ def _json_default(value: Any) -> str:
 def write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, default=_json_default), encoding="utf-8")
+
+
+def append_jsonl(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, default=_json_default, sort_keys=True) + "\n")
 
 
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -1587,6 +1606,7 @@ def main() -> None:
         stock_session_filter=args.stock_session_filter,
         test_date_count=args.test_date_count,
         contract_selection_method=args.contract_selection_method,
+        progress_dir=Path(args.progress_dir) if args.progress_dir else None,
     )
     payload["run_id"] = run_id
     payload["artifacts"] = write_artifacts(Path(args.output_dir), run_id, payload)

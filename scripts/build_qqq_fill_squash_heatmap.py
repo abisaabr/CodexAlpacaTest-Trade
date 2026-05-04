@@ -86,10 +86,52 @@ def load_summaries(gcloud: str, gcs_prefix: str) -> pd.DataFrame:
                 continue
             enriched = dict(row)
             enriched["source_uri"] = uri
+            enriched["artifact_type"] = "final_summary"
             enriched["profile"] = _profile_from_uri(uri)
             enriched["chunk"] = _chunk_from_uri(uri)
             rows.append(enriched)
-    return pd.DataFrame(rows)
+    progress_uris = storage_ls(
+        gcloud, f"{gcs_prefix.rstrip('/')}/**/candidate_summary_progress.jsonl"
+    )
+    for uri in progress_uris:
+        for line in storage_cat(gcloud, uri).splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if not isinstance(row, dict):
+                continue
+            enriched = dict(row)
+            enriched["source_uri"] = uri
+            enriched["artifact_type"] = "progress_jsonl"
+            enriched["profile"] = _profile_from_uri(uri)
+            enriched["chunk"] = _chunk_from_uri(uri)
+            rows.append(enriched)
+    frame = pd.DataFrame(rows)
+    if frame.empty:
+        return frame
+    frame["_artifact_priority"] = frame["artifact_type"].map(
+        {"final_summary": 1, "progress_jsonl": 0}
+    ).fillna(0)
+    dedupe_keys = [
+        "profile",
+        "chunk",
+        "candidate_variant_id",
+        "contract_selection_method",
+        "entry_lookup_mode",
+        "max_entry_lag_minutes",
+        "max_entry_staleness_minutes",
+        "exit_lookup_mode",
+        "max_exit_lag_minutes",
+        "source_session_filter",
+    ]
+    for column in dedupe_keys:
+        if column not in frame.columns:
+            frame[column] = ""
+    return (
+        frame.sort_values("_artifact_priority")
+        .drop_duplicates(dedupe_keys, keep="last")
+        .drop(columns=["_artifact_priority"])
+    )
 
 
 def _safe_numeric(frame: pd.DataFrame, column: str) -> pd.Series:
