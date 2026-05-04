@@ -15,6 +15,25 @@ This wave patches timing-profile semantics so:
 - `patient` maps to the prior default profile.
 - `slow` maps to a later/longer profile.
 
+## 2026-05-04 Session-Filter Repair
+
+The first strict rerun still showed low QQQ fill coverage even though raw selected-contract data coverage was strong. The diagnosis was that the replay denominator still included stock-proxy trades that occurred outside regular option tradability, while QQQ option bars are regular-session bars. This made strategy fill coverage look like a raw data failure when it was really a source-timing/denominator mismatch.
+
+The active QQQ rerun now uses:
+
+- `--stock-session-filter option_rth_same_day`
+- `--entry-bar-lookup-mode first_bar_at_or_after_entry_within_lag`
+- `--exit-bar-lookup-mode first_bar_at_or_after_exit_within_lag`
+- `fill_coverage >= 0.90` unchanged
+
+The five stale pre-filter QQQ profile-shard VMs were deleted and relaunched from the current source on 2026-05-04. Fresh VM serial logs confirmed `stock_session_filter=option_rth_same_day` and loaded the expected dense QQQ foundation: `200,994` stock rows, `5,522` selected contracts, and `1,593,974` option-bar rows.
+
+Early first-candidate evidence after relaunch:
+
+- Most strict lag/selector profiles improved to `0.9762` through `0.9841` fill coverage.
+- One zero-entry-lag profile remained below gate at `0.8492`, so the full profile-shard run must finish before any promotion decision.
+- This is evidence that QQQ's primary blocker was non-option-session source-trade timing in the denominator, not missing raw QQQ option bars.
+
 ## Wave Configuration
 
 - Wave ID: `ticker365_qqq_timing_redesign_20260504T1245Z`
@@ -25,6 +44,8 @@ This wave patches timing-profile semantics so:
 - Lag profiles: `0:60,15:120,30:180,60:240,120:390`
 - Selectors: `nearest_contract,entry_liquidity_first_research_only`
 - Entry lookup mode: `first_bar_at_or_after_entry_within_lag`
+- Exit lookup mode: `first_bar_at_or_after_exit_within_lag`
+- Stock session filter: `option_rth_same_day`
 - Max entry staleness: `0`
 - Fill gate: unchanged at `0.90`
 
