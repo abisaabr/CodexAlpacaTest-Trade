@@ -436,10 +436,18 @@ def delete_terminated_if_complete(
         zone = instance_zone(instance)
         log(f"deleting_terminated_completed_instance name={name} zone={zone}")
         if not args.dry_run:
-            run_command(
+            output = run_command(
                 gcloud(args, "compute", "instances", "delete", name, "--zone", zone, "--quiet"),
+                check=False,
                 timeout=900,
             )
+            if "was not found" in output or "not found" in output.lower():
+                log(f"terminated_completed_instance_already_deleted name={name} zone={zone}")
+            elif "ERROR:" in output:
+                log(
+                    "delete_terminated_completed_instance_nonfatal_error "
+                    f"name={name} zone={zone} output={output.strip()[:500]}"
+                )
 
 
 def restart_stale_active_instances(
