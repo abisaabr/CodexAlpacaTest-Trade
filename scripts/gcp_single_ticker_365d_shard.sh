@@ -108,6 +108,7 @@ start_runtime_monitor() {
         echo
       } >> "${WORKROOT}/runtime_monitor.log"
       gcloud storage cp "${WORKROOT}/runtime_monitor.log" "${WORKER_PREFIX}/runtime_monitor.log" || true
+      gcloud storage cp "${WORKROOT}/startup.log" "${WORKER_PREFIX}/startup.log" || true
       sleep 120
     done
   ) &
