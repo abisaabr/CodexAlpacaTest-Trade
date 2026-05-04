@@ -8,10 +8,12 @@ import pandas as pd
 
 from scripts.run_gcp_research_wave import (
     REAL_STOCK_BAR_EVIDENCE_MODE,
+    _variant_stock_strategy,
     filter_variants,
     load_variants,
     run,
     score_variant,
+    variant_timing_parameters,
 )
 
 
@@ -76,6 +78,25 @@ def test_score_variant_keeps_metadata_proxy_non_promotable() -> None:
     assert row["recommendation"] == "hold_for_real_backtest"
     assert row["broker_facing"] is False
     assert row["live_manifest_effect"] == "none"
+
+
+def test_timing_profile_defaults_drive_stock_proxy_timing() -> None:
+    fast = variant_timing_parameters({"timing_profile": "fast"})
+    slow = variant_timing_parameters({"timing_profile": "slow"})
+
+    assert fast["hard_exit_minute"] < slow["hard_exit_minute"]
+    assert fast["liquidity_gate"] == "tight"
+    assert slow["liquidity_gate"] == "baseline"
+
+    fast_strategy = _variant_stock_strategy(
+        {"variant_id": "fast", "symbol": "QQQ", "parameters": {"timing_profile": "fast"}}
+    )
+    slow_strategy = _variant_stock_strategy(
+        {"variant_id": "slow", "symbol": "QQQ", "parameters": {"timing_profile": "slow"}}
+    )
+
+    assert fast_strategy.timeout_bars < slow_strategy.timeout_bars
+    assert fast_strategy.fast_window < slow_strategy.fast_window
 
 
 def test_run_writes_required_research_artifacts(tmp_path: Path) -> None:

@@ -147,16 +147,16 @@ def stable_unit_interval(*parts: Any) -> float:
 
 
 def _parameter_score(parameters: dict[str, Any]) -> float:
+    timing = variant_timing_parameters(parameters)
     score = 0.0
-    if parameters.get("liquidity_gate") == "tight":
+    if timing["liquidity_gate"] == "tight":
         score += 3.0
     if parameters.get("avoid_after_loser_similarity") is True:
         score += 4.0
-    stop = parameters.get("stop_loss_multiple")
-    if isinstance(stop, int | float):
-        score += max(0.0, 0.30 - float(stop)) * 30.0
-    exit_minute = parameters.get("hard_exit_minute")
-    if isinstance(exit_minute, int | float) and float(exit_minute) <= 300:
+    stop = timing["stop_loss_multiple"]
+    score += max(0.0, 0.30 - float(stop)) * 30.0
+    exit_minute = timing["hard_exit_minute"]
+    if float(exit_minute) <= 300:
         score += 2.0
     template = str(parameters.get("family_template") or "")
     if "butterfly" in template:
@@ -239,13 +239,64 @@ def _variant_direction(variant: dict[str, Any]) -> int:
     return 1
 
 
+TIMING_PROFILE_DEFAULTS: dict[str, dict[str, float | str]] = {
+    "scalp": {
+        "hard_exit_minute": 120,
+        "stop_loss_multiple": 0.16,
+        "profit_target_multiple": 0.28,
+        "liquidity_gate": "tight",
+    },
+    "fast": {
+        "hard_exit_minute": 180,
+        "stop_loss_multiple": 0.18,
+        "profit_target_multiple": 0.32,
+        "liquidity_gate": "tight",
+    },
+    "base": {
+        "hard_exit_minute": 240,
+        "stop_loss_multiple": 0.22,
+        "profit_target_multiple": 0.40,
+        "liquidity_gate": "baseline",
+    },
+    "patient": {
+        "hard_exit_minute": 300,
+        "stop_loss_multiple": 0.24,
+        "profit_target_multiple": 0.45,
+        "liquidity_gate": "baseline",
+    },
+    "slow": {
+        "hard_exit_minute": 360,
+        "stop_loss_multiple": 0.28,
+        "profit_target_multiple": 0.55,
+        "liquidity_gate": "baseline",
+    },
+}
+
+
+def variant_timing_parameters(parameters: dict[str, Any]) -> dict[str, Any]:
+    profile = str(parameters.get("timing_profile") or "patient").lower()
+    defaults = TIMING_PROFILE_DEFAULTS.get(profile, TIMING_PROFILE_DEFAULTS["patient"])
+    return {
+        "timing_profile": profile,
+        "hard_exit_minute": int(parameters.get("hard_exit_minute") or defaults["hard_exit_minute"]),
+        "stop_loss_multiple": float(
+            parameters.get("stop_loss_multiple") or defaults["stop_loss_multiple"]
+        ),
+        "profit_target_multiple": float(
+            parameters.get("profit_target_multiple") or defaults["profit_target_multiple"]
+        ),
+        "liquidity_gate": str(parameters.get("liquidity_gate") or defaults["liquidity_gate"]),
+    }
+
+
 def _variant_stock_strategy(variant: dict[str, Any]) -> VariantStockProxyStrategy:
     parameters = variant.get("parameters") if isinstance(variant.get("parameters"), dict) else {}
-    hard_exit = int(parameters.get("hard_exit_minute") or 300)
+    timing = variant_timing_parameters(parameters)
+    hard_exit = int(timing["hard_exit_minute"])
     timing_scale = 0 if hard_exit <= 210 else 1 if hard_exit <= 300 else 2
-    stop_multiple = float(parameters.get("stop_loss_multiple") or 0.24)
-    target_multiple = float(parameters.get("profit_target_multiple") or 0.45)
-    liquidity_gate = str(parameters.get("liquidity_gate") or "baseline")
+    stop_multiple = float(timing["stop_loss_multiple"])
+    target_multiple = float(timing["profit_target_multiple"])
+    liquidity_gate = str(timing["liquidity_gate"])
     return VariantStockProxyStrategy(
         name=f"variant_stock_proxy__{variant.get('variant_id')}",
         direction=_variant_direction(variant),

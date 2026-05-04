@@ -18,7 +18,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from alpaca_lab.backtest.engine import FixedFractionSizer, LinearCostModel, run_backtest
-from scripts.run_gcp_research_wave import _variant_stock_strategy, load_variants
+from scripts.run_gcp_research_wave import (
+    _variant_stock_strategy,
+    load_variants,
+    variant_timing_parameters,
+)
 
 DEFAULT_QUEUE_JSON = (
     REPO_ROOT
@@ -649,15 +653,17 @@ def _stock_trades_for_variant(
 
 def _stock_trade_cache_key(variant: dict[str, Any]) -> str:
     parameters = variant.get("parameters") if isinstance(variant.get("parameters"), dict) else {}
+    timing = variant_timing_parameters(parameters)
     source = str(variant.get("source_strategy_id") or variant.get("variant_id") or "").lower()
     direction = "bear" if any(token in source for token in ["put", "short", "bear"]) else "bull"
     payload = {
         "symbol": str(variant.get("symbol") or "").upper(),
         "direction": direction,
-        "hard_exit_minute": int(parameters.get("hard_exit_minute") or 300),
-        "stop_loss_multiple": float(parameters.get("stop_loss_multiple") or 0.24),
-        "profit_target_multiple": float(parameters.get("profit_target_multiple") or 0.45),
-        "liquidity_gate": str(parameters.get("liquidity_gate") or "baseline"),
+        "timing_profile": timing["timing_profile"],
+        "hard_exit_minute": int(timing["hard_exit_minute"]),
+        "stop_loss_multiple": float(timing["stop_loss_multiple"]),
+        "profit_target_multiple": float(timing["profit_target_multiple"]),
+        "liquidity_gate": str(timing["liquidity_gate"]),
     }
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 

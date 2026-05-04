@@ -1,0 +1,10 @@
+[
+  {
+    "bars": "gs://codexalpaca-data-us/research_option_data/qqq_365d_next_trading_day_5x5_20260428/option_bars_silver/option_bars/underlying=QQQ/",
+    "contracts": "gs://codexalpaca-control-us/research_results/qqq_365d_next_trading_day_5x5_20260428/research_wave/qqq_365d_next_trading_day_5x5_20260428/dense_universe/selected_option_contracts/",
+    "dataset_id": "qqq_dense_365d",
+    "stock": "gs://codexalpaca-data-us/research_stock_data/qqq_365d_next_trading_day_5x5_20260428/stock_ref_silver/stock_bars/",
+    "symbol": "QQQ",
+    "zone": "us-east1-b"
+  }
+]

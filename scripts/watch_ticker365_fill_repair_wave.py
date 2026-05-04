@@ -205,7 +205,9 @@ def storage_cat(args: argparse.Namespace, uri: str) -> str:
 
 def load_launch_rows(args: argparse.Namespace) -> list[dict[str, Any]]:
     local_path = REPO_ROOT / "reports" / "gcp_research" / "ticker_365d_all_available_launch_rows.json"
-    if local_path.exists():
+    if args.launch_rows_uri != DEFAULT_LAUNCH_ROWS_URI:
+        rows = json.loads(storage_cat(args, args.launch_rows_uri))
+    elif local_path.exists():
         rows = json.loads(local_path.read_text(encoding="utf-8"))
     else:
         rows = json.loads(storage_cat(args, args.launch_rows_uri))
@@ -418,8 +420,12 @@ def refresh_inputs(args: argparse.Namespace, rows: list[dict[str, Any]]) -> list
     uploaded: list[str] = []
     archive_path = create_source_archive(args)
     launch_rows_path = (
-        REPO_ROOT / "reports" / "gcp_research" / "ticker_365d_all_available_launch_rows.json"
+        REPO_ROOT
+        / "reports"
+        / "gcp_research"
+        / f"{args.wave_id}_launch_rows.json"
     )
+    launch_rows_path.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
     uploads = [
         (archive_path, args.source_archive_uri),
         (
@@ -431,17 +437,12 @@ def refresh_inputs(args: argparse.Namespace, rows: list[dict[str, Any]]) -> list
             f"{args.gcs_prefix}/inputs/startup/gcp_ticker_365d_aggregate_watch.sh",
         ),
     ]
-    if launch_rows_path.exists():
-        uploads.append(
-            (
-                launch_rows_path,
-                f"{args.gcs_prefix}/inputs/ticker_365d_all_available_launch_rows.json",
-            )
+    uploads.append(
+        (
+            launch_rows_path,
+            f"{args.gcs_prefix}/inputs/ticker_365d_all_available_launch_rows.json",
         )
-    else:
-        temp_path = REPO_ROOT / "reports" / "gcp_research" / "ticker365_fill_repair_launch_rows.json"
-        temp_path.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
-        uploads.append((temp_path, f"{args.gcs_prefix}/inputs/ticker_365d_all_available_launch_rows.json"))
+    )
     for source, target in uploads:
         if source.exists():
             run_command(gcloud(args, "storage", "cp", str(source), target), timeout=900)
