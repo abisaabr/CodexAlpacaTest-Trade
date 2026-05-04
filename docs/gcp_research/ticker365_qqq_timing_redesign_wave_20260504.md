@@ -49,7 +49,20 @@ This wave patches timing-profile semantics so:
 - Worker/aggregate watchdog: `CodexAlpacaTicker365QQQTimingRedesignWatchdog`
 - Readiness watchdog: `CodexAlpacaTicker365QQQTimingRedesignReadinessWatchdog`
 - Worker script: `scripts/run_ticker365_qqq_timing_redesign_watchdog.ps1`
+- Profile-shard launcher: `scripts/run_ticker365_qqq_timing_redesign_profile_shards.ps1`
 - Readiness script: `scripts/run_ticker365_qqq_timing_redesign_readiness_watchdog.ps1`
+
+## QQQ-First Acceleration
+
+The first launch used a single QQQ worker that runs all five lag profiles sequentially. To keep the QQQ fix moving faster without changing promotion gates, the profile-shard launcher can run each strict lag profile on its own worker prefix:
+
+- `ticker365fillrepair_qqq_e0x60`
+- `ticker365fillrepair_qqq_e15x120`
+- `ticker365fillrepair_qqq_e30x180`
+- `ticker365fillrepair_qqq_e60x240`
+- `ticker365fillrepair_qqq_e120x390`
+
+Each profile-shard worker still uses both contract selectors and the same dense QQQ 365-day dataset. The aggregate remains blocked until all `10` strict candidate summaries exist, and no strategy may move forward unless the generated promotion packet says `eligible_for_promotion_review`.
 
 ## Expected Decision Rule
 
