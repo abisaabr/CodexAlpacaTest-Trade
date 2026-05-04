@@ -8,7 +8,6 @@ $Python = "C:\Users\rabisaab\AppData\Local\Programs\Python\Python312\python.exe"
 $Gcloud = "C:\Users\rabisaab\Downloads\google-cloud-sdk-local\google-cloud-sdk\bin\gcloud.cmd"
 $WaveId = "ticker365_qqq_timing_redesign_20260504T1245Z"
 $GcsPrefix = "gs://codexalpaca-control-us/research_results/ticker365_qqq_timing_redesign_20260504T1245Z"
-$InputDir = Join-Path $RepoRoot "docs\gcp_research\qqq_timing_redesign_20260504\inputs"
 
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 Set-Location $RepoRoot
@@ -37,13 +36,6 @@ if (Test-Path $KeyPath) {
 try {
     $stamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     Add-WatchdogLogLine "===== ticker365_qqq_timing_redesign_watchdog run $stamp ====="
-
-    & $Gcloud storage cp (Join-Path $InputDir "qqq_timing_redesign_variants.jsonl") "$GcsPrefix/inputs/qqq_timing_redesign_variants.jsonl" 2>&1 |
-        ForEach-Object { $line = $_.ToString(); Write-Output $line; Add-WatchdogLogLine $line }
-    & $Gcloud storage cp (Join-Path $InputDir "qqq_timing_redesign_option_queue.json") "$GcsPrefix/inputs/qqq_timing_redesign_option_queue.json" 2>&1 |
-        ForEach-Object { $line = $_.ToString(); Write-Output $line; Add-WatchdogLogLine $line }
-    & $Gcloud storage cp (Join-Path $InputDir "qqq_timing_redesign_launch_rows.json") "$GcsPrefix/inputs/qqq_timing_redesign_launch_rows.json" 2>&1 |
-        ForEach-Object { $line = $_.ToString(); Write-Output $line; Add-WatchdogLogLine $line }
 
     & $Python "scripts\watch_ticker365_fill_repair_wave.py" `
         --gcloud $Gcloud `
