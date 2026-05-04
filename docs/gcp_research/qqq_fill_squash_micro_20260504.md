@@ -55,6 +55,33 @@ python scripts\build_qqq_fill_squash_heatmap.py `
 
 The winning legitimate profile must be expanded to all `126` QQQ candidates before any promotion-review decision. The full expansion should use the same hard gates and write an auditable promotion-review packet.
 
+Controller:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File scripts\run_ticker365_qqq_fill_squash_controller.ps1 `
+  -MinMicroSummariesForExpansion 72 `
+  -MaxExpansionLaunches 8
+```
+
+The controller rebuilds the heatmap, mirrors it to GCS, and only launches the full-126 expansion after the micro-wave reaches the configured summary threshold.
+
+Expansion wave:
+- Wave ID: `ticker365_qqq_fill_squash_full126_20260504T1900Z`
+- Expected summary files: `36`
+- Candidate scope: top `126`
+- Chunk size: `7`
+- Selectors: `nearest_contract`, `entry_liquidity_first_research_only`
+- Machine type: `e2-standard-2`
+
+Strict profile selection:
+- Include only profiles whose name starts with `strict_`.
+- Require `first_bar_at_or_after_entry_within_lag`.
+- Require `first_bar_at_or_after_exit_within_lag`.
+- Require `source_session_filter=option_rth_same_day`.
+- Rank by research-gate passes, fill-gate passes, mean fill, max test PnL, then mean net PnL.
+- Selection is research-only and does not imply live or paper activation.
+
 ## Launch Command
 
 ```powershell
