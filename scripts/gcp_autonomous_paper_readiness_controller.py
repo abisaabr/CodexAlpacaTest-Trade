@@ -173,6 +173,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--run-both-selectors", action="store_true")
     parser.add_argument("--allow-delete-terminated", action="store_true")
+    parser.add_argument(
+        "--stale-worker-max-age-minutes",
+        type=int,
+        default=240,
+        help="Restart incomplete QQQ research workers older than this age. Set 0 to disable.",
+    )
     parser.add_argument("--sync-source", action="store_true", default=True)
     parser.add_argument("--target-equity", type=float, default=300_000.0)
     return parser.parse_args()
@@ -316,6 +322,17 @@ def active_instance_exists(instances: list[dict[str, Any]]) -> bool:
     return any(str(instance.get("status")) in ACTIVE_STATUSES for instance in instances)
 
 
+def instance_age_minutes(instance: dict[str, Any]) -> float | None:
+    value = str(instance.get("creationTimestamp") or "")
+    if not value:
+        return None
+    try:
+        created = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return (datetime.now(UTC) - created.astimezone(UTC)).total_seconds() / 60.0
+
+
 def safe_slug(value: str, *, dash: bool = False) -> str:
     replacement = "-" if dash else "_"
     return re.sub(r"[^A-Za-z0-9]+", replacement, value).strip(replacement).lower()
@@ -425,6 +442,35 @@ def delete_terminated_if_complete(
             )
 
 
+def restart_stale_active_instances(
+    args: argparse.Namespace,
+    name: str,
+    instances: list[dict[str, Any]],
+) -> bool:
+    if args.stale_worker_max_age_minutes <= 0:
+        return False
+    restarted = False
+    for instance in instances:
+        status = str(instance.get("status"))
+        if status not in ACTIVE_STATUSES:
+            continue
+        age = instance_age_minutes(instance)
+        if age is None or age < args.stale_worker_max_age_minutes:
+            continue
+        zone = instance_zone(instance)
+        log(
+            "restarting_stale_research_worker "
+            f"name={name} zone={zone} status={status} age_minutes={age:.1f}"
+        )
+        if not args.dry_run:
+            run_command(
+                gcloud(args, "compute", "instances", "delete", name, "--zone", zone, "--quiet"),
+                timeout=900,
+            )
+        restarted = True
+    return restarted
+
+
 def launch_instance(
     args: argparse.Namespace,
     *,
@@ -503,6 +549,16 @@ def launch_shard(
         log(f"shard_complete worker_id={worker_id} instance={instance_name}")
         delete_terminated_if_complete(args, instance_name, existing, completed=True)
         return False
+    if active_instance_exists(existing):
+        if restart_stale_active_instances(args, instance_name, existing):
+            instances = compute_instances(args)
+            existing = instances_by_name(instances, instance_name)
+            if active_instance_exists(existing):
+                log(f"shard_active_after_stale_restart worker_id={worker_id} instance={instance_name}")
+                return False
+        else:
+            log(f"shard_active worker_id={worker_id} instance={instance_name}")
+            return False
     if active_instance_exists(existing):
         log(f"shard_active worker_id={worker_id} instance={instance_name}")
         return False

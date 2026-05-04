@@ -30,6 +30,7 @@ Local Windows QQQ fill-squash scheduled tasks were disabled after the GCP contro
 - Sync the current repo source into GCS for worker VMs.
 - Monitor QQQ micro fill-squash summaries.
 - Relaunch missing or stalled QQQ micro shards.
+- Restart incomplete research worker VMs that exceed the stale-worker age threshold.
 - Build and mirror the QQQ fill-squash heatmap.
 - Select only a legitimate strict, option-session-filtered profile for full expansion.
 - Launch the optimized full `126` QQQ expansion using the winning selector by default.
@@ -66,7 +67,8 @@ The launch script uploads a source archive and creates a small GCP control VM. T
 python -u scripts/gcp_autonomous_paper_readiness_controller.py \
   --gcloud gcloud \
   --max-launches-per-pass 16 \
-  --allow-delete-terminated
+  --allow-delete-terminated \
+  --stale-worker-max-age-minutes 240
 ```
 
 The VM bootstrap runs this as a one-pass controller, then sleeps for `900` seconds, pulls the latest branch, and runs another pass. That keeps the controller patchable from GitHub/GCS instead of trapping it inside a stale long-lived Python process.
