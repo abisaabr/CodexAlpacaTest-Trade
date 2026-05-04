@@ -218,11 +218,41 @@ If duplicate controller VMs exist, keep only one `paper-ready-controller-*` inst
 
 ## Known Open Work
 
-- QQQ micro wave reached `72 / 72` by final direct GCS verification.
-- Full QQQ `126` expansion had not started yet at final direct verification.
+- QQQ micro wave reached `72 / 72` by direct GCS verification.
+- Full QQQ `126` expansion is underway under selected strict profile `strict-e0x60`.
+- Latest direct verification after repair: `7 / 18` full summary files and `13` progress files.
+- Active workers were progressing and uploading `candidate_summary_progress.jsonl`; one sampled worker uploaded progress every few minutes through `2026-05-04T23:18:49Z`.
+- All `18` full chunks were completed, running, or launched by the latest controller/local pass.
 - No strategy was eligible for paper promotion yet.
 - No paper runner was armed.
 - Independent reproduction and runner preflight are still downstream gates.
+
+## 2026-05-04 Repair And Continuation Notes
+
+The controller initially failed after micro completion because the VM environment lacked `tabulate`, which is required by `pandas.to_markdown()` in `scripts/build_qqq_fill_squash_heatmap.py`.
+
+Durable repair:
+
+- Commit: `fb0f618` `Repair GCP controller dependency and loader test`
+- Adds `tabulate>=0.9.0` to package dependencies.
+- Updates `tests/test_run_option_aware_research_backtest_loader.py` to pass the explicit `stock_session_filter`.
+- Validation: `python -m pytest -q` returned `210 passed, 1 warning`.
+
+GCP continuation:
+
+- Recreated controller VM: `paper-ready-controller-20260504qa`
+- Controller branch: `codex/phase2-fill-semantics-20260430`
+- Controller root: `gs://codexalpaca-control-us/research_results/autonomous_paper_readiness_20260504/`
+- Full expansion root: `gs://codexalpaca-control-us/research_results/ticker365_qqq_fill_squash_full126_20260504T1900Z/`
+- Selection JSON: `gs://codexalpaca-control-us/research_results/ticker365_qqq_fill_squash_full126_20260504T1900Z/selection/qqq_fill_squash_selected_strict_profile.json`
+
+Quota optimization:
+
+- Deleted `79` recognized terminated research VMs matching `portfolio-*`, `qqq-365d-*`, `qqqfs-*`, and `ticker365-*`.
+- Did not delete trader/runtime-looking terminated VMs such as `multi-ticker-trader-v1` or `vm-execution-paper-01`.
+- Deletion manifest mirrored to `gs://codexalpaca-control-us/research_results/autonomous_paper_readiness_20260504/controller/terminated_research_instances_deleted_20260504.csv`.
+
+The next safe action is to let the controller finish the full expansion, then launch aggregate promotion review. Do not promote or arm paper trading unless the generated promotion packet explicitly says `eligible_for_promotion_review`.
 
 ## What To Do When Micro Reaches 72/72
 

@@ -84,3 +84,19 @@ The VM bootstrap runs this as a one-pass controller, then sleeps for `900` secon
 ## North Star Alignment
 
 This automation optimizes for a paper trader that is ready because it survived evidence, lineage, fill coverage, economics, promotion review, and runner preflight. It explicitly avoids optimizing for the fastest route to placing orders.
+
+## 2026-05-04 23:20 UTC Update
+
+Controller repair and full-expansion launch are now complete enough for unattended continuation:
+
+- Repo commit `fb0f618` adds the missing `tabulate` dependency required by `pandas.to_markdown()` during heatmap generation and repairs the stale loader unit test.
+- Local validation after the repair: `210 passed, 1 warning`.
+- The broken controller VM was deleted and recreated as `paper-ready-controller-20260504qa`; the refreshed VM installed `tabulate` and is running branch `codex/phase2-fill-semantics-20260430` at commit `fb0f618`.
+- The QQQ micro fill-squash wave reached `72 / 72` summaries.
+- The selected legitimate strict profile for the full expansion is `strict-e0x60` with `entry_liquidity_first_research_only`.
+- Selection metadata is at `gs://codexalpaca-control-us/research_results/ticker365_qqq_fill_squash_full126_20260504T1900Z/selection/qqq_fill_squash_selected_strict_profile.json`.
+- The full QQQ expansion is in phase `full_qqq_expansion`; latest observed direct GCS count was `7 / 18` summary files with `13` progress files.
+- All `18` full chunks were either completed, running, or launched by the latest controller/local pass.
+- `79` old terminated research VMs were deleted to free regional instance-count quota; the deletion list was mirrored to `gs://codexalpaca-control-us/research_results/autonomous_paper_readiness_20260504/controller/terminated_research_instances_deleted_20260504.csv`.
+
+Operational note: a local controller pass briefly overlapped with the GCP controller, causing duplicate active workers for two chunks. The later duplicate copies were deleted, leaving one active worker per chunk. The remaining controller should be allowed to continue alone.
