@@ -16,7 +16,8 @@ REPO_URL="$(metadata_value repo_url "https://github.com/abisaabr/CodexAlpacaTest
 BRANCH="$(metadata_value branch "codex/phase2-fill-semantics-20260430")"
 SOURCE_ARCHIVE_URI="$(metadata_value source_archive_uri "gs://codexalpaca-control-us/research_results/autonomous_paper_readiness_20260504/inputs/source/codexalpaca_repo_source.tar.gz")"
 STATUS_PREFIX="$(metadata_value status_prefix "gs://codexalpaca-control-us/research_results/autonomous_paper_readiness_20260504/controller")"
-CONTROLLER_ARGS="$(metadata_value controller_args "--loop --sleep-seconds 900 --max-launches-per-pass 16 --allow-delete-terminated")"
+CONTROLLER_ARGS="$(metadata_value controller_args "--max-launches-per-pass 16 --allow-delete-terminated")"
+LOOP_SLEEP_SECONDS="$(metadata_value loop_sleep_seconds "900")"
 
 WORKROOT="${WORKROOT:-/mnt/codexalpaca-autonomous-controller}"
 REPO_DIR="${WORKROOT}/repo"
@@ -37,6 +38,7 @@ echo "branch=${BRANCH}"
 echo "source_archive_uri=${SOURCE_ARCHIVE_URI}"
 echo "status_prefix=${STATUS_PREFIX}"
 echo "controller_args=${CONTROLLER_ARGS}"
+echo "loop_sleep_seconds=${LOOP_SLEEP_SECONDS}"
 
 apt-get update
 apt-get install -y git python3 python3-venv python3-pip ca-certificates
@@ -72,5 +74,5 @@ while true; do
     --status-prefix "${STATUS_PREFIX}" \
     ${CONTROLLER_ARGS}
   publish_log
-  sleep 60
+  sleep "${LOOP_SLEEP_SECONDS}"
 done

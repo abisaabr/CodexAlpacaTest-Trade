@@ -65,11 +65,11 @@ The launch script uploads a source archive and creates a small GCP control VM. T
 ```bash
 python -u scripts/gcp_autonomous_paper_readiness_controller.py \
   --gcloud gcloud \
-  --loop \
-  --sleep-seconds 900 \
   --max-launches-per-pass 16 \
   --allow-delete-terminated
 ```
+
+The VM bootstrap runs this as a one-pass controller, then sleeps for `900` seconds, pulls the latest branch, and runs another pass. That keeps the controller patchable from GitHub/GCS instead of trapping it inside a stale long-lived Python process.
 
 ## State Machine
 

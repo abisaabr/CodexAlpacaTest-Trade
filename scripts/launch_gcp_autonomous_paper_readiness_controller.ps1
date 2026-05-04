@@ -54,13 +54,14 @@ if ($DryRun) {
     & $Gcloud storage cp $StartupScript "$GcsRoot/inputs/startup/gcp_bootstrap_autonomous_paper_readiness_controller.sh" --project $Project
 }
 
-$ControllerArgs = "--loop --sleep-seconds 900 --max-launches-per-pass 16 --allow-delete-terminated"
+$ControllerArgs = "--max-launches-per-pass 16 --allow-delete-terminated"
 $Metadata = @(
     "repo_url=$RepoUrl",
     "branch=$Branch",
     "source_archive_uri=$SourceArchiveUri",
     "status_prefix=$StatusPrefix",
-    "controller_args=$ControllerArgs"
+    "controller_args=$ControllerArgs",
+    "loop_sleep_seconds=900"
 ) -join ","
 
 $Labels = "role=paper-ready-controller,wave=autonomous-paper-readiness,symbol=qqq"
