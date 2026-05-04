@@ -1,8 +1,18 @@
 # Autonomous Paper Readiness Controller
 
-Status: GCP-resident research automation prepared.
+Status: GCP-resident research automation launched.
 
 This controller is designed to keep the QQQ research-to-paper-readiness plan moving from Google Cloud without requiring the local Windows scheduled tasks to stay alive.
+
+Launched controller VM:
+
+- Instance: `paper-ready-controller-20260504qa`
+- Zone: `us-central1-a`
+- Machine type: `e2-standard-2`
+- Branch: `codex/phase2-fill-semantics-20260430`
+- Launch commit: `25b4a2b`
+
+Local Windows QQQ fill-squash scheduled tasks were disabled after the GCP controller published its first status artifact.
 
 ## Hard Rules
 
