@@ -32,6 +32,7 @@ SELECTORS_CSV="$(metadata_value selectors "nearest_contract,entry_liquidity_firs
 LAG_PROFILES_CSV="$(metadata_value lag_profiles "10:10")"
 ENTRY_BAR_LOOKUP_MODE="$(metadata_value entry_bar_lookup_mode "first_bar_at_or_after_entry_within_lag")"
 MAX_ENTRY_STALENESS_MINUTES="$(metadata_value max_entry_staleness_minutes 5)"
+EXIT_BAR_LOOKUP_MODE="$(metadata_value exit_bar_lookup_mode "first_bar_at_or_after_exit_within_lag")"
 SELECTORS_CSV="${SELECTORS_CSV//;/,}"
 LAG_PROFILES_CSV="${LAG_PROFILES_CSV//;/,}"
 
@@ -154,6 +155,7 @@ run_selector() {
     --entry-bar-lookup-mode "${ENTRY_BAR_LOOKUP_MODE}"
     --max-entry-staleness-minutes "${MAX_ENTRY_STALENESS_MINUTES}"
     --max-exit-lag-minutes "${exit_lag}"
+    --exit-bar-lookup-mode "${EXIT_BAR_LOOKUP_MODE}"
     --test-date-count "${TEST_DATE_COUNT}"
     --initial-cash "${INITIAL_CASH}"
     --allocation-fraction "${ALLOCATION_FRACTION}"
@@ -182,6 +184,7 @@ echo "selectors=${SELECTORS_CSV}"
 echo "lag_profiles=${LAG_PROFILES_CSV}"
 echo "entry_bar_lookup_mode=${ENTRY_BAR_LOOKUP_MODE}"
 echo "max_entry_staleness_minutes=${MAX_ENTRY_STALENESS_MINUTES}"
+echo "exit_bar_lookup_mode=${EXIT_BAR_LOOKUP_MODE}"
 start_runtime_monitor
 write_status "startup" "installing_dependencies"
 

@@ -8,7 +8,12 @@ import pandas as pd
 
 from scripts.run_option_aware_research_backtest import (
     CONTRACT_SELECTION_LIQUIDITY_FIRST,
+    EXIT_LOOKUP_AT_OR_AFTER,
+    EXIT_LOOKUP_AT_OR_AFTER_OR_PRIOR,
+    STRATEGY_FILL_COVERAGE_GATE,
+    _exit_option_bar,
     _path_matches_symbol_filter,
+    _recommendation,
     build_option_aware_backtest,
 )
 
@@ -179,6 +184,50 @@ def test_option_aware_backtest_prices_stock_signal_windows_against_options(
         "candidate_for_walk_forward_review",
         "hold_option_economics",
     }
+
+
+def test_recommendation_holds_until_strategy_fill_gate() -> None:
+    summary = {
+        "source_stock_trade_count": 100,
+        "option_trade_count": 89,
+        "strategy_fill_coverage": STRATEGY_FILL_COVERAGE_GATE - 0.01,
+        "fill_coverage": STRATEGY_FILL_COVERAGE_GATE - 0.01,
+        "train_net_pnl": 100.0,
+        "test_net_pnl": 100.0,
+        "net_pnl": 200.0,
+        "expectancy": 2.0,
+    }
+
+    assert _recommendation(summary) == "hold_option_fill_coverage"
+
+
+def test_exit_lookup_defaults_to_strict_at_or_after() -> None:
+    bars = pd.DataFrame(
+        {
+            "symbol": ["QQQ260515C00500000"],
+            "timestamp": pd.to_datetime(["2026-05-01T15:58:00Z"], utc=True),
+            "close": [2.50],
+        }
+    )
+    exit_time = pd.Timestamp("2026-05-01T16:00:00Z")
+
+    assert (
+        _exit_option_bar(
+            option_bars=bars,
+            contract_symbol="QQQ260515C00500000",
+            timestamp=exit_time,
+            max_lag=timedelta(minutes=5),
+            lookup_mode=EXIT_LOOKUP_AT_OR_AFTER,
+        )
+        is None
+    )
+    assert _exit_option_bar(
+        option_bars=bars,
+        contract_symbol="QQQ260515C00500000",
+        timestamp=exit_time,
+        max_lag=timedelta(minutes=5),
+        lookup_mode=EXIT_LOOKUP_AT_OR_AFTER_OR_PRIOR,
+    )["close"] == 2.50
 
 
 def test_liquidity_first_selector_uses_entry_window_without_future_bars(

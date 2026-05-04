@@ -116,6 +116,14 @@ def parse_args() -> argparse.Namespace:
         ],
     )
     parser.add_argument("--max-entry-staleness-minutes", type=float, default=5.0)
+    parser.add_argument(
+        "--exit-bar-lookup-mode",
+        default="first_bar_at_or_after_exit_within_lag",
+        choices=[
+            "first_bar_at_or_after_exit_within_lag",
+            "first_bar_at_or_after_or_prior_exit_within_lag",
+        ],
+    )
     parser.add_argument("--top-n", type=int, default=30)
     parser.add_argument("--test-date-count", type=int, default=20)
     parser.add_argument("--initial-cash", type=float, default=25_000.0)
@@ -302,8 +310,13 @@ def repair_instances(args: argparse.Namespace, instances: list[dict[str, Any]]) 
             continue
         if name.startswith(f"ticker365-repair-agg-{args.instance_suffix}"):
             continue
+        labels = instance.get("labels") or {}
+        label_symbol = str(labels.get("symbol") or "").upper()
+        if label_symbol:
+            grouped.setdefault(label_symbol, []).append(instance)
+            continue
         middle = name[len(prefix) :].split(suffix, 1)[0]
-        grouped.setdefault(middle.upper(), []).append(instance)
+        grouped.setdefault(middle.split("-", 1)[0].upper(), []).append(instance)
     return grouped
 
 
@@ -364,6 +377,104 @@ def completed_worker(phase: str, counts: dict[str, int], expected_count: int) ->
         and counts.get("portfolio_report_count", 0) >= 1
         and counts.get("promotion_packet_count", 0) >= 1
     )
+
+
+def _infer_symbol_from_worker_id(worker_id_value: str) -> str:
+    match = re.search(r"ticker365fillrepair_([a-z0-9]+)(?:_|$)", worker_id_value.lower())
+    return match.group(1).upper() if match else ""
+
+
+def _profile_shard_suffix(canonical_worker_id: str, worker_id_value: str) -> str:
+    prefix = f"{canonical_worker_id}_"
+    if worker_id_value.startswith(prefix):
+        return worker_id_value[len(prefix) :]
+    return ""
+
+
+def _instances_for_profile_shard(
+    *,
+    instances: list[dict[str, Any]],
+    canonical_worker_id: str,
+    profile_worker_id: str,
+) -> list[dict[str, Any]]:
+    suffix = _profile_shard_suffix(canonical_worker_id, profile_worker_id)
+    if not suffix:
+        return []
+    needle = f"-{suffix.lower()}-"
+    return [
+        instance
+        for instance in instances
+        if needle in str(instance.get("name", "")).lower()
+    ]
+
+
+def profile_shard_status(
+    args: argparse.Namespace,
+    rows: list[dict[str, Any]],
+    instances_by_symbol: dict[str, list[dict[str, Any]]],
+    statuses: dict[str, dict[str, Any]],
+    counts_by_worker: dict[str, dict[str, int]],
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    canonical_worker_ids = {worker_id(str(row["symbol"]).upper()) for row in rows}
+    extra_worker_ids = sorted((set(statuses) | set(counts_by_worker)) - canonical_worker_ids)
+    expected_profile_worker = _csv_count(args.selectors)
+    profile_workers: list[dict[str, Any]] = []
+    completed = failed = running = pending = 0
+
+    for wid in extra_worker_ids:
+        payload = statuses.get(wid, {})
+        symbol = str(payload.get("symbol") or _infer_symbol_from_worker_id(wid)).upper()
+        canonical_worker_id = worker_id(symbol) if symbol else ""
+        counts = counts_by_worker.get(wid, {})
+        phase = str(payload.get("phase", "not_started"))
+        instances = _instances_for_profile_shard(
+            instances=instances_by_symbol.get(symbol, []),
+            canonical_worker_id=canonical_worker_id,
+            profile_worker_id=wid,
+        )
+        is_completed = completed_worker(phase, counts, expected_profile_worker)
+        is_failed = phase == "failed"
+        is_running = active_instance_exists(instances)
+        if is_completed:
+            completed += 1
+        elif is_failed:
+            failed += 1
+        elif is_running:
+            running += 1
+        else:
+            pending += 1
+        profile_workers.append(
+            {
+                "worker_id": wid,
+                "symbol": symbol,
+                "phase": phase,
+                "detail": payload.get("detail"),
+                "status_uri": payload.get("status_uri"),
+                "candidate_summary_count": counts.get("candidate_summary_count", 0),
+                "expected_candidate_summary_count": expected_profile_worker,
+                "portfolio_report_count": counts.get("portfolio_report_count", 0),
+                "promotion_packet_count": counts.get("promotion_packet_count", 0),
+                "instances": [
+                    {
+                        "name": str(instance.get("name")),
+                        "zone": instance_zone(instance),
+                        "machine_type": machine_type_name(instance),
+                        "status": str(instance.get("status")),
+                    }
+                    for instance in instances
+                ],
+                "completed": is_completed,
+                "failed": is_failed,
+            }
+        )
+
+    return profile_workers, {
+        "total": len(profile_workers),
+        "completed": completed,
+        "running": running,
+        "failed": failed,
+        "pending": pending,
+    }
 
 
 def aggregate_state(args: argparse.Namespace) -> dict[str, Any]:
@@ -492,6 +603,7 @@ def launch_worker(
         "lag_profiles": args.lag_profiles.replace(",", ";"),
         "entry_bar_lookup_mode": args.entry_bar_lookup_mode,
         "max_entry_staleness_minutes": f"{args.max_entry_staleness_minutes:g}",
+        "exit_bar_lookup_mode": args.exit_bar_lookup_mode,
     }
     dataset_label = str(row.get("dataset_id", "unknown")).replace("_", "-")[:32]
     labels = (
@@ -818,6 +930,9 @@ def build_status(
     expected_worker = expected_per_worker(args)
     workers: list[dict[str, Any]] = []
     completed = failed = running = pending = 0
+    profile_workers, profile_counts = profile_shard_status(
+        args, rows, instances_by_symbol, statuses, counts_by_worker
+    )
     for row in rows:
         symbol = str(row["symbol"]).upper()
         wid = worker_id(symbol)
@@ -858,7 +973,10 @@ def build_status(
                 "failed": is_failed,
             }
         )
-    summary_count = sum(worker["candidate_summary_count"] for worker in workers)
+    summary_count = sum(
+        worker_counts.get("candidate_summary_count", 0)
+        for worker_counts in counts_by_worker.values()
+    )
     expected_total = expected_summary_count(args, len(rows))
     if aggregate.get("promotion_packet_uris"):
         next_action = "Review repair aggregate promotion packet; stage no-order paper handoff only if eligible."
@@ -879,6 +997,7 @@ def build_status(
         "selectors": args.selectors,
         "entry_bar_lookup_mode": args.entry_bar_lookup_mode,
         "max_entry_staleness_minutes": args.max_entry_staleness_minutes,
+        "exit_bar_lookup_mode": args.exit_bar_lookup_mode,
         "top_n": args.top_n,
         "quota": quota,
         "summary_counts": {"total": summary_count, "expected": expected_total},
@@ -888,8 +1007,10 @@ def build_status(
             "running": running,
             "failed": failed,
             "pending": pending,
+            "profile_shards": profile_counts,
         },
         "workers": workers,
+        "profile_shards": profile_workers,
         "aggregate": aggregate,
         "paper_trader_handoff": paper_handoff(aggregate),
         "actions": actions,
@@ -912,12 +1033,15 @@ def write_status(args: argparse.Namespace, status: dict[str, Any]) -> tuple[Path
         f"- GCS prefix: `{status['gcs_prefix']}`",
         f"- Lag profiles: `{status['lag_profiles']}`",
         f"- Selectors: `{status['selectors']}`",
+        f"- Entry lookup mode: `{status['entry_bar_lookup_mode']}`",
+        f"- Exit lookup mode: `{status['exit_bar_lookup_mode']}`",
         f"- Top N per symbol: `{status['top_n']}`",
         f"- Quota: `{status['quota']['usage']}/{status['quota']['limit']}` CPUs, free `{status['quota']['free']}`",
         f"- Candidate summaries: `{status['summary_counts']['total']}/{status['summary_counts']['expected']}`",
         f"- Completed workers: `{status['worker_counts']['completed']}/{status['worker_counts']['total']}`",
         f"- Running workers: `{status['worker_counts']['running']}`",
         f"- Pending workers: `{status['worker_counts']['pending']}`",
+        f"- Profile shards: `{status['worker_counts']['profile_shards']['completed']}/{status['worker_counts']['profile_shards']['total']}` completed, `{status['worker_counts']['profile_shards']['running']}` running",
         f"- Aggregate packet ready: `{bool(status['aggregate']['promotion_packet_uris'])}`",
         f"- Paper handoff: `{status['paper_trader_handoff']['status']}`",
         "",
@@ -966,6 +1090,21 @@ def write_status(args: argparse.Namespace, status: dict[str, Any]) -> tuple[Path
             f"{worker['portfolio_report_count']} | {worker['promotion_packet_count']} | "
             f"{instance_text} |"
         )
+    if status.get("profile_shards"):
+        lines.extend(["", "## Profile Shard State", ""])
+        lines.append("| Worker ID | Symbol | Phase | Candidate Summaries | Reports | Packets | Instances |")
+        lines.append("| --- | --- | --- | ---: | ---: | ---: | --- |")
+        for worker in status["profile_shards"]:
+            instance_text = ", ".join(
+                f"{item['name']}:{item['status']}" for item in worker["instances"]
+            ) or "none"
+            lines.append(
+                "| "
+                f"`{worker['worker_id']}` | `{worker['symbol']}` | `{worker['phase']}` | "
+                f"{worker['candidate_summary_count']}/{worker['expected_candidate_summary_count']} | "
+                f"{worker['portfolio_report_count']} | {worker['promotion_packet_count']} | "
+                f"{instance_text} |"
+            )
     lines.extend(["", "## Hard Rules", ""])
     for rule in HARD_RULES:
         lines.append(f"- {rule}")

@@ -50,6 +50,9 @@ CONTRACT_SELECTION_NEAREST = "nearest_contract"
 CONTRACT_SELECTION_LIQUIDITY_FIRST = "entry_liquidity_first_research_only"
 ENTRY_LOOKUP_AT_OR_AFTER = "first_bar_at_or_after_entry_within_lag"
 ENTRY_LOOKUP_AT_OR_AFTER_OR_ASOF = "first_bar_at_or_after_or_asof_entry_within_lag"
+EXIT_LOOKUP_AT_OR_AFTER = "first_bar_at_or_after_exit_within_lag"
+EXIT_LOOKUP_AT_OR_AFTER_OR_PRIOR = "first_bar_at_or_after_or_prior_exit_within_lag"
+STRATEGY_FILL_COVERAGE_GATE = 0.90
 REGIME_TOKENS = {"bull", "bear", "choppy"}
 
 
@@ -94,6 +97,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--max-entry-staleness-minutes", type=float, default=5.0)
     parser.add_argument("--max-exit-lag-minutes", type=float, default=10.0)
+    parser.add_argument(
+        "--exit-bar-lookup-mode",
+        choices=[EXIT_LOOKUP_AT_OR_AFTER, EXIT_LOOKUP_AT_OR_AFTER_OR_PRIOR],
+        default=EXIT_LOOKUP_AT_OR_AFTER,
+        help=(
+            "Exit lookup semantics. The default uses the first option bar at or after "
+            "the stock exit signal. The prior-bar fallback is research-diagnostic only."
+        ),
+    )
     parser.add_argument(
         "--test-date-count",
         type=int,
@@ -563,6 +575,7 @@ def _exit_option_bar(
     contract_symbol: str,
     timestamp: pd.Timestamp,
     max_lag: timedelta,
+    lookup_mode: str = EXIT_LOOKUP_AT_OR_AFTER,
 ) -> dict[str, Any] | None:
     forward_bar = _first_option_bar(
         option_bars=option_bars,
@@ -573,6 +586,8 @@ def _exit_option_bar(
     )
     if forward_bar:
         return forward_bar
+    if lookup_mode != EXIT_LOOKUP_AT_OR_AFTER_OR_PRIOR:
+        return None
 
     earliest = timestamp - max_lag
     if option_index:
@@ -724,7 +739,7 @@ def _recommendation(summary: dict[str, Any]) -> str:
     expectancy = float(summary["expectancy"])
     if source_trades < 3 or filled < 3:
         return "hold_insufficient_option_fills"
-    if fill_coverage < 0.80:
+    if fill_coverage < STRATEGY_FILL_COVERAGE_GATE:
         return "hold_option_fill_coverage"
     if net_pnl > 0 and expectancy > 0 and train_pnl >= 0 and test_pnl >= 0:
         if summary.get("contract_selection_method") == CONTRACT_SELECTION_LIQUIDITY_FIRST:
@@ -743,7 +758,7 @@ def _fill_failure_reason(summary: dict[str, Any]) -> str:
     fill_coverage = float(
         summary.get("strategy_fill_coverage") or summary.get("fill_coverage") or 0.0
     )
-    if fill_coverage >= 0.90:
+    if fill_coverage >= STRATEGY_FILL_COVERAGE_GATE:
         return "fill_gate_clear"
     missing = {
         "selected_contract_universe_gap": int(summary.get("missing_no_selected_contract") or 0),
@@ -777,6 +792,7 @@ def _option_rows_for_candidate(
     entry_lookup_mode: str,
     max_entry_staleness: timedelta,
     max_exit_lag: timedelta,
+    exit_lookup_mode: str,
     contract_selection_method: str,
     source_trades: pd.DataFrame | None = None,
 ) -> tuple[list[dict[str, Any]], int, dict[str, int], list[dict[str, Any]]]:
@@ -827,6 +843,7 @@ def _option_rows_for_candidate(
                 max_entry_staleness.total_seconds() / 60.0, 4
             ),
             "max_exit_lag_minutes": round(max_exit_lag.total_seconds() / 60.0, 4),
+            "exit_lookup_mode": exit_lookup_mode,
             "contract_selection_method": contract_selection_method,
         }
         if lookup_time is not None:
@@ -917,6 +934,7 @@ def _option_rows_for_candidate(
             contract_symbol=contract_symbol,
             timestamp=exit_time,
             max_lag=max_exit_lag,
+            lookup_mode=exit_lookup_mode,
         )
         if not exit_bar:
             missing_counts["no_exit_bar"] += 1
@@ -1034,6 +1052,7 @@ def build_option_aware_backtest(
     max_entry_lag: timedelta,
     max_exit_lag: timedelta,
     entry_lookup_mode: str = ENTRY_LOOKUP_AT_OR_AFTER,
+    exit_lookup_mode: str = EXIT_LOOKUP_AT_OR_AFTER,
     max_entry_staleness: timedelta | None = None,
     symbol_filter: set[str] | None = None,
     skip_blocked_queue_items: bool = False,
@@ -1137,6 +1156,7 @@ def build_option_aware_backtest(
             entry_lookup_mode=entry_lookup_mode,
             max_entry_staleness=max_entry_staleness,
             max_exit_lag=max_exit_lag,
+            exit_lookup_mode=exit_lookup_mode,
             contract_selection_method=contract_selection_method,
             source_trades=source_trades,
         )
@@ -1186,13 +1206,14 @@ def build_option_aware_backtest(
             "fill_coverage_numerator": filled_order_count,
             "fill_coverage_denominator": source_trade_count,
             "fill_coverage_unit": "filled_single_contract_option_orders_per_source_stock_trade",
+            "strategy_fill_coverage_gate": STRATEGY_FILL_COVERAGE_GATE,
             "fill_coverage_semantics": (
                 "Strategy-level fill coverage, not raw option data coverage. "
                 "Current engine models one directional option contract per source stock trade."
             ),
             "entry_lookup_mode": entry_lookup_mode,
             "max_entry_staleness_minutes": round(max_entry_staleness.total_seconds() / 60.0, 4),
-            "exit_lookup_mode": "first_bar_after_or_last_bar_before_exit_within_lag",
+            "exit_lookup_mode": exit_lookup_mode,
             **economics,
             **split,
             "promotion_allowed": False,
@@ -1249,11 +1270,13 @@ def build_option_aware_backtest(
         "contract_selection_method": contract_selection_method,
         "option_lookup_mode": "indexed_by_contract_and_symbol",
         "fill_coverage_unit": "filled_single_contract_option_orders_per_source_stock_trade",
+        "strategy_fill_coverage_gate": STRATEGY_FILL_COVERAGE_GATE,
         "fill_coverage_semantics": (
             "fill_coverage is an alias for strategy_fill_coverage. "
             "data_foundation_coverage measures selected-contract availability for source trades; "
             "entry_bar_coverage and exit_bar_coverage isolate timing/execution gaps."
         ),
+        "exit_lookup_mode": exit_lookup_mode,
         "option_index_counts": {
             "contract_keys": len(option_index.contracts_by_key),
             "bar_symbols": len(option_index.bars_by_symbol),
@@ -1417,6 +1440,7 @@ def main() -> None:
         entry_lookup_mode=args.entry_bar_lookup_mode,
         max_entry_staleness=timedelta(minutes=args.max_entry_staleness_minutes),
         max_exit_lag=timedelta(minutes=args.max_exit_lag_minutes),
+        exit_lookup_mode=args.exit_bar_lookup_mode,
         test_date_count=args.test_date_count,
         contract_selection_method=args.contract_selection_method,
     )

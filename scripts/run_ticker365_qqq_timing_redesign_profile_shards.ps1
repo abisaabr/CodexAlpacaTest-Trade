@@ -189,6 +189,7 @@ function Start-ShardWorker {
         lag_profiles = $Shard.LagProfile
         entry_bar_lookup_mode = "first_bar_at_or_after_entry_within_lag"
         max_entry_staleness_minutes = "0"
+        exit_bar_lookup_mode = "first_bar_at_or_after_exit_within_lag"
     }
     $metadataArg = ConvertTo-MetadataArg $metadata
     $labels = "wave=ticker365-fillrepair,role=ticker365-repair,symbol=qqq,dataset=qqq-dense-365d"
