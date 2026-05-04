@@ -982,6 +982,10 @@ def build_status(
         next_action = "Review repair aggregate promotion packet; stage no-order paper handoff only if eligible."
     elif summary_count >= expected_total:
         next_action = "Wait for or launch aggregate packet builder."
+    elif profile_counts["running"] > 0 or running > 0:
+        next_action = "Wait for running fill-repair profile shards to finish and self-stop."
+    elif args.max_launches_per_run <= 0:
+        next_action = "No worker launches requested this run; wait for profile shard automation or launch manually."
     elif int(quota.get("free", 0)) >= machine_type_cpus(args.machine_type):
         next_action = "Launch next fill-repair worker tranche."
     else:
