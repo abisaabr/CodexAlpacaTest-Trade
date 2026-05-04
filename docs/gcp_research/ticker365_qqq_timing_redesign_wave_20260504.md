@@ -64,6 +64,8 @@ The first launch used a single QQQ worker that runs all five lag profiles sequen
 
 Each profile-shard worker still uses both contract selectors and the same dense QQQ 365-day dataset. The aggregate remains blocked until all `10` strict candidate summaries exist, and no strategy may move forward unless the generated promotion packet says `eligible_for_promotion_review`.
 
+The profile-shard launcher now uses `200GB` `pd-ssd` boot disks for reruns. The earlier `40GB` `pd-standard` workers staged data successfully but produced no candidate summaries after an extended compute window, consistent with local parquet read/index I/O becoming the bottleneck.
+
 ## Expected Decision Rule
 
 Only move a QQQ strategy toward governed promotion review if the generated promotion packet says `eligible_for_promotion_review`. If QQQ remains below the fill gate, the next step is deeper source-signal timing redesign, not broader ticker expansion and not gate relaxation.
