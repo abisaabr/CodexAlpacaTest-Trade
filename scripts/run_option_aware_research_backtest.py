@@ -677,6 +677,54 @@ def _select_wing_contract_with_entry(
     return (candidate_rows[0], None, "no_entry_bar") if saw_candidate else (None, None, "no_selected_contract")
 
 
+def _select_matching_body_contract_with_entry(
+    *,
+    contracts: pd.DataFrame,
+    option_bars: pd.DataFrame,
+    option_index: OptionResearchIndex | None,
+    symbol: str,
+    option_type: str,
+    trade_date: Any,
+    base_contract: dict[str, Any],
+    entry_time: pd.Timestamp,
+    max_lag: timedelta,
+    entry_lookup_mode: str,
+    max_entry_staleness: timedelta,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str]:
+    frame = _contract_frame_for_type(
+        contracts=contracts,
+        option_index=option_index,
+        symbol=symbol,
+        option_type=option_type,
+        trade_date=trade_date,
+    )
+    if frame.empty:
+        return None, None, "no_selected_contract"
+
+    base_strike = _contract_strike(base_contract)
+    strikes = pd.to_numeric(frame.get("strike_price", frame.get("strike")), errors="coerce")
+    candidates = frame[strikes == base_strike].copy()
+    base_dte = base_contract.get("dte")
+    if base_dte is not None and "dte" in candidates.columns:
+        candidates = candidates[pd.to_numeric(candidates["dte"], errors="coerce") == float(base_dte)]
+    if candidates.empty:
+        return None, None, "no_selected_contract"
+
+    for contract in candidates.sort_values("symbol").to_dict("records"):
+        entry_bar = _contract_entry_bar(
+            contract=contract,
+            option_bars=option_bars,
+            option_index=option_index,
+            entry_time=entry_time,
+            max_lag=max_lag,
+            entry_lookup_mode=entry_lookup_mode,
+            max_entry_staleness=max_entry_staleness,
+        )
+        if entry_bar:
+            return contract, entry_bar, "selected"
+    return candidates.iloc[0].to_dict(), None, "no_entry_bar"
+
+
 def _leg(
     *,
     role: str,
@@ -759,7 +807,19 @@ def _option_structure_legs(
         call_contract, call_entry, status = base("call")
         if status != "selected" or not call_contract or not call_entry:
             return [], "iron_butterfly", status
-        put_contract, put_entry, status = base("put")
+        put_contract, put_entry, status = _select_matching_body_contract_with_entry(
+            contracts=contracts,
+            option_bars=option_bars,
+            option_index=option_index,
+            symbol=symbol,
+            option_type="put",
+            trade_date=trade_date,
+            base_contract=call_contract,
+            entry_time=entry_time,
+            max_lag=max_entry_lag,
+            entry_lookup_mode=entry_lookup_mode,
+            max_entry_staleness=max_entry_staleness,
+        )
         if status != "selected" or not put_contract or not put_entry:
             return [], "iron_butterfly", status
         call_wing, call_wing_entry, status = wing(

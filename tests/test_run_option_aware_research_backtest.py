@@ -322,6 +322,77 @@ def test_family_aware_option_structure_builds_vertical_and_iron_butterfly_legs()
     ]
 
 
+def test_iron_butterfly_pairs_body_strikes_under_liquidity_first_selection() -> None:
+    trade_date = pd.Timestamp("2026-04-21").date()
+    entry_time = pd.Timestamp("2026-04-21T13:35:00Z")
+    contracts = pd.DataFrame(
+        {
+            "trade_date": [trade_date] * 5,
+            "underlying_symbol": ["QQQ"] * 5,
+            "symbol": [
+                "QQQ260424C00100000",
+                "QQQ260424C00101000",
+                "QQQ260424P00100000",
+                "QQQ260424P00101000",
+                "QQQ260424P00099000",
+            ],
+            "option_type": ["call", "call", "put", "put", "put"],
+            "strike_price": [100.0, 101.0, 100.0, 101.0, 99.0],
+            "dte": [3, 3, 3, 3, 3],
+            "relative_strike_step": [0, 1, 0, 1, -1],
+        }
+    )
+    option_bars = pd.DataFrame(
+        {
+            "symbol": [
+                "QQQ260424C00100000",
+                "QQQ260424C00101000",
+                "QQQ260424P00100000",
+                "QQQ260424P00101000",
+                "QQQ260424P00099000",
+            ],
+            "timestamp": [entry_time] * 5,
+            "close": [2.0, 1.1, 2.2, 3.4, 1.0],
+            "volume": [10, 10, 1, 1_000, 10],
+        }
+    )
+    option_index = _build_option_research_index(
+        contracts=contracts,
+        option_bars=option_bars,
+        option_trades=pd.DataFrame(),
+    )
+
+    iron_legs, iron_structure, iron_status = _option_structure_legs(
+        queue_item={
+            "candidate_variant_id": "qqq_iron",
+            "symbol": "QQQ",
+            "directional_option_type": "call",
+            "family": "iron_butterfly",
+        },
+        variant={"parameters": {"family_template": "iron_butterfly"}},
+        contracts=contracts,
+        option_bars=option_bars,
+        option_trades=pd.DataFrame(),
+        option_index=option_index,
+        symbol="QQQ",
+        trade_date=trade_date,
+        entry_time=entry_time,
+        max_entry_lag=timedelta(minutes=1),
+        entry_lookup_mode="first_bar_at_or_after_entry_within_lag",
+        max_entry_staleness=timedelta(minutes=0),
+        contract_selection_method=CONTRACT_SELECTION_LIQUIDITY_FIRST,
+    )
+
+    assert iron_status == "selected"
+    assert iron_structure == "iron_butterfly"
+    body_strikes = {
+        leg["role"]: leg["contract"]["strike_price"]
+        for leg in iron_legs
+        if leg["role"] in {"short_call_body", "short_put_body"}
+    }
+    assert body_strikes == {"short_call_body": 100.0, "short_put_body": 100.0}
+
+
 def test_exit_lookup_defaults_to_strict_at_or_after() -> None:
     bars = pd.DataFrame(
         {
