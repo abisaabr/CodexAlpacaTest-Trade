@@ -25,6 +25,8 @@ CONTRACTS_URI="$(metadata_value contracts_uri)"
 BARS_URI="$(metadata_value bars_uri)"
 INITIAL_CASH="$(metadata_value initial_cash 25000)"
 TOP_N="$(metadata_value top_n 40)"
+CANDIDATE_SELECTION_MODE="$(metadata_value candidate_selection_mode "priority_order")"
+REGIME_BALANCE_ORDER="$(metadata_value regime_balance_order "bull,bear,choppy,unclassified")"
 CANDIDATE_START_INDEX="$(metadata_value candidate_start_index 1)"
 CANDIDATE_COUNT="$(metadata_value candidate_count)"
 TEST_DATE_COUNT="$(metadata_value test_date_count 20)"
@@ -101,6 +103,8 @@ print(json.dumps({
     "stock_session_filter": "__STOCK_SESSION_FILTER__",
     "candidate_start_index": "__CANDIDATE_START_INDEX__",
     "candidate_count": "__CANDIDATE_COUNT__",
+    "candidate_selection_mode": "__CANDIDATE_SELECTION_MODE__",
+    "regime_balance_order": "__REGIME_BALANCE_ORDER__",
     "expected_candidate_summary_count": "__EXPECTED_CANDIDATE_SUMMARY_COUNT__",
     "broker_facing": False,
     "paper_orders": False,
@@ -123,6 +127,8 @@ PY
     -e "s|__STOCK_SESSION_FILTER__|${STOCK_SESSION_FILTER}|g" \
     -e "s|__CANDIDATE_START_INDEX__|${CANDIDATE_START_INDEX}|g" \
     -e "s|__CANDIDATE_COUNT__|${CANDIDATE_COUNT}|g" \
+    -e "s|__CANDIDATE_SELECTION_MODE__|${CANDIDATE_SELECTION_MODE}|g" \
+    -e "s|__REGIME_BALANCE_ORDER__|${REGIME_BALANCE_ORDER}|g" \
     -e "s|__EXPECTED_CANDIDATE_SUMMARY_COUNT__|${EXPECTED_CANDIDATE_SUMMARY_COUNT}|g" \
     "${WORKROOT}/ticker_365d_status.json"
   gcloud storage cp "${WORKROOT}/ticker_365d_status.json" "${WORKER_PREFIX}/ticker_365d_status.json" || true
@@ -264,6 +270,8 @@ run_selector() {
     --run-id "${run_id}"
     --progress-dir "${WORKROOT}/progress/${run_id}"
     --top-n "${TOP_N}"
+    --candidate-selection-mode "${CANDIDATE_SELECTION_MODE}"
+    --regime-balance-order "${REGIME_BALANCE_ORDER}"
     --candidate-start-index "${CANDIDATE_START_INDEX}"
     --symbol-filter "${SYMBOL}"
     --max-entry-lag-minutes "${entry_lag}"
@@ -298,6 +306,8 @@ echo "profile_name=${PROFILE_NAME}"
 echo "symbol=${SYMBOL}"
 echo "gcs_prefix=${GCS_PREFIX}"
 echo "top_n=${TOP_N}"
+echo "candidate_selection_mode=${CANDIDATE_SELECTION_MODE}"
+echo "regime_balance_order=${REGIME_BALANCE_ORDER}"
 echo "candidate_start_index=${CANDIDATE_START_INDEX}"
 echo "candidate_count=${CANDIDATE_COUNT}"
 echo "test_date_count=${TEST_DATE_COUNT}"

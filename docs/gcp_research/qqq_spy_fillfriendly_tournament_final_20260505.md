@@ -64,6 +64,7 @@ Fill failure counts:
 The following research-control upgrades were added after the wave launched, so they apply to future reruns:
 
 - `scripts/run_option_aware_research_backtest.py` now supports opt-in `--candidate-selection-mode regime_balanced`, preserving default priority-order behavior while allowing bull/bear/choppy round-robin candidate windows.
+- `scripts/gcp_single_ticker_365d_shard.sh` now passes candidate-selection metadata through to the backtester and worker status JSON, defaulting to priority-order behavior for compatibility.
 - `scripts/build_portfolio_overnight_research_inputs.py` now writes normalized `directional_option_type`, `intended_regime`, and `family` metadata into generated variants and their parameter payloads, not only queue rows.
 - `scripts/build_research_portfolio_report.py` now emits `symbol_regime_summary`, making per-ticker bull/bear/choppy coverage gaps first-class in JSON and Markdown reports.
 
@@ -71,6 +72,7 @@ Validation:
 
 - `python -m py_compile scripts/run_option_aware_research_backtest.py`
 - `python -m py_compile scripts/build_portfolio_overnight_research_inputs.py scripts/build_research_portfolio_report.py`
+- `bash -n scripts/gcp_single_ticker_365d_shard.sh`
 - `uv run --with pytest python -m pytest tests/test_build_portfolio_overnight_research_inputs.py tests/test_build_research_portfolio_report.py tests/test_run_option_aware_research_backtest.py -q`
 - Result: `25 passed`
 
