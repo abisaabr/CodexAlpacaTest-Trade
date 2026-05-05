@@ -1598,6 +1598,7 @@ def _stock_trade_cache_key(variant: dict[str, Any], *, stock_session_filter: str
         "range_entry_side",
         "range_edge_pct",
         "entry_signal_mode",
+        "signal_delay_bars",
         "cooldown_bars",
         "max_signals_per_day",
         "timeout_only_stock_proxy",

@@ -23,7 +23,38 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--symbol", default="IWM")
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--wave-id", default="ticker365_iwm_regime_rescue_20260505")
+    parser.add_argument("--target-regimes", default="bear,choppy")
+    parser.add_argument(
+        "--choppy-families",
+        default="",
+        help="Optional comma-separated choppy family filter for bounded rescue waves.",
+    )
+    parser.add_argument(
+        "--choppy-signal-delay-bars",
+        default="0",
+        help=(
+            "Comma-separated completed-stock-bar signal delays for choppy rows. "
+            "Default 0 preserves the historical immediate-entry search."
+        ),
+    )
     return parser.parse_args()
+
+
+def _csv_set(value: str) -> set[str]:
+    return {item.strip().lower() for item in str(value or "").split(",") if item.strip()}
+
+
+def _csv_ints(value: str) -> list[int]:
+    items = []
+    for item in str(value or "").split(","):
+        item = item.strip()
+        if not item:
+            continue
+        parsed = int(item)
+        if parsed < 0:
+            raise ValueError("signal delay bars must be non-negative")
+        items.append(parsed)
+    return items or [0]
 
 
 def _bear_timing_profiles() -> list[dict[str, Any]]:
@@ -208,8 +239,15 @@ def _bear_rows(*, symbol: str, wave_id: str) -> list[dict[str, Any]]:
     return rows
 
 
-def _choppy_rows(*, symbol: str, wave_id: str) -> list[dict[str, Any]]:
+def _choppy_rows(
+    *,
+    symbol: str,
+    wave_id: str,
+    signal_delay_bars: list[int] | None = None,
+    family_filter: set[str] | None = None,
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    delays = signal_delay_bars or [0]
     direction_specs = [
         ("call", "lower_band", "single_leg_repair", 1),
         ("call", "lower_band", "debit_call_vertical", 1),
@@ -221,40 +259,65 @@ def _choppy_rows(*, symbol: str, wave_id: str) -> list[dict[str, Any]]:
     for timing_profile in _choppy_timing_profiles():
         for exit_profile in _choppy_exit_profiles():
             for direction, range_entry_side, family, wing_width in direction_specs:
+                if family_filter and family not in family_filter:
+                    continue
                 for range_edge_pct in (0.0004, 0.0009):
-                    parameters = {
-                        **timing_profile,
-                        **exit_profile,
-                        "cooldown_bars": 75,
-                        "dte_mode": "next_expiry",
-                        "entry_signal_mode": "rising_edge",
-                        "family_template": family,
-                        "liquidity_gate": "tight",
-                        "max_signals_per_day": 1,
-                        "min_range_pct": 0.0012,
-                        "range_edge_pct": range_edge_pct,
-                        "range_entry_side": range_entry_side,
-                        "short_width_steps": 1,
-                        "stock_proxy_mode": "range_bound",
-                        "timeout_only_stock_proxy": True,
-                        "wing_width_steps": wing_width,
-                    }
-                    rows.append(
-                        _variant(
-                            symbol=symbol,
-                            regime="choppy",
-                            direction=direction,
-                            family=family,
-                            parameters=parameters,
-                            priority=1,
-                            wave_id=wave_id,
+                    for delay_bars in delays:
+                        parameters = {
+                            **timing_profile,
+                            **exit_profile,
+                            "cooldown_bars": 75,
+                            "dte_mode": "next_expiry",
+                            "entry_signal_mode": "rising_edge",
+                            "family_template": family,
+                            "liquidity_gate": "tight",
+                            "max_signals_per_day": 1,
+                            "min_range_pct": 0.0012,
+                            "range_edge_pct": range_edge_pct,
+                            "range_entry_side": range_entry_side,
+                            "short_width_steps": 1,
+                            "stock_proxy_mode": "range_bound",
+                            "timeout_only_stock_proxy": True,
+                            "wing_width_steps": wing_width,
+                        }
+                        if delay_bars:
+                            parameters["signal_delay_bars"] = delay_bars
+                        rows.append(
+                            _variant(
+                                symbol=symbol,
+                                regime="choppy",
+                                direction=direction,
+                                family=family,
+                                parameters=parameters,
+                                priority=1,
+                                wave_id=wave_id,
+                            )
                         )
-                    )
     return rows
 
 
-def build_iwm_regime_rescue_rows(*, symbol: str, wave_id: str) -> list[dict[str, Any]]:
-    return [*_bear_rows(symbol=symbol, wave_id=wave_id), *_choppy_rows(symbol=symbol, wave_id=wave_id)]
+def build_iwm_regime_rescue_rows(
+    *,
+    symbol: str,
+    wave_id: str,
+    target_regimes: set[str] | None = None,
+    choppy_signal_delay_bars: list[int] | None = None,
+    choppy_families: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    regimes = target_regimes or {"bear", "choppy"}
+    rows: list[dict[str, Any]] = []
+    if "bear" in regimes:
+        rows.extend(_bear_rows(symbol=symbol, wave_id=wave_id))
+    if "choppy" in regimes:
+        rows.extend(
+            _choppy_rows(
+                symbol=symbol,
+                wave_id=wave_id,
+                signal_delay_bars=choppy_signal_delay_bars,
+                family_filter=choppy_families,
+            )
+        )
+    return rows
 
 
 def main() -> None:
@@ -262,7 +325,15 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     symbol = str(args.symbol).upper()
-    rows = build_iwm_regime_rescue_rows(symbol=symbol, wave_id=args.wave_id)
+    target_regimes = _csv_set(args.target_regimes)
+    choppy_families = _csv_set(args.choppy_families)
+    rows = build_iwm_regime_rescue_rows(
+        symbol=symbol,
+        wave_id=args.wave_id,
+        target_regimes=target_regimes,
+        choppy_signal_delay_bars=_csv_ints(args.choppy_signal_delay_bars),
+        choppy_families=choppy_families or None,
+    )
     queue = build_queue(rows=rows, wave_id=args.wave_id)
     manifest = {
         "broker_facing": False,
@@ -270,7 +341,7 @@ def main() -> None:
         "live_manifest_effect": "none",
         "risk_policy_effect": "none",
         "status": "ready_for_iwm_regime_rescue_backtest",
-        "target_regimes": ["bear", "choppy"],
+        "target_regimes": sorted(target_regimes),
         "target_symbols": sorted({row["symbol"] for row in rows}),
         "template_count": len(rows),
         "wave_id": args.wave_id,

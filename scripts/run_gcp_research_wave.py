@@ -191,6 +191,7 @@ class VariantStockProxyStrategy(BaseStrategy):
         min_minutes_since_open: int = 5,
         max_minutes_since_open: int = 385,
         entry_signal_mode: str = "continuous",
+        signal_delay_bars: int = 0,
         cooldown_bars: int = 0,
         max_signals_per_day: int = 0,
     ) -> None:
@@ -214,6 +215,7 @@ class VariantStockProxyStrategy(BaseStrategy):
         self.min_minutes_since_open = min_minutes_since_open
         self.max_minutes_since_open = max_minutes_since_open
         self.entry_signal_mode = entry_signal_mode
+        self.signal_delay_bars = max(int(signal_delay_bars), 0)
         self.cooldown_bars = cooldown_bars
         self.max_signals_per_day = max_signals_per_day
 
@@ -297,6 +299,7 @@ class VariantStockProxyStrategy(BaseStrategy):
             )
             frame["signal"] = -active.fillna(False).astype(int)
         frame["signal"] = self._throttle_signals(frame, market_timestamps)
+        frame["signal"] = self._delay_signals(frame, market_timestamps)
         frame["stop_pct"] = self.stop_pct
         frame["target_pct"] = self.target_pct
         frame["timeout_bars"] = self.timeout_bars
@@ -338,6 +341,18 @@ class VariantStockProxyStrategy(BaseStrategy):
                     cooldown_remaining = max(self.cooldown_bars, 0)
                 was_active = is_active
         return throttled
+
+    def _delay_signals(
+        self, frame: pd.DataFrame, market_timestamps: pd.Series
+    ) -> pd.Series:
+        raw = frame["signal"].fillna(0).astype(int)
+        if self.signal_delay_bars <= 0:
+            return raw
+        trade_dates = market_timestamps.dt.date
+        delayed = raw.groupby([frame["symbol"], trade_dates], sort=False).shift(
+            self.signal_delay_bars
+        )
+        return delayed.fillna(0).astype(int)
 
 
 def _variant_direction(variant: dict[str, Any]) -> int:
@@ -440,6 +455,7 @@ def _variant_stock_strategy(variant: dict[str, Any]) -> VariantStockProxyStrateg
         min_minutes_since_open=int(parameters.get("min_minutes_since_open") or 5),
         max_minutes_since_open=int(parameters.get("max_minutes_since_open") or 385),
         entry_signal_mode=str(parameters.get("entry_signal_mode") or "continuous"),
+        signal_delay_bars=int(parameters.get("signal_delay_bars") or 0),
         cooldown_bars=int(parameters.get("cooldown_bars") or 0),
         max_signals_per_day=int(parameters.get("max_signals_per_day") or 0),
     )

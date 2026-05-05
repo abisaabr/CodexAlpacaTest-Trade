@@ -11,6 +11,9 @@ param(
     [string]$Selectors = "entry_liquidity_first_research_only,nearest_contract",
     [string]$LagProfiles = "0:60",
     [int]$MaxEntryStalenessMinutes = 0,
+    [string]$TargetRegimes = "bear,choppy",
+    [string]$ChoppyFamilies = "",
+    [string]$ChoppySignalDelayBars = "0",
     [switch]$PrepareOnly
 )
 
@@ -133,7 +136,10 @@ function Remove-TerminatedInstance {
 & python scripts\build_iwm_regime_rescue_research_inputs.py `
     --symbol IWM `
     --wave-id $WaveId `
-    --output-dir $InputsDir
+    --output-dir $InputsDir `
+    --target-regimes $TargetRegimes `
+    --choppy-families $ChoppyFamilies `
+    --choppy-signal-delay-bars $ChoppySignalDelayBars
 if ($LASTEXITCODE -ne 0) {
     throw "input builder failed"
 }

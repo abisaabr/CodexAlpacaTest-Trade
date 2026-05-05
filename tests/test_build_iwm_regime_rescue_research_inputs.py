@@ -36,6 +36,22 @@ def test_iwm_regime_rescue_queue_preserves_identity_and_research_only_state() ->
     assert all(item["source_strategy_id"].startswith("iwm__") for item in queue["queue_items"])
 
 
+def test_iwm_choppy_signal_delay_family_filter_builds_bounded_queue() -> None:
+    rows = build_iwm_regime_rescue_rows(
+        symbol="IWM",
+        wave_id="test_wave",
+        target_regimes={"choppy"},
+        choppy_families={"debit_put_vertical"},
+        choppy_signal_delay_bars=[1, 2],
+    )
+
+    assert len(rows) == 36
+    assert {row["parameters"]["family_template"] for row in rows} == {"debit_put_vertical"}
+    assert {row["parameters"]["signal_delay_bars"] for row in rows} == {1, 2}
+    assert {row["source_strategy_id"].split("__")[1] for row in rows} == {"choppy"}
+    assert all(row["broker_facing"] is False for row in rows)
+
+
 def test_iwm_regime_rescue_cli_writes_expected_files(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         "sys.argv",

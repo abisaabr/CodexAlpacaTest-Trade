@@ -167,6 +167,55 @@ def test_choppy_range_reversion_can_emit_lower_and_upper_band_signals() -> None:
     assert int((upper_signals > 0).sum()) == 0
 
 
+def test_variant_stock_proxy_can_delay_signals_within_session() -> None:
+    timestamps = pd.date_range("2026-01-05 14:30", periods=100, freq="min", tz="UTC")
+    prices = [100.0 + ((index % 20) - 10) * 0.025 for index in range(len(timestamps))]
+    bars = pd.DataFrame(
+        {
+            "symbol": ["QQQ"] * len(timestamps),
+            "timestamp": timestamps,
+            "open": prices,
+            "high": [price + 0.08 for price in prices],
+            "low": [price - 0.08 for price in prices],
+            "close": prices,
+            "volume": [1000] * len(timestamps),
+        }
+    )
+    immediate_strategy = _variant_stock_strategy(
+        {
+            "variant_id": "qqq_choppy_immediate",
+            "symbol": "QQQ",
+            "source_strategy_id": "qqq__choppy__call__single_leg_repair",
+            "parameters": {
+                "range_edge_pct": 0.0005,
+                "range_entry_side": "lower_band",
+                "stock_proxy_mode": "range_bound",
+            },
+        }
+    )
+    delayed_strategy = _variant_stock_strategy(
+        {
+            "variant_id": "qqq_choppy_delayed",
+            "symbol": "QQQ",
+            "source_strategy_id": "qqq__choppy__call__single_leg_repair",
+            "parameters": {
+                "range_edge_pct": 0.0005,
+                "range_entry_side": "lower_band",
+                "signal_delay_bars": 2,
+                "stock_proxy_mode": "range_bound",
+            },
+        }
+    )
+
+    immediate = immediate_strategy.generate_signals(bars)
+    delayed = delayed_strategy.generate_signals(bars)
+    immediate_first = immediate.loc[immediate["signal"] != 0, "timestamp"].iloc[0]
+    delayed_first = delayed.loc[delayed["signal"] != 0, "timestamp"].iloc[0]
+
+    assert delayed_strategy.signal_delay_bars == 2
+    assert delayed_first == immediate_first + pd.Timedelta(minutes=2)
+
+
 def test_bull_put_credit_spread_keeps_bullish_stock_proxy_direction() -> None:
     strategy = _variant_stock_strategy(
         {
