@@ -265,30 +265,41 @@ foreach ($row in $launchRows) {
         worker_id = $row.worker_id
     }
 
-    $createStatus = Invoke-GcloudCreateInstance @(
-        "compute", "instances", "create", $row.instance_name,
-        "--project", $Project,
-        "--zone", $row.zone,
-        "--machine-type", $MachineType,
-        "--image-family", "debian-12",
-        "--image-project", "debian-cloud",
-        "--boot-disk-size", "160GB",
-        "--boot-disk-type", "pd-standard",
-        "--service-account", $ServiceAccount,
-        "--scopes", "https://www.googleapis.com/auth/cloud-platform",
-        "--labels", "app=codexalpaca,env=research,role=regime-rescue,wave=regime-rescue,symbol=$SymbolSlug",
-        "--metadata", (ConvertTo-MetadataArg $metadata),
-        "--metadata-from-file", "startup-script=$StartupScript",
-        "--quiet"
-    )
-    if ($createStatus -eq "quota_limited") {
+    $candidateZones = @($row.zone) + @($Zones | Where-Object { $_ -ne $row.zone })
+    $created = $false
+    foreach ($candidateZone in $candidateZones) {
+        $createStatus = Invoke-GcloudCreateInstance @(
+            "compute", "instances", "create", $row.instance_name,
+            "--project", $Project,
+            "--zone", $candidateZone,
+            "--machine-type", $MachineType,
+            "--image-family", "debian-12",
+            "--image-project", "debian-cloud",
+            "--boot-disk-size", "160GB",
+            "--boot-disk-type", "pd-standard",
+            "--service-account", $ServiceAccount,
+            "--scopes", "https://www.googleapis.com/auth/cloud-platform",
+            "--labels", "app=codexalpaca,env=research,role=regime-rescue,wave=regime-rescue,symbol=$SymbolSlug",
+            "--metadata", (ConvertTo-MetadataArg $metadata),
+            "--metadata-from-file", "startup-script=$StartupScript",
+            "--quiet"
+        )
+        if ($createStatus -eq "quota_limited") {
+            $created = $false
+            break
+        }
+        if ($createStatus -eq "zone_capacity_limited") {
+            Write-Output "zone_retry_next candidate_start=$($row.candidate_start_index) failed_zone=$candidateZone"
+            continue
+        }
+        $launched += 1
+        $created = $true
+        Write-Output "launched_instance=$($row.instance_name) candidate_start=$($row.candidate_start_index) candidate_count=$($row.candidate_count) zone=$candidateZone"
         break
     }
-    if ($createStatus -eq "zone_capacity_limited") {
-        continue
+    if (-not $created -and $createStatus -eq "quota_limited") {
+        break
     }
-    $launched += 1
-    Write-Output "launched_instance=$($row.instance_name) candidate_start=$($row.candidate_start_index) candidate_count=$($row.candidate_count) zone=$($row.zone)"
 }
 
 Write-Output "wave_id=$WaveId"
