@@ -434,14 +434,21 @@ def _variant_stock_strategy(variant: dict[str, Any]) -> VariantStockProxyStrateg
         parameters.get("stock_proxy_mode") or ("range_bound" if inferred_choppy else "breakout")
     ).lower()
     timeout_only = bool(parameters.get("timeout_only_stock_proxy")) or signal_mode == "range_bound"
+    fast_window = int(parameters.get("fast_window") or (4 + timing_scale))
+    slow_window = int(parameters.get("slow_window") or (18 + timing_scale * 3))
+    breakout_window = int(parameters.get("breakout_window") or (18 + timing_scale * 3))
+    min_volume_ratio = float(
+        parameters.get("min_volume_ratio")
+        or (1.05 if liquidity_gate == "tight" else 0.80)
+    )
     return VariantStockProxyStrategy(
         name=f"variant_stock_proxy__{variant.get('variant_id')}",
         direction=_variant_direction(variant),
         signal_mode=signal_mode,
-        fast_window=4 + timing_scale,
-        slow_window=18 + timing_scale * 3,
-        breakout_window=18 + timing_scale * 3,
-        min_volume_ratio=1.05 if liquidity_gate == "tight" else 0.80,
+        fast_window=max(2, fast_window),
+        slow_window=max(3, slow_window),
+        breakout_window=max(3, breakout_window),
+        min_volume_ratio=max(0.0, min_volume_ratio),
         stop_pct=0.0 if timeout_only else max(0.003, min(0.04, stop_multiple * 0.05)),
         target_pct=0.0 if timeout_only else max(0.005, min(0.08, target_multiple * 0.05)),
         timeout_bars=max(5, min(390, hard_exit)),

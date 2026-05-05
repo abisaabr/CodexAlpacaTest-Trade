@@ -26,6 +26,7 @@ from scripts.run_option_aware_research_backtest import (
     _structure_risk_per_unit,
     build_option_aware_backtest,
 )
+from scripts.run_gcp_research_wave import _variant_stock_strategy
 
 
 def _write_json(path: Path, payload: object) -> None:
@@ -802,6 +803,28 @@ def test_stock_trade_cache_key_includes_entry_window_filters() -> None:
     ) != _stock_trade_cache_key(
         shifted, stock_session_filter=STOCK_SESSION_FILTER_OPTION_RTH_SAME_DAY
     )
+
+
+def test_stock_proxy_strategy_accepts_explicit_signal_window_overrides() -> None:
+    variant = {
+        "variant_id": "qqq_bear_signal_window",
+        "symbol": "QQQ",
+        "source_strategy_id": "qqq__bear__put__single_leg_repair",
+        "parameters": {
+            "breakout_window": 42,
+            "fast_window": 8,
+            "liquidity_gate": "tight",
+            "min_volume_ratio": 1.35,
+            "slow_window": 34,
+        },
+    }
+
+    strategy = _variant_stock_strategy(variant)
+
+    assert strategy.breakout_window == 42
+    assert strategy.fast_window == 8
+    assert strategy.slow_window == 34
+    assert strategy.min_volume_ratio == 1.35
 
 
 def test_stock_session_filter_keeps_only_same_day_option_rth_trades() -> None:

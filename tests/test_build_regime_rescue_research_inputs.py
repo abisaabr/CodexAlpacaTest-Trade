@@ -40,3 +40,39 @@ def test_symbol_generic_regime_rescue_cli_writes_symbol_prefixed_files(
     assert queue["queue_item_count"] == 156
     assert {item["symbol"] for item in queue["queue_items"]} == {"SPY"}
     assert {item["intended_regime"] for item in queue["queue_items"]} == {"bear", "choppy"}
+
+
+def test_symbol_generic_bear_signal_window_refine_builds_strict_bear_grid(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "build_regime_rescue_research_inputs.py",
+            "--symbol",
+            "QQQ",
+            "--wave-id",
+            "test_wave",
+            "--output-dir",
+            str(tmp_path),
+            "--target-regimes",
+            "bear",
+            "--bear-profile-set",
+            "signal_window_refine",
+        ],
+    )
+    main()
+
+    variants_path = tmp_path / "qqq_regime_rescue_variants.jsonl"
+    rows = [
+        json.loads(line)
+        for line in variants_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert len(rows) == 54
+    assert {row["symbol"] for row in rows} == {"QQQ"}
+    assert {row["source_strategy_id"].split("__")[1] for row in rows} == {"bear"}
+    assert {row["parameters"]["family_template"] for row in rows} == {"single_leg_repair"}
+    assert {row["parameters"]["breakout_window"] for row in rows} == {26, 34, 45}
+    assert min(row["parameters"]["min_trend_gap_pct"] for row in rows) == 0.0009
+    assert max(row["parameters"]["min_trend_gap_pct"] for row in rows) == 0.002

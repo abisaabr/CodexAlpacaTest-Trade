@@ -1623,6 +1623,10 @@ def _stock_trade_cache_key(variant: dict[str, Any], *, stock_session_filter: str
         "cooldown_bars",
         "max_signals_per_day",
         "timeout_only_stock_proxy",
+        "fast_window",
+        "slow_window",
+        "breakout_window",
+        "min_volume_ratio",
     ):
         if key in parameters:
             payload[key] = parameters[key]
