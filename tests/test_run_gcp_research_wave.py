@@ -99,6 +99,26 @@ def test_timing_profile_defaults_drive_stock_proxy_timing() -> None:
     assert fast_strategy.fast_window < slow_strategy.fast_window
 
 
+def test_choppy_premium_strategy_uses_range_bound_timeout_proxy() -> None:
+    strategy = _variant_stock_strategy(
+        {
+            "variant_id": "qqq_choppy_condor",
+            "symbol": "QQQ",
+            "source_strategy_id": "qqq__choppy__call__iron_condor",
+            "parameters": {
+                "family_template": "iron_condor",
+                "hard_exit_minute": 75,
+                "stock_proxy_mode": "range_bound",
+            },
+        }
+    )
+
+    assert strategy.signal_mode == "range_bound"
+    assert strategy.stop_pct == 0.0
+    assert strategy.target_pct == 0.0
+    assert strategy.timeout_bars == 75
+
+
 def test_run_writes_required_research_artifacts(tmp_path: Path) -> None:
     variants_path = tmp_path / "variants.jsonl"
     manifest_path = tmp_path / "wave.json"

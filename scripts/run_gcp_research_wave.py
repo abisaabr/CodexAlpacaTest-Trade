@@ -172,6 +172,7 @@ class VariantStockProxyStrategy(BaseStrategy):
         *,
         name: str,
         direction: int,
+        signal_mode: str,
         fast_window: int,
         slow_window: int,
         breakout_window: int,
@@ -179,9 +180,14 @@ class VariantStockProxyStrategy(BaseStrategy):
         stop_pct: float,
         target_pct: float,
         timeout_bars: int,
+        max_trend_gap_pct: float = 0.004,
+        min_range_pct: float = 0.0015,
+        max_range_pct: float = 0.018,
+        max_midpoint_distance_pct: float = 0.006,
     ) -> None:
         super().__init__(name=name, instrument_type="stock", contract_multiplier=1.0)
         self.direction = 1 if direction >= 0 else -1
+        self.signal_mode = signal_mode
         self.fast_window = fast_window
         self.slow_window = slow_window
         self.breakout_window = breakout_window
@@ -189,6 +195,10 @@ class VariantStockProxyStrategy(BaseStrategy):
         self.stop_pct = stop_pct
         self.target_pct = target_pct
         self.timeout_bars = timeout_bars
+        self.max_trend_gap_pct = max_trend_gap_pct
+        self.min_range_pct = min_range_pct
+        self.max_range_pct = max_range_pct
+        self.max_midpoint_distance_pct = max_midpoint_distance_pct
 
     def generate_signals(self, bars: pd.DataFrame) -> pd.DataFrame:
         self.validate_bars(bars, ("symbol", "timestamp", "open", "high", "low", "close", "volume"))
@@ -211,7 +221,25 @@ class VariantStockProxyStrategy(BaseStrategy):
         )
         frame["volume_ratio"] = frame["volume"] / frame["volume_sma"].replace(0, pd.NA)
         volume_ok = frame["volume_ratio"].fillna(0).ge(self.min_volume_ratio)
-        if self.direction > 0:
+        if self.signal_mode == "range_bound":
+            range_width = (frame["rolling_high"] - frame["rolling_low"]).abs()
+            range_pct = range_width / frame["close"].replace(0, pd.NA)
+            trend_gap_pct = (frame["fast_sma"] - frame["slow_sma"]).abs() / frame[
+                "close"
+            ].replace(0, pd.NA)
+            midpoint = (frame["rolling_high"] + frame["rolling_low"]) / 2.0
+            midpoint_distance_pct = (frame["close"] - midpoint).abs() / frame[
+                "close"
+            ].replace(0, pd.NA)
+            active = (
+                volume_ok
+                & range_pct.ge(self.min_range_pct).fillna(False)
+                & range_pct.le(self.max_range_pct).fillna(False)
+                & trend_gap_pct.le(self.max_trend_gap_pct).fillna(False)
+                & midpoint_distance_pct.le(self.max_midpoint_distance_pct).fillna(False)
+            )
+            frame["signal"] = active.fillna(False).astype(int)
+        elif self.direction > 0:
             active = (
                 frame["close"].gt(frame["rolling_high"])
                 & frame["fast_sma"].gt(frame["slow_sma"])
@@ -297,16 +325,31 @@ def _variant_stock_strategy(variant: dict[str, Any]) -> VariantStockProxyStrateg
     stop_multiple = float(timing["stop_loss_multiple"])
     target_multiple = float(timing["profit_target_multiple"])
     liquidity_gate = str(timing["liquidity_gate"])
+    source = str(variant.get("source_strategy_id") or variant.get("variant_id") or "").lower()
+    family_template = str(parameters.get("family_template") or source).lower()
+    inferred_choppy = "choppy" in source or any(
+        token in family_template
+        for token in ("iron_butterfly", "iron_condor", "premium_defense")
+    )
+    signal_mode = str(
+        parameters.get("stock_proxy_mode") or ("range_bound" if inferred_choppy else "breakout")
+    ).lower()
+    timeout_only = bool(parameters.get("timeout_only_stock_proxy")) or signal_mode == "range_bound"
     return VariantStockProxyStrategy(
         name=f"variant_stock_proxy__{variant.get('variant_id')}",
         direction=_variant_direction(variant),
+        signal_mode=signal_mode,
         fast_window=4 + timing_scale,
         slow_window=18 + timing_scale * 3,
         breakout_window=18 + timing_scale * 3,
         min_volume_ratio=1.05 if liquidity_gate == "tight" else 0.80,
-        stop_pct=max(0.003, min(0.04, stop_multiple * 0.05)),
-        target_pct=max(0.005, min(0.08, target_multiple * 0.05)),
+        stop_pct=0.0 if timeout_only else max(0.003, min(0.04, stop_multiple * 0.05)),
+        target_pct=0.0 if timeout_only else max(0.005, min(0.08, target_multiple * 0.05)),
         timeout_bars=max(5, min(390, hard_exit)),
+        max_trend_gap_pct=float(parameters.get("max_trend_gap_pct") or 0.004),
+        min_range_pct=float(parameters.get("min_range_pct") or 0.0015),
+        max_range_pct=float(parameters.get("max_range_pct") or 0.018),
+        max_midpoint_distance_pct=float(parameters.get("max_midpoint_distance_pct") or 0.006),
     )
 
 

@@ -793,6 +793,7 @@ def _option_structure_legs(
     option_type = str(queue_item.get("directional_option_type") or "").lower()
     vertical_width = int(parameters.get("vertical_width_steps") or parameters.get("wing_width_steps") or 1)
     far_width = int(parameters.get("far_wing_width_steps") or max(vertical_width + 1, 2))
+    short_width = int(parameters.get("short_width_steps") or parameters.get("body_width_steps") or 1)
 
     def base(option_type_value: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str]:
         return _select_contract_with_entry(
@@ -905,6 +906,79 @@ def _option_structure_legs(
         choices.sort(key=lambda item: (item[0], item[1]))
         return choices[0][2], "iron_butterfly", "selected"
 
+    if "iron_condor" in family or "premium_defense_spread" in family:
+        call_frame = _contract_frame_for_type(
+            contracts=contracts,
+            option_index=option_index,
+            symbol=symbol,
+            option_type="call",
+            trade_date=trade_date,
+            dte_mode=dte_mode,
+        )
+        if call_frame.empty:
+            return [], "iron_condor", "no_selected_contract"
+        choices: list[tuple[tuple[float, ...], str, list[dict[str, Any]]]] = []
+        statuses: list[str] = []
+        for call_body in call_frame.to_dict("records"):
+            put_body, put_body_entry, status = _select_matching_body_contract_with_entry(
+                contracts=contracts,
+                option_bars=option_bars,
+                option_index=option_index,
+                symbol=symbol,
+                option_type="put",
+                trade_date=trade_date,
+                base_contract=call_body,
+                entry_time=entry_time,
+                max_lag=max_entry_lag,
+                entry_lookup_mode=entry_lookup_mode,
+                max_entry_staleness=max_entry_staleness,
+            )
+            if status != "selected" or not put_body or not put_body_entry:
+                statuses.append(status)
+                continue
+            short_call, short_call_entry, status = wing(
+                "call", call_body, higher=True, width_steps=short_width
+            )
+            if status != "selected" or not short_call or not short_call_entry:
+                statuses.append(status)
+                continue
+            long_call, long_call_entry, status = wing(
+                "call", short_call, higher=True, width_steps=vertical_width
+            )
+            if status != "selected" or not long_call or not long_call_entry:
+                statuses.append(status)
+                continue
+            short_put, short_put_entry, status = wing(
+                "put", put_body, higher=False, width_steps=short_width
+            )
+            if status != "selected" or not short_put or not short_put_entry:
+                statuses.append(status)
+                continue
+            long_put, long_put_entry, status = wing(
+                "put", short_put, higher=False, width_steps=vertical_width
+            )
+            if status != "selected" or not long_put or not long_put_entry:
+                statuses.append(status)
+                continue
+            legs = [
+                _leg(role="short_call", side=-1, ratio=1, contract=short_call, entry_bar=short_call_entry),
+                _leg(role="long_call_wing", side=1, ratio=1, contract=long_call, entry_bar=long_call_entry),
+                _leg(role="short_put", side=-1, ratio=1, contract=short_put, entry_bar=short_put_entry),
+                _leg(role="long_put_wing", side=1, ratio=1, contract=long_put, entry_bar=long_put_entry),
+            ]
+            volume = float(short_call_entry.get("volume") or 0.0) + float(
+                short_put_entry.get("volume") or 0.0
+            )
+            abs_step = abs(float(call_body.get("relative_strike_step") or 0.0))
+            dte = float(call_body.get("dte") or 999.0)
+            strike = _contract_strike(call_body)
+            choices.append(((-volume, abs_step, dte, strike), str(call_body["symbol"]), legs))
+        if not choices:
+            status = "no_entry_bar" if statuses and all(item == "no_entry_bar" for item in statuses) else "no_selected_contract"
+            return [], "iron_condor", status
+        choices.sort(key=lambda item: (item[0], item[1]))
+        return choices[0][2], "iron_condor", "selected"
+
     if "debit_call_vertical" in family or "debit_put_vertical" in family:
         option_type = "put" if "put" in family else "call"
         long_contract, long_entry, status = base(option_type)
@@ -973,8 +1047,27 @@ def _option_structure_legs(
 def _structure_risk_per_unit(legs: list[dict[str, Any]], entry_debit_per_unit: float) -> float:
     if entry_debit_per_unit > 0:
         return entry_debit_per_unit
+    call_widths: list[float] = []
+    put_widths: list[float] = []
+    for short_leg in legs:
+        if int(short_leg.get("side", 0)) >= 0:
+            continue
+        short_type = str(short_leg["contract"].get("option_type") or "").lower()
+        short_strike = _contract_strike(short_leg["contract"])
+        for long_leg in legs:
+            if int(long_leg.get("side", 0)) <= 0:
+                continue
+            long_type = str(long_leg["contract"].get("option_type") or "").lower()
+            if long_type != short_type:
+                continue
+            long_strike = _contract_strike(long_leg["contract"])
+            if short_type == "call" and long_strike > short_strike:
+                call_widths.append(long_strike - short_strike)
+            elif short_type == "put" and long_strike < short_strike:
+                put_widths.append(short_strike - long_strike)
     strikes = [_contract_strike(leg["contract"]) for leg in legs]
-    max_width = max(strikes) - min(strikes) if strikes else 0.0
+    spread_widths = call_widths + put_widths
+    max_width = max(spread_widths) if spread_widths else max(strikes) - min(strikes) if strikes else 0.0
     credit = abs(entry_debit_per_unit)
     defined_risk = max_width * 100.0 - credit
     return max(defined_risk, 0.01)

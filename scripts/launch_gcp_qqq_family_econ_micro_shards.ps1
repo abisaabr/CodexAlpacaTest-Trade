@@ -6,6 +6,8 @@ param(
     [int]$TopN = 20,
     [string[]]$Zones = @("us-east1-b", "us-central1-a", "us-west1-a", "us-east4-a"),
     [string]$MachineType = "e2-standard-2",
+    [string]$VariantPath = "",
+    [string]$QueuePath = "",
     [switch]$PrepareOnly
 )
 
@@ -26,8 +28,12 @@ $StockUri = "gs://codexalpaca-data-us/research_stock_data/qqq_365d_next_trading_
 $ContractsUri = "gs://codexalpaca-control-us/research_results/qqq_365d_next_trading_day_5x5_20260428/research_wave/qqq_365d_next_trading_day_5x5_20260428/dense_universe/selected_option_contracts/"
 $BarsUri = "gs://codexalpaca-data-us/research_option_data/qqq_365d_next_trading_day_5x5_20260428/option_bars_silver/option_bars/underlying=QQQ/"
 $StartupScript = Join-Path $RepoRoot "scripts\gcp_single_ticker_365d_shard.sh"
-$VariantPath = Join-Path $RepoRoot "reports\gcp_research\portfolio_overnight_12h_20260501\inputs\portfolio_overnight_variants.jsonl"
-$QueuePath = Join-Path $RepoRoot "reports\gcp_research\portfolio_overnight_12h_20260501\inputs\portfolio_overnight_option_queue.json"
+if (-not $VariantPath) {
+    $VariantPath = Join-Path $RepoRoot "reports\gcp_research\portfolio_overnight_12h_20260501\inputs\portfolio_overnight_variants.jsonl"
+}
+if (-not $QueuePath) {
+    $QueuePath = Join-Path $RepoRoot "reports\gcp_research\portfolio_overnight_12h_20260501\inputs\portfolio_overnight_option_queue.json"
+}
 $ReportDir = Join-Path $RepoRoot "reports\gcp_research\$WaveId"
 $LaunchRowsPath = Join-Path $ReportDir "qqq_family_econ_micro_launch_rows.json"
 $SourceArchivePath = Join-Path $env:TEMP "$WaveId-codexalpaca_repo_source.tar.gz"

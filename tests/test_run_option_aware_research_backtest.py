@@ -20,6 +20,7 @@ from scripts.run_option_aware_research_backtest import (
     _option_structure_legs,
     _path_matches_symbol_filter,
     _recommendation,
+    _structure_risk_per_unit,
     build_option_aware_backtest,
 )
 
@@ -391,6 +392,101 @@ def test_iron_butterfly_pairs_body_strikes_under_liquidity_first_selection() -> 
         if leg["role"] in {"short_call_body", "short_put_body"}
     }
     assert body_strikes == {"short_call_body": 100.0, "short_put_body": 100.0}
+
+
+def test_premium_defense_spread_builds_complete_iron_condor() -> None:
+    trade_date = pd.Timestamp("2026-04-21").date()
+    entry_time = pd.Timestamp("2026-04-21T13:35:00Z")
+    contracts = pd.DataFrame(
+        {
+            "trade_date": [trade_date] * 6,
+            "underlying_symbol": ["QQQ"] * 6,
+            "symbol": [
+                "QQQ260424P00098000",
+                "QQQ260424P00099000",
+                "QQQ260424P00100000",
+                "QQQ260424C00100000",
+                "QQQ260424C00101000",
+                "QQQ260424C00102000",
+            ],
+            "option_type": ["put", "put", "put", "call", "call", "call"],
+            "strike_price": [98.0, 99.0, 100.0, 100.0, 101.0, 102.0],
+            "dte": [3, 3, 3, 3, 3, 3],
+            "relative_strike_step": [-2, -1, 0, 0, 1, 2],
+        }
+    )
+    option_bars = pd.DataFrame(
+        {
+            "symbol": [
+                "QQQ260424P00098000",
+                "QQQ260424P00099000",
+                "QQQ260424P00100000",
+                "QQQ260424C00100000",
+                "QQQ260424C00101000",
+                "QQQ260424C00102000",
+            ],
+            "timestamp": [entry_time] * 6,
+            "close": [0.6, 1.2, 2.4, 2.2, 1.1, 0.5],
+            "volume": [10, 30, 40, 40, 30, 10],
+        }
+    )
+    option_index = _build_option_research_index(
+        contracts=contracts,
+        option_bars=option_bars,
+        option_trades=pd.DataFrame(),
+    )
+
+    legs, structure, status = _option_structure_legs(
+        queue_item={
+            "candidate_variant_id": "qqq_condor",
+            "symbol": "QQQ",
+            "directional_option_type": "call",
+            "family": "premium_defense_spread",
+            "parameter_set": (
+                '{"dte_mode":"next_expiry","short_width_steps":1,'
+                '"wing_width_steps":1}'
+            ),
+        },
+        variant={
+            "parameters": {
+                "dte_mode": "next_expiry",
+                "family_template": "premium_defense_spread",
+                "short_width_steps": 1,
+                "wing_width_steps": 1,
+            }
+        },
+        contracts=contracts,
+        option_bars=option_bars,
+        option_trades=pd.DataFrame(),
+        option_index=option_index,
+        symbol="QQQ",
+        trade_date=trade_date,
+        entry_time=entry_time,
+        max_entry_lag=timedelta(minutes=1),
+        entry_lookup_mode="first_bar_at_or_after_entry_within_lag",
+        max_entry_staleness=timedelta(minutes=0),
+        contract_selection_method=CONTRACT_SELECTION_LIQUIDITY_FIRST,
+    )
+
+    assert status == "selected"
+    assert structure == "iron_condor"
+    assert [(leg["role"], leg["side"], leg["contract"]["strike_price"]) for leg in legs] == [
+        ("short_call", -1, 101.0),
+        ("long_call_wing", 1, 102.0),
+        ("short_put", -1, 99.0),
+        ("long_put_wing", 1, 98.0),
+    ]
+
+
+def test_credit_spread_risk_uses_side_width_not_full_condor_span() -> None:
+    legs = [
+        {"side": -1, "contract": {"option_type": "call", "strike_price": 101.0}},
+        {"side": 1, "contract": {"option_type": "call", "strike_price": 102.0}},
+        {"side": -1, "contract": {"option_type": "put", "strike_price": 99.0}},
+        {"side": 1, "contract": {"option_type": "put", "strike_price": 98.0}},
+    ]
+
+    assert _structure_risk_per_unit(legs, entry_debit_per_unit=-40.0) == 60.0
 
 
 def test_dte_mode_blocks_unavailable_same_day_contracts() -> None:
