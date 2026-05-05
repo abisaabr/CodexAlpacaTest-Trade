@@ -1,0 +1,63 @@
+name: qqq_spy_regime_complete_realtime_paper_trader
+description: Broker-free controlled validation portfolio for QQQ and SPY using SIP stock data and OPRA option snapshots.
+strategy_manifest_paths:
+  - promotion_manifests/qqq_regime_complete_governed_validation_20260505.yaml
+  - promotion_manifests/spy_regime_complete_governed_validation_20260505.yaml
+
+ownership:
+  enabled: true
+  lease_backend: file
+  lease_path: reports/multi_ticker_portfolio/state/qqq_spy_regime_complete_realtime_ownership_lease.json
+  lease_ttl_seconds: 180
+
+execution:
+  underlying_symbols: [QQQ, SPY]
+  option_feed: opra
+  stock_feed: sip
+  submit_paper_orders: false
+  poll_interval_seconds: 20
+  order_status_poll_seconds: 10
+  order_fill_timeout_seconds: 45
+  contract_refresh_minutes: 15
+  quote_stale_seconds: 120
+  stock_freshness_seconds: 180
+  max_relative_spread: 0.35
+  max_dte_days: 7
+  state_root: reports/multi_ticker_portfolio/state/qqq_spy_regime_complete_realtime
+  run_root: reports/multi_ticker_portfolio/runs/qqq_spy_regime_complete_realtime
+  task_name: QQQ SPY Regime Complete Realtime Paper Trader
+  allow_market_exit_fallback: true
+  market_exit_fallback_minute: 385
+  startup_lead_minutes: 10
+  midday_report_minute: 180
+  auto_flatten_unexpected_positions: true
+  unexpected_position_cleanup_timeout_seconds: 45
+
+risk:
+  sleeve_starting_equity: 25000
+  max_open_risk_fraction: 0.14
+  daily_loss_gate_pct: 0.02
+  delever_drawdown_pct: 8.0
+  delever_risk_scale: 0.5
+  max_open_positions: 6
+  max_positions_per_regime: 2
+  max_positions_per_symbol: 3
+  entry_cluster_window_minutes: 15
+  max_positions_per_regime_window: 2
+  max_positions_per_bucket_regime_window: 4
+  max_open_risk_fraction_per_symbol: 0.08
+  min_required_buying_power: 10000
+  broker_min_equity_to_trade: 26000
+  broker_equity_emergency_stop: 25500
+  severe_loss_halt_new_entries_pct: 0.035
+  severe_loss_flatten_all_pct: 0.05
+  soft_alert_delta_shares: 1500
+  soft_alert_vega_dollars_1pct: 300
+  hard_cap_delta_shares: 1800
+  hard_cap_vega_dollars_1pct: 380
+  entry_failure_streak_limit: 3
+  entry_adverse_slippage_fraction_limit: 0.20
+  entry_adverse_slippage_lookback: 4
+  entry_cutoff_minute: 345
+  same_day_entry_cutoff_minute: 300
+  event_blackouts: []

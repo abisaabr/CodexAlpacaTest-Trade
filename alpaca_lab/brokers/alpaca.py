@@ -787,21 +787,21 @@ class AlpacaBrokerAdapter:
             page_index += 1
         return self._attach_request_audit(aggregated, request_audit)
 
-    def get_option_latest_quotes(self, symbols: list[str]) -> dict[str, Any]:
+    def get_option_latest_quotes(self, symbols: list[str], *, feed: str = "opra") -> dict[str, Any]:
         payload = self._request_json(
             "GET",
             "/v1beta1/options/quotes/latest",
             api="data",
-            params={"symbols": ",".join(symbols)},
+            params={"symbols": ",".join(symbols), "feed": feed},
         )
         return payload if isinstance(payload, dict) else {}
 
-    def get_option_snapshots(self, symbols: list[str]) -> dict[str, Any]:
+    def get_option_snapshots(self, symbols: list[str], *, feed: str = "opra") -> dict[str, Any]:
         payload = self._request_json(
             "GET",
             "/v1beta1/options/snapshots",
             api="data",
-            params={"symbols": ",".join(symbols)},
+            params={"symbols": ",".join(symbols), "feed": feed},
         )
         return payload if isinstance(payload, dict) else {}
 

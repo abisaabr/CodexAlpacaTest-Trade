@@ -458,7 +458,10 @@ class QQQPortfolioPaperTrader:
         rows: list[dict[str, Any]] = []
         now_et = _now_et()
         for batch in _chunked(symbols, 50):
-            payload = self.broker.get_option_snapshots(batch)
+            payload = self.broker.get_option_snapshots(
+                batch,
+                feed=self.portfolio_config.execution.option_feed,
+            )
             for symbol, snapshot in payload.get("snapshots", {}).items():
                 info = metadata.get(symbol)
                 if info is None:
