@@ -59,11 +59,17 @@ def _load_rows(payload: str) -> list[dict[str, Any]]:
 
 
 def _eligible_like(row: dict[str, Any]) -> bool:
+    recommendation = str(row.get("recommendation") or "")
     return (
         float(row.get("fill_coverage") or 0.0) >= 0.90
         and int(row.get("option_trade_count") or 0) >= 20
         and float(row.get("net_pnl") or 0.0) > 0
         and float(row.get("test_net_pnl") or 0.0) > 0
+        and recommendation
+        in {
+            "candidate_for_walk_forward_review",
+            "research_candidate_liquidity_first_review",
+        }
     )
 
 
@@ -100,6 +106,7 @@ def main() -> int:
                 "profit_factor": row.get("profit_factor"),
                 "recommendation": row.get("recommendation"),
                 "test_net_pnl": row.get("test_net_pnl"),
+                "train_net_pnl": row.get("train_net_pnl"),
             }
         )
     compact.sort(
