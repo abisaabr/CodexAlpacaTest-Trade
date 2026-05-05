@@ -3,6 +3,7 @@ param(
     [string]$InstanceSuffix = "20260505a",
     [int[]]$CandidateIndices = @(6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20),
     [int]$MaxLaunches = 15,
+    [int]$TopN = 20,
     [string[]]$Zones = @("us-east1-b", "us-central1-a", "us-west1-a", "us-east4-a"),
     [string]$MachineType = "e2-standard-2",
     [switch]$PrepareOnly
@@ -33,6 +34,8 @@ $SourceArchivePath = Join-Path $env:TEMP "$WaveId-codexalpaca_repo_source.tar.gz
 
 Set-Location $RepoRoot
 New-Item -ItemType Directory -Path $ReportDir -Force | Out-Null
+$MaxCandidateIndex = ($CandidateIndices | Measure-Object -Maximum).Maximum
+$EffectiveTopN = [Math]::Max($TopN, $MaxCandidateIndex)
 
 $env:CLOUDSDK_PYTHON = $Python
 $env:GOOGLE_CLOUD_PROJECT = $Project
@@ -136,6 +139,7 @@ foreach ($candidateIndex in $CandidateIndices) {
         machine_type = $MachineType
         risk_policy_effect = "none"
         symbol = "QQQ"
+        top_n = $EffectiveTopN
         worker_id = $workerId
         zone = $zone
     }
@@ -183,7 +187,7 @@ foreach ($row in $launchRows) {
         stock_uri = $StockUri
         symbol = "QQQ"
         test_date_count = "20"
-        top_n = "20"
+        top_n = "$EffectiveTopN"
         wave_id = $WaveId
         worker_id = $row.worker_id
     }
