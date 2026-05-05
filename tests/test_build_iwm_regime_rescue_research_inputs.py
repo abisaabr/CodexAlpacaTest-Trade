@@ -52,6 +52,30 @@ def test_iwm_choppy_signal_delay_family_filter_builds_bounded_queue() -> None:
     assert all(row["broker_facing"] is False for row in rows)
 
 
+def test_iwm_choppy_timewindow_refine_builds_high_fill_single_leg_grid() -> None:
+    rows = build_iwm_regime_rescue_rows(
+        symbol="IWM",
+        wave_id="test_wave",
+        target_regimes={"choppy"},
+        choppy_profile_set="timewindow_refine",
+    )
+
+    assert len(rows) == 144
+    assert {row["source_strategy_id"].split("__")[1] for row in rows} == {"choppy"}
+    assert {row["parameters"]["family_template"] for row in rows} == {"single_leg_repair"}
+    assert {row["parameters"]["range_entry_side"] for row in rows} == {"lower_band"}
+    assert {row["parameters"]["stock_proxy_mode"] for row in rows} == {"range_bound"}
+    assert {row["parameters"]["min_minutes_since_open"] for row in rows} == {
+        90,
+        105,
+        120,
+        135,
+    }
+    assert min(row["parameters"]["max_minutes_since_open"] for row in rows) == 135
+    assert max(row["parameters"]["max_minutes_since_open"] for row in rows) == 165
+    assert all(row["broker_facing"] is False for row in rows)
+
+
 def test_iwm_regime_rescue_cli_writes_expected_files(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         "sys.argv",

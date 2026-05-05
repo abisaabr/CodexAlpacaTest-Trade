@@ -37,6 +37,16 @@ def parse_args() -> argparse.Namespace:
             "Default 0 preserves the historical immediate-entry search."
         ),
     )
+    parser.add_argument(
+        "--choppy-profile-set",
+        choices=("rescue", "timewindow_refine"),
+        default="rescue",
+        help=(
+            "Choppy grid to build. 'rescue' preserves the broad missing-regime search; "
+            "'timewindow_refine' focuses on the high-fill IWM lower-band call sleeve "
+            "identified from prior 365d trade economics."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -296,6 +306,77 @@ def _choppy_rows(
     return rows
 
 
+def _choppy_timewindow_refine_rows(
+    *,
+    symbol: str,
+    wave_id: str,
+    family_filter: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    family = "single_leg_repair"
+    if family_filter and family not in family_filter:
+        return rows
+
+    time_windows = [
+        ("iwm_choppy_lower_band_90_135_refine", 90, 135, 45),
+        ("iwm_choppy_lower_band_105_135_refine", 105, 135, 45),
+        ("iwm_choppy_lower_band_105_150_refine", 105, 150, 45),
+        ("iwm_choppy_lower_band_120_150_refine", 120, 150, 45),
+        ("iwm_choppy_lower_band_120_165_refine", 120, 165, 45),
+        ("iwm_choppy_lower_band_135_165_refine", 135, 165, 45),
+    ]
+    exit_profiles = [
+        ("target30_stop12", 0.30, 0.12),
+        ("target30_stop14", 0.30, 0.14),
+        ("target35_stop14", 0.35, 0.14),
+        ("target35_stop16", 0.35, 0.16),
+    ]
+    for timing_profile, min_minute, max_minute, hard_exit in time_windows:
+        for exit_name, target_pct, stop_pct in exit_profiles:
+            for min_hold in (2, 3):
+                for range_edge_pct in (0.0009, 0.0010, 0.0011):
+                    parameters = {
+                        "cooldown_bars": 60,
+                        "dte_mode": "next_expiry",
+                        "entry_signal_mode": "rising_edge",
+                        "family_template": family,
+                        "hard_exit_minute": hard_exit,
+                        "liquidity_gate": "tight",
+                        "max_midpoint_distance_pct": 0.004,
+                        "max_minutes_since_open": max_minute,
+                        "max_range_pct": 0.006,
+                        "max_signals_per_day": 1,
+                        "max_trend_gap_pct": 0.0015,
+                        "min_minutes_since_open": min_minute,
+                        "min_option_hold_minutes": min_hold,
+                        "min_range_pct": 0.0015,
+                        "option_exit_mode": "premium_target_stop",
+                        "option_exit_profile": exit_name,
+                        "option_profit_target_pct": target_pct,
+                        "option_stop_loss_pct": stop_pct,
+                        "profit_target_multiple": target_pct,
+                        "range_edge_pct": range_edge_pct,
+                        "range_entry_side": "lower_band",
+                        "short_width_steps": 1,
+                        "stock_proxy_mode": "range_bound",
+                        "stop_loss_multiple": stop_pct,
+                        "timeout_only_stock_proxy": True,
+                        "wing_width_steps": 1,
+                    }
+                    rows.append(
+                        _variant(
+                            symbol=symbol,
+                            regime="choppy",
+                            direction="call",
+                            family=family,
+                            parameters=parameters,
+                            priority=1,
+                            wave_id=wave_id,
+                        )
+                    )
+    return rows
+
+
 def build_iwm_regime_rescue_rows(
     *,
     symbol: str,
@@ -303,20 +384,30 @@ def build_iwm_regime_rescue_rows(
     target_regimes: set[str] | None = None,
     choppy_signal_delay_bars: list[int] | None = None,
     choppy_families: set[str] | None = None,
+    choppy_profile_set: str = "rescue",
 ) -> list[dict[str, Any]]:
     regimes = target_regimes or {"bear", "choppy"}
     rows: list[dict[str, Any]] = []
     if "bear" in regimes:
         rows.extend(_bear_rows(symbol=symbol, wave_id=wave_id))
     if "choppy" in regimes:
-        rows.extend(
-            _choppy_rows(
-                symbol=symbol,
-                wave_id=wave_id,
-                signal_delay_bars=choppy_signal_delay_bars,
-                family_filter=choppy_families,
+        if choppy_profile_set == "timewindow_refine":
+            rows.extend(
+                _choppy_timewindow_refine_rows(
+                    symbol=symbol,
+                    wave_id=wave_id,
+                    family_filter=choppy_families,
+                )
             )
-        )
+        else:
+            rows.extend(
+                _choppy_rows(
+                    symbol=symbol,
+                    wave_id=wave_id,
+                    signal_delay_bars=choppy_signal_delay_bars,
+                    family_filter=choppy_families,
+                )
+            )
     return rows
 
 
@@ -333,6 +424,7 @@ def main() -> None:
         target_regimes=target_regimes,
         choppy_signal_delay_bars=_csv_ints(args.choppy_signal_delay_bars),
         choppy_families=choppy_families or None,
+        choppy_profile_set=args.choppy_profile_set,
     )
     queue = build_queue(rows=rows, wave_id=args.wave_id)
     manifest = {
@@ -341,6 +433,7 @@ def main() -> None:
         "live_manifest_effect": "none",
         "risk_policy_effect": "none",
         "status": "ready_for_iwm_regime_rescue_backtest",
+        "choppy_profile_set": args.choppy_profile_set,
         "target_regimes": sorted(target_regimes),
         "target_symbols": sorted({row["symbol"] for row in rows}),
         "template_count": len(rows),

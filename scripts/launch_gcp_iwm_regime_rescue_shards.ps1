@@ -14,6 +14,8 @@ param(
     [string]$TargetRegimes = "bear,choppy",
     [string]$ChoppyFamilies = "",
     [string]$ChoppySignalDelayBars = "0",
+    [ValidateSet("rescue", "timewindow_refine")]
+    [string]$ChoppyProfileSet = "rescue",
     [switch]$PrepareOnly
 )
 
@@ -139,7 +141,8 @@ function Remove-TerminatedInstance {
     --output-dir $InputsDir `
     --target-regimes $TargetRegimes `
     --choppy-families $ChoppyFamilies `
-    --choppy-signal-delay-bars $ChoppySignalDelayBars
+    --choppy-signal-delay-bars $ChoppySignalDelayBars `
+    --choppy-profile-set $ChoppyProfileSet
 if ($LASTEXITCODE -ne 0) {
     throw "input builder failed"
 }
