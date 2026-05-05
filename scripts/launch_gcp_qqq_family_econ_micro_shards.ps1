@@ -67,14 +67,14 @@ function Invoke-GcloudCreateInstance {
     } finally {
         $ErrorActionPreference = $previousPreference
     }
-    $output | ForEach-Object { Write-Output $_ }
+    $output | ForEach-Object { Write-Host $_ }
     if ($exitCode -eq 0) {
         return "created"
     }
     $message = ($output | Out-String)
-    if ($message -match "CPUS_ALL_REGIONS" -or $message -match "Quota") {
-        Write-Output "quota_limit_reached=true"
-        Write-Output "quota_pause_reason=$($message.Trim() -replace '\s+', ' ')"
+    if ($message -match "CPUS_ALL_REGIONS" -or $message -match "Quota .* exceeded") {
+        Write-Host "quota_limit_reached=true"
+        Write-Host "quota_pause_reason=$($message.Trim() -replace '\s+', ' ')"
         return "quota_limited"
     }
     throw "gcloud failed: $($Arguments -join ' ')"
