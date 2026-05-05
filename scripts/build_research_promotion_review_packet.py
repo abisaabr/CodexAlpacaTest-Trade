@@ -180,6 +180,8 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         f"- Broker facing: `{packet['broker_facing']}`",
         f"- Candidate count: `{packet['gate_summary']['candidate_count']}`",
         f"- Eligible count: `{packet['gate_summary']['eligible_for_promotion_review_count']}`",
+        f"- Top-candidate count: `{packet['gate_summary']['top_candidate_count']}`",
+        f"- Blocker count scope: `{packet['gate_summary']['blocker_count_scope']}`",
         f"- Fill coverage unit: `{packet['gate_summary'].get('fill_coverage_unit')}`",
         f"- Fill coverage semantics: {packet['gate_summary'].get('fill_coverage_semantics')}",
         f"- Capital allocated weight: `{packet['gate_summary']['capital_plan_allocated_weight']}`",
@@ -214,9 +216,15 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         )
     lines.extend(["", "## Blocker Counts", ""])
     if not packet["blocker_counts"]:
-        lines.append("- No blockers found in the top-candidate set.")
+        lines.append("- No blockers found in the configured blocker-count scope.")
     for blocker, count in packet["blocker_counts"].items():
         lines.append(f"- `{blocker}`: `{count}`")
+    if packet.get("top_candidate_blocker_counts") != packet.get("blocker_counts"):
+        lines.extend(["", "Top-candidate blocker counts:", ""])
+        if not packet.get("top_candidate_blocker_counts"):
+            lines.append("- No blockers found in the top-candidate set.")
+        for blocker, count in packet["top_candidate_blocker_counts"].items():
+            lines.append(f"- `{blocker}`: `{count}`")
     lines.extend(["", "## Data Repair Targets", ""])
     if not packet["data_repair_targets"]:
         lines.append("- No data repair targets selected.")
@@ -261,6 +269,10 @@ def build_research_promotion_review_packet(
         item for item in source.get("top_candidates", []) if isinstance(item, dict)
     ]
     capital_plan = [item for item in source.get("capital_plan", []) if isinstance(item, dict)]
+    full_blocker_counts = source.get("blocker_counts")
+    if not isinstance(full_blocker_counts, dict):
+        full_blocker_counts = _blocker_counts(top_candidates)
+    top_candidate_blocker_counts = _blocker_counts(top_candidates)
     source_data_repair_targets = [
         _candidate_summary(item)
         for item in source.get("data_repair_priority_candidates", [])
@@ -315,6 +327,12 @@ def build_research_promotion_review_packet(
             "capital_plan_unallocated_dollars": source.get(
                 "capital_plan_unallocated_dollars"
             ),
+            "top_candidate_count": len(top_candidates),
+            "blocker_count_scope": (
+                "full_candidate_population"
+                if isinstance(source.get("blocker_counts"), dict)
+                else "top_candidates_only"
+            ),
         },
         "portfolio_constraints": {
             "initial_cash": source.get("initial_cash"),
@@ -325,7 +343,8 @@ def build_research_promotion_review_packet(
         "review_candidates": review_candidates,
         "capital_plan": capital_plan,
         "symbol_exposure": _symbol_exposure(capital_plan),
-        "blocker_counts": _blocker_counts(top_candidates),
+        "blocker_counts": full_blocker_counts,
+        "top_candidate_blocker_counts": top_candidate_blocker_counts,
         "data_repair_targets": (
             source_data_repair_targets
             if source_has_data_repair_targets

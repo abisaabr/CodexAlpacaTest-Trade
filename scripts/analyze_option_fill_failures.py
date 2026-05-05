@@ -20,6 +20,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--candidate-variant-id", default=None)
     parser.add_argument("--report-id", default=None)
+    parser.add_argument("--fill-coverage-gate", type=float, default=0.90)
+    parser.add_argument("--min-option-trades", type=int, default=20)
+    parser.add_argument("--min-test-net-pnl", type=float, default=0.0)
     return parser.parse_args()
 
 
@@ -88,18 +91,76 @@ def _candidate_lookup(candidates: list[dict[str, Any]]) -> dict[str, dict[str, A
     }
 
 
+def _float(value: object, default: float = 0.0) -> float:
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _gate_context(
+    candidate: dict[str, Any],
+    *,
+    fill_coverage_gate: float,
+    min_option_trades: int,
+    min_test_net_pnl: float,
+) -> dict[str, Any]:
+    fill_coverage = _float(
+        candidate.get("strategy_fill_coverage", candidate.get("fill_coverage"))
+    )
+    option_trade_count = int(_float(candidate.get("option_trade_count")))
+    test_net_pnl = _float(candidate.get("test_net_pnl"))
+    net_pnl = _float(candidate.get("net_pnl"))
+    blockers: list[str] = []
+    if fill_coverage < fill_coverage_gate:
+        blockers.append(f"fill_coverage_below_{fill_coverage_gate:.2f}")
+    if option_trade_count < min_option_trades:
+        blockers.append(f"option_trades_below_{min_option_trades}")
+    if test_net_pnl <= min_test_net_pnl:
+        blockers.append(f"test_net_pnl_not_above_{min_test_net_pnl:g}")
+    if net_pnl <= 0:
+        blockers.append("min_net_pnl_not_positive")
+    return {
+        "diagnostic_only_not_promotion_equivalent": True,
+        "fill_coverage_gate": fill_coverage_gate,
+        "min_option_trades": min_option_trades,
+        "min_test_net_pnl": min_test_net_pnl,
+        "candidate_fill_coverage": fill_coverage,
+        "candidate_option_trade_count": option_trade_count,
+        "candidate_test_net_pnl": test_net_pnl,
+        "candidate_net_pnl": net_pnl,
+        "would_clear_basic_promotion_gates": not blockers,
+        "basic_gate_blockers": blockers,
+    }
+
+
 def _write_markdown(path: Path, report: dict[str, Any]) -> None:
     candidate = report["candidate"]
     lines = [
         "# Option Fill Failure Diagnostic",
         "",
+        "> Diagnostic only: this report summarizes fill failures and is not a promoter-equivalent decision packet.",
+        "",
         f"- Generated at: `{report['generated_at']}`",
         f"- Report ID: `{report['report_id']}`",
         f"- Candidate: `{report['candidate_variant_id'] or 'all_candidates'}`",
+        f"- Base candidate: `{candidate.get('base_candidate_variant_id')}`",
+        f"- Candidate identity mode: `{candidate.get('candidate_identity_mode')}`",
+        f"- Aggregate profile: `{candidate.get('aggregate_profile') or candidate.get('profile')}`",
         f"- Strategy: `{candidate.get('strategy_id') or candidate.get('source_strategy_id') or 'mixed'}`",
         f"- Symbol: `{candidate.get('symbol') or 'mixed'}`",
         f"- Family: `{candidate.get('family') or 'mixed'}`",
         f"- Intended regime: `{candidate.get('intended_regime') or 'mixed'}`",
+        "",
+        "## Gate Context",
+        "",
+        f"- Fill coverage gate: `{report['promotion_gate_context']['fill_coverage_gate']}`",
+        f"- Minimum option trades: `{report['promotion_gate_context']['min_option_trades']}`",
+        f"- Minimum test net PnL: `{report['promotion_gate_context']['min_test_net_pnl']}`",
+        f"- Would clear basic gates: `{report['promotion_gate_context']['would_clear_basic_promotion_gates']}`",
+        f"- Basic gate blockers: `{', '.join(report['promotion_gate_context']['basic_gate_blockers']) or 'none'}`",
         "",
         "## Candidate Metrics",
         "",
@@ -142,6 +203,9 @@ def build_report(
     output_dir: Path,
     candidate_variant_id: str | None,
     report_id: str | None,
+    fill_coverage_gate: float = 0.90,
+    min_option_trades: int = 20,
+    min_test_net_pnl: float = 0.0,
 ) -> dict[str, Any]:
     candidates = _rows(_load_json(candidate_summary_json), "candidates", "candidate_summaries")
     failures = _rows(_load_json(fill_failures_json), "fill_failures", "failures")
@@ -164,8 +228,15 @@ def build_report(
     report = {
         "generated_at": datetime.now(UTC).isoformat(),
         "report_id": resolved_report_id,
+        "diagnostic_scope": "fill_failure_counts_only_not_promotion_equivalent",
         "candidate_variant_id": candidate_variant_id,
         "candidate": candidate,
+        "promotion_gate_context": _gate_context(
+            candidate,
+            fill_coverage_gate=fill_coverage_gate,
+            min_option_trades=min_option_trades,
+            min_test_net_pnl=min_test_net_pnl,
+        ),
         "failure_count": len(failures),
         "failure_reason_counts": _counter(failures, "failure_reason"),
         "option_structure_counts": _counter(failures, "option_structure"),
@@ -196,6 +267,9 @@ def main() -> None:
         output_dir=Path(args.output_dir),
         candidate_variant_id=args.candidate_variant_id,
         report_id=args.report_id,
+        fill_coverage_gate=args.fill_coverage_gate,
+        min_option_trades=args.min_option_trades,
+        min_test_net_pnl=args.min_test_net_pnl,
     )
     print(json.dumps({"report_id": report["report_id"], "failure_count": report["failure_count"]}, indent=2))
 

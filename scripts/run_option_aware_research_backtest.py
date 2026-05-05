@@ -2305,7 +2305,7 @@ def build_option_aware_backtest(
         },
         "contract_selection_method": contract_selection_method,
         "option_lookup_mode": "indexed_by_contract_and_symbol",
-        "fill_coverage_unit": "filled_single_contract_option_orders_per_source_stock_trade",
+        "fill_coverage_unit": "filled_option_structures_per_source_stock_trade",
         "strategy_fill_coverage_gate": STRATEGY_FILL_COVERAGE_GATE,
         "fill_coverage_semantics": (
             "fill_coverage is an alias for strategy_fill_coverage. "
