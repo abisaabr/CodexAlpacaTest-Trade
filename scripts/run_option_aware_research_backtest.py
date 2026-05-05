@@ -1047,6 +1047,15 @@ def _option_structure_legs(
 def _structure_risk_per_unit(legs: list[dict[str, Any]], entry_debit_per_unit: float) -> float:
     if entry_debit_per_unit > 0:
         return entry_debit_per_unit
+    spread_widths = _credit_structure_spread_widths(legs)
+    strikes = [_contract_strike(leg["contract"]) for leg in legs]
+    max_width = max(spread_widths) if spread_widths else max(strikes) - min(strikes) if strikes else 0.0
+    credit = abs(entry_debit_per_unit)
+    defined_risk = max_width * 100.0 - credit
+    return max(defined_risk, max_width * 100.0 * 0.25, 0.01)
+
+
+def _credit_structure_spread_widths(legs: list[dict[str, Any]]) -> list[float]:
     call_widths: list[float] = []
     put_widths: list[float] = []
     for short_leg in legs:
@@ -1065,12 +1074,18 @@ def _structure_risk_per_unit(legs: list[dict[str, Any]], entry_debit_per_unit: f
                 call_widths.append(long_strike - short_strike)
             elif short_type == "put" and long_strike < short_strike:
                 put_widths.append(short_strike - long_strike)
-    strikes = [_contract_strike(leg["contract"]) for leg in legs]
-    spread_widths = call_widths + put_widths
-    max_width = max(spread_widths) if spread_widths else max(strikes) - min(strikes) if strikes else 0.0
+    return call_widths + put_widths
+
+
+def _invalid_credit_structure(legs: list[dict[str, Any]], entry_debit_per_unit: float) -> bool:
+    if entry_debit_per_unit >= 0:
+        return False
+    spread_widths = _credit_structure_spread_widths(legs)
+    if not spread_widths:
+        return False
+    max_loss_before_credit = max(spread_widths) * 100.0
     credit = abs(entry_debit_per_unit)
-    defined_risk = max_width * 100.0 - credit
-    return max(defined_risk, 0.01)
+    return credit >= max_loss_before_credit
 
 
 def _first_option_bar(
@@ -1658,6 +1673,26 @@ def _option_rows_for_candidate(
                     "dte": leg_item["contract"].get("dte"),
                 }
             )
+        if _invalid_credit_structure(legs, entry_debit_per_unit):
+            missing_counts["invalid_credit_structure"] = (
+                missing_counts.get("invalid_credit_structure", 0) + 1
+            )
+            failure_rows.append(
+                failure_row(
+                    reason="invalid_credit_structure",
+                    trade=trade,
+                    contract_symbol=";".join(item["contract_symbol"] for item in leg_details),
+                    lookup_time=entry_time,
+                    extra={
+                        "entry_debit_per_unit": round(entry_debit_per_unit, 4),
+                        "max_credit_widths": ";".join(
+                            str(width) for width in _credit_structure_spread_widths(legs)
+                        ),
+                        "option_structure": option_structure,
+                    },
+                )
+            )
+            continue
         risk_per_unit = _structure_risk_per_unit(legs, entry_debit_per_unit)
         budget = initial_cash * allocation_fraction
         quantity = math.floor(budget / risk_per_unit)

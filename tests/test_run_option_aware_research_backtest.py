@@ -17,6 +17,7 @@ from scripts.run_option_aware_research_backtest import (
     _candidate_window,
     _exit_option_bar,
     _filter_stock_trades_for_option_session,
+    _invalid_credit_structure,
     _option_structure_legs,
     _path_matches_symbol_filter,
     _recommendation,
@@ -487,6 +488,19 @@ def test_credit_spread_risk_uses_side_width_not_full_condor_span() -> None:
     ]
 
     assert _structure_risk_per_unit(legs, entry_debit_per_unit=-40.0) == 60.0
+    assert _invalid_credit_structure(legs, entry_debit_per_unit=-40.0) is False
+
+
+def test_credit_spread_rejects_impossible_credit() -> None:
+    legs = [
+        {"side": -1, "contract": {"option_type": "call", "strike_price": 101.0}},
+        {"side": 1, "contract": {"option_type": "call", "strike_price": 102.0}},
+        {"side": -1, "contract": {"option_type": "put", "strike_price": 99.0}},
+        {"side": 1, "contract": {"option_type": "put", "strike_price": 98.0}},
+    ]
+
+    assert _invalid_credit_structure(legs, entry_debit_per_unit=-100.0) is True
+    assert _structure_risk_per_unit(legs, entry_debit_per_unit=-99.0) >= 25.0
 
 
 def test_dte_mode_blocks_unavailable_same_day_contracts() -> None:
