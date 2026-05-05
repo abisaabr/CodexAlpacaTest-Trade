@@ -77,6 +77,11 @@ First tranche target:
 - Bear candidates: `1-8`
 - Choppy candidates: `1-8`
 
+Bear extension:
+
+- Bear candidates: `9-16`
+- Reason: bear candidates `1-8` cleared fill on single-leg structures but failed economics; QQQ's winning bear came from the later bear tranche, so SPY required the same follow-up.
+
 Worker naming:
 
 - Bull: `spybull-c001-20260505a` through `spybull-c008-20260505a`
@@ -90,14 +95,42 @@ Quota notes:
 - Global CPU quota is `32`, so at most 16 `e2-standard-2` workers can run concurrently.
 - Completed terminated workers may be deleted after their GCS `status.json` says `phase=completed`.
 
-Cleanup log:
+Cleanup logs:
 
 - `gs://codexalpaca-control-us/research_results/ticker365_spy_launch_20260505T0945Z/ops/ops_cleanup_completed_spy_workers_1.txt`
+- `gs://codexalpaca-control-us/research_results/ticker365_spy_launch_20260505T0945Z/ops/ops_cleanup_completed_spy_workers_2.txt`
+
+## Result
+
+SPY reached a regime-complete governed-validation packet.
+
+- Combined local packet: `reports/gcp_research/spy_regime_complete_20260505/promotion_packet/research_promotion_review_packet.json`
+- Combined GCS packet: `gs://codexalpaca-control-us/research_results/spy_regime_complete_20260505/promotion_packet/research_promotion_review_packet.json`
+- Decision: `ready_for_governed_validation_review`
+- Eligible count: `3`
+- Capital allocated weight: `1.0`
+- Broker-facing: `false`
+- Live manifest effect: `none`
+- Risk policy effect: `none`
+
+Selected SPY candidates:
+
+- Choppy: `portfolio12h__spy__choppy__call__single_leg_repair__f9a907650802b7`
+- Choppy metrics: `net_pnl=5508.298`, `test_net_pnl=194.349`, `fill_coverage=0.994`, `option_trade_count=166`
+- Bear: `portfolio12h__spy__bear__put__single_leg_repair__1f8d8ba1e9de3b`
+- Bear metrics: `net_pnl=2071.481`, `test_net_pnl=512.94`, `fill_coverage=1.0`, `option_trade_count=69`
+- Bull: `portfolio12h__spy__bull__call__single_leg_repair__9460508770cf7e`
+- Bull metrics: `net_pnl=179.621`, `test_net_pnl=2270.178`, `fill_coverage=0.9941`, `option_trade_count=168`
+
+Capital plan from the combined packet:
+
+- Choppy weight: `0.531657`
+- Bear weight: `0.385667`
+- Bull weight: `0.082676`
 
 ## Next Steps
 
-1. Poll worker `status.json` files under each wave's `workers/` prefix.
-2. When all 24 target workers are complete, pull their `option_aware_candidate_summary.csv` files into a local aggregate.
-3. Build one SPY portfolio report and promotion-review packet across bull, bear, and choppy candidates.
-4. If SPY has at least one eligible strategy in each regime, create a SPY governed-validation manifest and then repeat the same lane for IWM.
-5. If any SPY regime fails, use the best near-miss to launch the next small tranche before moving to IWM.
+1. Create a SPY governed-validation runner manifest only after reviewing the combined packet.
+2. Do not add SPY to broker-facing paper until QQQ broker-free shadow/preflight is clean and the operator explicitly approves.
+3. Repeat the same lane for IWM.
+4. If IWM reaches all-regime review, then build a QQQ+SPY+IWM controlled validation portfolio.
