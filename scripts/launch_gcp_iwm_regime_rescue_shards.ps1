@@ -41,6 +41,15 @@ $MetadataLagProfiles = $LagProfiles.Replace(",", ";")
 Set-Location $RepoRoot
 New-Item -ItemType Directory -Path $InputsDir -Force | Out-Null
 $env:GOOGLE_CLOUD_PROJECT = $Project
+$Zones = @(
+    $Zones |
+        ForEach-Object { $_ -split "," } |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { $_ }
+)
+if ($Zones.Count -eq 0) {
+    throw "at least one zone is required"
+}
 
 function Invoke-Gcloud {
     param([string[]]$Arguments)
@@ -193,10 +202,10 @@ foreach ($row in $launchRows) {
         initial_cash = "25000"
         input_queue_uri = $InputQueueUri
         input_variants_uri = $InputVariantsUri
-        lag_profiles = $LagProfiles
+        lag_profiles = $MetadataLagProfiles
         max_entry_staleness_minutes = "$MaxEntryStalenessMinutes"
         profile_name = "iwm-regime-rescue-e${MaxEntryStalenessMinutes}x60"
-        selectors = $Selectors
+        selectors = $MetadataSelectors
         slippage_bps = "10"
         source_archive_uri = $SourceArchiveUri
         stock_session_filter = "option_rth_same_day"
