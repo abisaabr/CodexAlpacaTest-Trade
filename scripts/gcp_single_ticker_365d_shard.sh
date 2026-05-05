@@ -129,6 +129,75 @@ PY
   gcloud storage cp "${WORKROOT}/startup.log" "${WORKER_PREFIX}/startup.log" || true
 }
 
+write_progress_status() {
+  local active_backtests="0"
+  local completed_summary_count="0"
+  local progress_candidate_files="0"
+  local progress_fill_files="0"
+  local latest_progress_file=""
+  local latest_progress_raw=""
+
+  active_backtests="$(pgrep -fc 'scripts/run_option_aware_research_backtest.py' 2>/dev/null || true)"
+  if [[ -d "${REPO_DIR}/reports/research_wave" ]]; then
+    completed_summary_count="$(find "${REPO_DIR}/reports/research_wave" -name option_aware_candidate_summary.csv -type f 2>/dev/null | wc -l | tr -d ' ')"
+  fi
+  if [[ -d "${WORKROOT}/progress" ]]; then
+    progress_candidate_files="$(find "${WORKROOT}/progress" -name candidate_summary_progress.jsonl -type f 2>/dev/null | wc -l | tr -d ' ')"
+    progress_fill_files="$(find "${WORKROOT}/progress" -name fill_failure_progress.jsonl -type f 2>/dev/null | wc -l | tr -d ' ')"
+    latest_progress_file="$(
+      find "${WORKROOT}/progress" -name candidate_summary_progress.jsonl -type f -printf '%T@ %p\n' 2>/dev/null \
+        | sort -nr \
+        | head -1 \
+        | cut -d' ' -f2- || true
+    )"
+  fi
+  if [[ -n "${latest_progress_file}" && -f "${latest_progress_file}" ]]; then
+    latest_progress_raw="$(tail -n 1 "${latest_progress_file}" 2>/dev/null || true)"
+  fi
+
+  LATEST_PROGRESS_RAW="${latest_progress_raw}" python3 \
+    - "${active_backtests}" "${completed_summary_count}" "${progress_candidate_files}" "${progress_fill_files}" "${latest_progress_file}" \
+    > "${WORKROOT}/ticker_365d_progress_status.json" <<'PY'
+import json
+import os
+import sys
+from datetime import UTC, datetime
+
+active_backtests, completed_summary_count, progress_candidate_files, progress_fill_files, latest_progress_file = sys.argv[1:6]
+latest_progress_raw = os.environ.get("LATEST_PROGRESS_RAW", "")
+try:
+    latest_progress = json.loads(latest_progress_raw) if latest_progress_raw else None
+except json.JSONDecodeError:
+    latest_progress = {"raw": latest_progress_raw}
+
+print(json.dumps({
+    "generated_at_utc": datetime.now(UTC).replace(microsecond=0).isoformat(),
+    "wave_id": "__WAVE_ID__",
+    "worker_id": "__WORKER_ID__",
+    "symbol": "__SYMBOL__",
+    "phase": "running_progress",
+    "active_backtest_process_count": int(active_backtests or 0),
+    "completed_candidate_summary_count": int(completed_summary_count or 0),
+    "expected_candidate_summary_count": int("__EXPECTED_CANDIDATE_SUMMARY_COUNT__" or 0),
+    "progress_candidate_file_count": int(progress_candidate_files or 0),
+    "progress_fill_failure_file_count": int(progress_fill_files or 0),
+    "latest_progress_file": latest_progress_file,
+    "latest_candidate_progress": latest_progress,
+    "broker_facing": False,
+    "paper_orders": False,
+    "live_manifest_effect": "none",
+    "risk_policy_effect": "none",
+}, indent=2, sort_keys=True))
+PY
+  sed -i \
+    -e "s|__WAVE_ID__|${WAVE_ID}|g" \
+    -e "s|__WORKER_ID__|${WORKER_ID}|g" \
+    -e "s|__SYMBOL__|${SYMBOL}|g" \
+    -e "s|__EXPECTED_CANDIDATE_SUMMARY_COUNT__|${EXPECTED_CANDIDATE_SUMMARY_COUNT}|g" \
+    "${WORKROOT}/ticker_365d_progress_status.json"
+  gcloud storage cp "${WORKROOT}/ticker_365d_progress_status.json" "${WORKER_PREFIX}/ticker_365d_progress_status.json" || true
+}
+
 start_runtime_monitor() {
   (
     while true; do
@@ -149,6 +218,7 @@ start_runtime_monitor() {
       if [[ -d "${WORKROOT}/progress" ]]; then
         gcloud storage rsync --recursive "${WORKROOT}/progress" "${WORKER_PREFIX}/progress" || true
       fi
+      write_progress_status || true
       gcloud storage cp "${WORKROOT}/runtime_monitor.log" "${WORKER_PREFIX}/runtime_monitor.log" || true
       gcloud storage cp "${WORKROOT}/startup.log" "${WORKER_PREFIX}/startup.log" || true
       sleep 120

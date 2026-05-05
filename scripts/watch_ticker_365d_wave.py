@@ -260,6 +260,22 @@ def load_worker_statuses(args: argparse.Namespace) -> dict[str, dict[str, Any]]:
     return statuses
 
 
+def load_worker_progress_statuses(args: argparse.Namespace) -> dict[str, dict[str, Any]]:
+    statuses: dict[str, dict[str, Any]] = {}
+    for uri in storage_ls(
+        args, f"{args.gcs_prefix}/workers/**/ticker_365d_progress_status.json"
+    ):
+        try:
+            payload = json.loads(storage_cat(args, uri))
+            wid = str(payload.get("worker_id") or "")
+            if wid:
+                payload["progress_status_uri"] = uri
+                statuses[wid] = payload
+        except Exception as exc:
+            log(f"progress_status_read_failed uri={uri} error={exc}")
+    return statuses
+
+
 def count_by_worker(uris: list[str]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for uri in uris:
@@ -639,15 +655,18 @@ def write_status_files(args: argparse.Namespace, status: dict[str, Any]) -> tupl
         lines.append(f"- Launched aggregate VM `{item['instance']}` in `{item['zone']}`.")
 
     lines.extend(["", "## Worker State", ""])
-    lines.append("| Symbol | Phase | Instance Statuses | Summaries | Reports | Packets |")
-    lines.append("| --- | --- | --- | ---: | ---: | ---: |")
+    lines.append("| Symbol | Phase | Active Backtests | Progress Files | Instance Statuses | Summaries | Reports | Packets |")
+    lines.append("| --- | --- | ---: | ---: | --- | ---: | ---: | ---: |")
     for worker in status["workers"]:
         instance_status = ", ".join(
             f"{item['name']}:{item['status']}" for item in worker["instances"]
         ) or "none"
         lines.append(
             "| "
-            f"`{worker['symbol']}` | `{worker['phase']}` | {instance_status} | "
+            f"`{worker['symbol']}` | `{worker['phase']}` | "
+            f"{worker.get('active_backtest_process_count') or 0} | "
+            f"{worker.get('progress_candidate_file_count') or 0} | "
+            f"{instance_status} | "
             f"{worker['candidate_summary_count']} | {worker['portfolio_report_count']} | "
             f"{worker['promotion_packet_count']} |"
         )
@@ -700,6 +719,7 @@ def build_status(
     rows: list[dict[str, Any]],
     instances_by_symbol: dict[str, list[dict[str, Any]]],
     statuses: dict[str, dict[str, Any]],
+    progress_statuses: dict[str, dict[str, Any]],
     counts_by_worker: dict[str, dict[str, int]],
     quota: dict[str, Any],
     aggregate: dict[str, Any],
@@ -712,6 +732,7 @@ def build_status(
         symbol = str(row["symbol"]).upper()
         wid = worker_id(symbol)
         status_payload = statuses.get(wid, {})
+        progress_payload = progress_statuses.get(wid, {})
         phase = str(status_payload.get("phase", "not_started"))
         counts = counts_by_worker.get(wid, {})
         instance_items = [
@@ -741,6 +762,17 @@ def build_status(
                 "phase": phase,
                 "status_uri": status_payload.get("status_uri"),
                 "generated_at_utc": status_payload.get("generated_at_utc"),
+                "progress_status_uri": progress_payload.get("progress_status_uri"),
+                "progress_generated_at_utc": progress_payload.get("generated_at_utc"),
+                "active_backtest_process_count": progress_payload.get(
+                    "active_backtest_process_count"
+                ),
+                "progress_candidate_file_count": progress_payload.get(
+                    "progress_candidate_file_count"
+                ),
+                "latest_candidate_progress": progress_payload.get(
+                    "latest_candidate_progress"
+                ),
                 "candidate_summary_count": counts.get("candidate_summary_count", 0),
                 "portfolio_report_count": counts.get("portfolio_report_count", 0),
                 "promotion_packet_count": counts.get("promotion_packet_count", 0),
@@ -805,6 +837,7 @@ def main() -> int:
     instances = list_instances(args)
     instances_by_symbol = ticker_instances(instances)
     statuses = load_worker_statuses(args)
+    progress_statuses = load_worker_progress_statuses(args)
     counts_by_worker = worker_artifact_counts(args)
     aggregate = aggregate_state(args)
     quota = quota_snapshot(args, instances)
@@ -850,6 +883,7 @@ def main() -> int:
         rows,
         instances_by_symbol,
         statuses,
+        progress_statuses,
         counts_by_worker,
         quota,
         aggregate,
