@@ -66,61 +66,83 @@ def build_rows(*, symbol: str, wave_id: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     directional_profiles = [
         {
-            "timing_profile": "scalp",
-            "hard_exit_minute": 60,
+            "timing_profile": "morning_trend",
+            "hard_exit_minute": 75,
             "stop_loss_multiple": 0.10,
-            "profit_target_multiple": 0.22,
+            "profit_target_multiple": 0.26,
             "liquidity_gate": "tight",
+            "min_minutes_since_open": 15,
+            "max_minutes_since_open": 105,
+            "min_trend_gap_pct": 0.0006,
+            "entry_signal_mode": "daily_first",
+            "cooldown_bars": 120,
+            "max_signals_per_day": 1,
         },
         {
-            "timing_profile": "fast",
-            "hard_exit_minute": 120,
+            "timing_profile": "midday_continuation",
+            "hard_exit_minute": 135,
             "stop_loss_multiple": 0.14,
-            "profit_target_multiple": 0.32,
+            "profit_target_multiple": 0.36,
             "liquidity_gate": "tight",
+            "min_minutes_since_open": 90,
+            "max_minutes_since_open": 240,
+            "min_trend_gap_pct": 0.0008,
+            "entry_signal_mode": "rising_edge",
+            "cooldown_bars": 120,
+            "max_signals_per_day": 1,
         },
         {
-            "timing_profile": "base",
-            "hard_exit_minute": 180,
+            "timing_profile": "late_followthrough",
+            "hard_exit_minute": 90,
             "stop_loss_multiple": 0.18,
-            "profit_target_multiple": 0.45,
+            "profit_target_multiple": 0.30,
             "liquidity_gate": "tight",
+            "min_minutes_since_open": 240,
+            "max_minutes_since_open": 350,
+            "min_trend_gap_pct": 0.0007,
+            "entry_signal_mode": "daily_first",
+            "cooldown_bars": 90,
+            "max_signals_per_day": 1,
         },
         {
-            "timing_profile": "patient",
-            "hard_exit_minute": 240,
-            "stop_loss_multiple": 0.22,
-            "profit_target_multiple": 0.55,
-            "liquidity_gate": "baseline",
-        },
-        {
-            "timing_profile": "slow",
-            "hard_exit_minute": 300,
-            "stop_loss_multiple": 0.26,
-            "profit_target_multiple": 0.70,
-            "liquidity_gate": "baseline",
+            "timing_profile": "strong_trend_patient",
+            "hard_exit_minute": 210,
+            "stop_loss_multiple": 0.16,
+            "profit_target_multiple": 0.50,
+            "liquidity_gate": "tight",
+            "min_minutes_since_open": 30,
+            "max_minutes_since_open": 270,
+            "min_trend_gap_pct": 0.0012,
+            "entry_signal_mode": "rising_edge",
+            "cooldown_bars": 180,
+            "max_signals_per_day": 1,
         },
     ]
     for regime, direction in (("bull", "call"), ("bear", "put")):
         for dte_mode in ("next_expiry",):
             for profile in directional_profiles:
-                params = {
-                    **profile,
-                    "dte_mode": dte_mode,
-                    "family_template": "single_leg_repair",
-                    "stock_proxy_mode": "breakout",
-                }
-                rows.append(
-                    _variant(
-                        symbol=symbol,
-                        regime=regime,
-                        direction=direction,
-                        family="single_leg_repair",
-                        parameters=params,
-                        priority=1,
-                        wave_id=wave_id,
+                for family in (
+                    "single_leg_repair",
+                    f"debit_{direction}_vertical",
+                ):
+                    params = {
+                        **profile,
+                        "dte_mode": dte_mode,
+                        "family_template": family,
+                        "stock_proxy_mode": "breakout",
+                        "wing_width_steps": 1,
+                    }
+                    rows.append(
+                        _variant(
+                            symbol=symbol,
+                            regime=regime,
+                            direction=direction,
+                            family=family,
+                            parameters=params,
+                            priority=1,
+                            wave_id=wave_id,
+                        )
                     )
-                )
     credit_specs = [
         ("bull", "call", "bull_put_credit_spread"),
         ("bear", "put", "bear_call_credit_spread"),
@@ -150,25 +172,40 @@ def build_rows(*, symbol: str, wave_id: str) -> list[dict[str, Any]]:
 
     choppy_profiles = [
         {
-            "timing_profile": "scalp",
-            "hard_exit_minute": 45,
+            "timing_profile": "morning_range",
+            "hard_exit_minute": 60,
+            "max_range_pct": 0.006,
+            "max_trend_gap_pct": 0.0015,
+            "max_midpoint_distance_pct": 0.0025,
+            "min_minutes_since_open": 45,
+            "max_minutes_since_open": 135,
+            "entry_signal_mode": "daily_first",
+            "cooldown_bars": 240,
+            "max_signals_per_day": 1,
+        },
+        {
+            "timing_profile": "midday_range",
+            "hard_exit_minute": 90,
+            "max_range_pct": 0.008,
+            "max_trend_gap_pct": 0.0020,
+            "max_midpoint_distance_pct": 0.0030,
+            "min_minutes_since_open": 120,
+            "max_minutes_since_open": 270,
+            "entry_signal_mode": "daily_first",
+            "cooldown_bars": 240,
+            "max_signals_per_day": 1,
+        },
+        {
+            "timing_profile": "wide_afternoon_range",
+            "hard_exit_minute": 120,
             "max_range_pct": 0.010,
             "max_trend_gap_pct": 0.0025,
-            "max_midpoint_distance_pct": 0.0035,
-        },
-        {
-            "timing_profile": "fast",
-            "hard_exit_minute": 75,
-            "max_range_pct": 0.014,
-            "max_trend_gap_pct": 0.0035,
-            "max_midpoint_distance_pct": 0.0050,
-        },
-        {
-            "timing_profile": "base",
-            "hard_exit_minute": 120,
-            "max_range_pct": 0.018,
-            "max_trend_gap_pct": 0.0045,
-            "max_midpoint_distance_pct": 0.0065,
+            "max_midpoint_distance_pct": 0.0040,
+            "min_minutes_since_open": 210,
+            "max_minutes_since_open": 330,
+            "entry_signal_mode": "daily_first",
+            "cooldown_bars": 240,
+            "max_signals_per_day": 1,
         },
     ]
     for family in ("iron_condor", "iron_butterfly", "premium_defense_spread"):

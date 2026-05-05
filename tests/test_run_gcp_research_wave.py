@@ -136,6 +136,79 @@ def test_bull_put_credit_spread_keeps_bullish_stock_proxy_direction() -> None:
     assert strategy.signal_mode == "breakout"
 
 
+def test_variant_stock_proxy_throttles_to_daily_first_signal() -> None:
+    strategy = _variant_stock_strategy(
+        {
+            "variant_id": "qqq_bull_daily_first",
+            "symbol": "QQQ",
+            "source_strategy_id": "qqq__bull__call__single_leg_repair",
+            "parameters": {
+                "entry_signal_mode": "daily_first",
+                "hard_exit_minute": 30,
+                "max_signals_per_day": 1,
+                "min_minutes_since_open": 15,
+                "min_trend_gap_pct": 0.0,
+                "stock_proxy_mode": "breakout",
+            },
+        }
+    )
+    timestamps = pd.date_range("2026-01-05 09:30", periods=80, freq="min")
+    bars = pd.DataFrame(
+        {
+            "symbol": ["QQQ"] * len(timestamps),
+            "timestamp": timestamps,
+            "open": [100.0 + index * 0.1 for index in range(len(timestamps))],
+            "high": [100.1 + index * 0.1 for index in range(len(timestamps))],
+            "low": [99.9 + index * 0.1 for index in range(len(timestamps))],
+            "close": [100.0 + index * 0.1 for index in range(len(timestamps))],
+            "volume": [1000] * len(timestamps),
+        }
+    )
+
+    signals = strategy.generate_signals(bars)
+
+    assert int((signals["signal"] != 0).sum()) == 1
+
+
+def test_variant_stock_proxy_respects_entry_window() -> None:
+    strategy = _variant_stock_strategy(
+        {
+            "variant_id": "qqq_bear_window",
+            "symbol": "QQQ",
+            "source_strategy_id": "qqq__bear__put__single_leg_repair",
+            "parameters": {
+                "entry_signal_mode": "daily_first",
+                "hard_exit_minute": 30,
+                "max_signals_per_day": 1,
+                "max_minutes_since_open": 40,
+                "min_minutes_since_open": 30,
+                "min_trend_gap_pct": 0.0,
+                "stock_proxy_mode": "breakout",
+            },
+        }
+    )
+    timestamps = pd.date_range("2026-01-05 09:30", periods=80, freq="min")
+    prices = [100.0 - index * 0.1 for index in range(len(timestamps))]
+    bars = pd.DataFrame(
+        {
+            "symbol": ["QQQ"] * len(timestamps),
+            "timestamp": timestamps,
+            "open": prices,
+            "high": [price + 0.05 for price in prices],
+            "low": [price - 0.05 for price in prices],
+            "close": prices,
+            "volume": [1000] * len(timestamps),
+        }
+    )
+
+    signals = strategy.generate_signals(bars)
+    fired = signals.loc[signals["signal"] != 0, "timestamp"]
+
+    assert len(fired) == 1
+    minute_since_open = fired.iloc[0].hour * 60 + fired.iloc[0].minute - (9 * 60 + 30)
+    assert 30 <= minute_since_open <= 40
+
+
 def test_run_writes_required_research_artifacts(tmp_path: Path) -> None:
     variants_path = tmp_path / "variants.jsonl"
     manifest_path = tmp_path / "wave.json"
