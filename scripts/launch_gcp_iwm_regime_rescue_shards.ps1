@@ -35,6 +35,8 @@ $ManifestPath = Join-Path $InputsDir "iwm_regime_rescue_manifest.json"
 $StockUri = "gs://codexalpaca-data-us/research_stock_data/option_fill_ladder_20260429/IWM/365d_5x5/stock_ref_silver/stock_bars/"
 $ContractsUri = "gs://codexalpaca-control-us/research_results/option_fill_ladder_20260429/IWM/365d_5x5/research_wave/dense_universe/selected_option_contracts/"
 $BarsUri = "gs://codexalpaca-data-us/research_option_data/option_fill_ladder_20260429/IWM/365d_5x5/option_bars_silver/option_bars/"
+$MetadataSelectors = $Selectors.Replace(",", ";")
+$MetadataLagProfiles = $LagProfiles.Replace(",", ";")
 
 Set-Location $RepoRoot
 New-Item -ItemType Directory -Path $InputsDir -Force | Out-Null
@@ -146,11 +148,11 @@ for ($candidateStart = 1; $candidateStart -le $TotalCandidates; $candidateStart 
         candidate_start_index = $candidateStart
         gcs_prefix = $GcsPrefix
         instance_name = $instanceName
-        lag_profiles = $LagProfiles
+        lag_profiles = $MetadataLagProfiles
         live_manifest_effect = "none"
         machine_type = $MachineType
         risk_policy_effect = "none"
-        selectors = $Selectors
+        selectors = $MetadataSelectors
         symbol = "IWM"
         top_n = $TopN
         worker_id = $workerId
