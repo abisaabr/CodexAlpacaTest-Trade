@@ -4,9 +4,11 @@ import argparse
 import json
 import sys
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+UTC = timezone.utc
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -156,6 +158,13 @@ def _repair_targets(
 
 
 def _next_actions(packet: dict[str, Any]) -> list[str]:
+    missing_regimes = packet.get("gate_summary", {}).get("missing_eligible_regimes") or []
+    if missing_regimes:
+        return [
+            "Keep this packet research-only; it is not regime-complete for bull/bear/choppy paper-readiness.",
+            f"Continue targeted redesign for missing eligible regimes: {', '.join(str(item) for item in missing_regimes)}.",
+            "Do not modify live manifests, strategy selection, or risk policy from this packet alone.",
+        ]
     if packet["decision"] == "ready_for_governed_validation_review":
         return [
             "Review promotion-review candidates against the strategy-governance policy before any activation discussion.",
@@ -176,12 +185,16 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         "",
         f"- Generated at: `{packet['generated_at']}`",
         f"- Decision: `{packet['decision']}`",
+        f"- Candidate-level decision: `{packet.get('candidate_level_decision')}`",
         f"- Promotion scope: `{packet['promotion_scope']}`",
         f"- Broker facing: `{packet['broker_facing']}`",
         f"- Candidate count: `{packet['gate_summary']['candidate_count']}`",
         f"- Eligible count: `{packet['gate_summary']['eligible_for_promotion_review_count']}`",
         f"- Top-candidate count: `{packet['gate_summary']['top_candidate_count']}`",
         f"- Blocker count scope: `{packet['gate_summary']['blocker_count_scope']}`",
+        f"- Required regimes: `{', '.join(packet['gate_summary'].get('required_regimes') or [])}`",
+        f"- Missing eligible regimes: `{', '.join(packet['gate_summary'].get('missing_eligible_regimes') or []) or 'none'}`",
+        f"- Regime complete for promotion review: `{packet['gate_summary'].get('regime_complete_for_promotion_review')}`",
         f"- Fill coverage unit: `{packet['gate_summary'].get('fill_coverage_unit')}`",
         f"- Fill coverage semantics: {packet['gate_summary'].get('fill_coverage_semantics')}",
         f"- Capital allocated weight: `{packet['gate_summary']['capital_plan_allocated_weight']}`",
@@ -225,6 +238,18 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
             lines.append("- No blockers found in the top-candidate set.")
         for blocker, count in packet["top_candidate_blocker_counts"].items():
             lines.append(f"- `{blocker}`: `{count}`")
+    lines.extend(["", "## Regime Summary", ""])
+    if not packet.get("regime_summary"):
+        lines.append("- No regime summary was provided by the source report.")
+    for row in packet.get("regime_summary", []):
+        lines.append(
+            "- "
+            f"`{row.get('intended_regime')}` candidates `{row.get('candidate_count')}` "
+            f"eligible `{row.get('eligible_for_promotion_review_count')}` "
+            f"best `{row.get('best_candidate_variant_id')}` "
+            f"best_fill `{row.get('best_min_fill_coverage')}` "
+            f"best_status `{row.get('best_promotion_status')}`"
+        )
     lines.extend(["", "## Data Repair Targets", ""])
     if not packet["data_repair_targets"]:
         lines.append("- No data repair targets selected.")
@@ -293,15 +318,24 @@ def build_research_promotion_review_packet(
             if row.get("promotion_status") == "eligible_for_promotion_review"
         }
     )
-    decision = (
+    candidate_level_decision = (
         "ready_for_governed_validation_review"
         if unique_eligible_base_count > 0 and review_candidates
         else "research_only_blocked"
+    )
+    regime_complete = source.get("regime_complete_for_promotion_review")
+    regime_incomplete = isinstance(regime_complete, bool) and not regime_complete
+    decision = (
+        "research_only_blocked_regime_incomplete"
+        if candidate_level_decision == "ready_for_governed_validation_review"
+        and regime_incomplete
+        else candidate_level_decision
     )
     packet = {
         "generated_at": datetime.now(UTC).isoformat(),
         "status": "research_promotion_review_packet_complete",
         "decision": decision,
+        "candidate_level_decision": candidate_level_decision,
         "promotion_scope": "research_governed_validation_review_only",
         "broker_facing": False,
         "live_manifest_effect": "none",
@@ -333,6 +367,15 @@ def build_research_promotion_review_packet(
                 if isinstance(source.get("blocker_counts"), dict)
                 else "top_candidates_only"
             ),
+            "required_regimes": source.get("required_regimes", []),
+            "eligible_regimes": source.get("eligible_regimes", []),
+            "missing_eligible_regimes": source.get("missing_eligible_regimes", []),
+            "regime_complete_for_promotion_review": source.get(
+                "regime_complete_for_promotion_review"
+            ),
+            "promotion_allowed_regime_complete": source.get(
+                "promotion_allowed_regime_complete"
+            ),
         },
         "portfolio_constraints": {
             "initial_cash": source.get("initial_cash"),
@@ -345,6 +388,7 @@ def build_research_promotion_review_packet(
         "symbol_exposure": _symbol_exposure(capital_plan),
         "blocker_counts": full_blocker_counts,
         "top_candidate_blocker_counts": top_candidate_blocker_counts,
+        "regime_summary": source.get("regime_summary", []),
         "data_repair_targets": (
             source_data_repair_targets
             if source_has_data_repair_targets

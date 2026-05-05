@@ -5,11 +5,13 @@ import json
 import re
 import sys
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
+
+UTC = timezone.utc
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -29,6 +31,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-strategies-per-symbol", type=int, default=2)
     parser.add_argument("--max-symbol-weight", type=float, default=0.50)
     parser.add_argument("--initial-cash", type=float, default=25_000.0)
+    parser.add_argument(
+        "--required-regimes",
+        default="bull,bear,choppy",
+        help=(
+            "Comma-separated regime set required for regime-complete paper-readiness "
+            "summary. This does not change candidate-level promotion gates."
+        ),
+    )
     parser.add_argument(
         "--candidate-identity-mode",
         choices=["variant", "variant_profile"],
@@ -428,6 +438,98 @@ def _fill_failure_counts(candidate_rows: list[dict[str, Any]]) -> dict[str, int]
     return dict(sorted(counts.items()))
 
 
+def _normalize_required_regimes(required_regimes: list[str] | tuple[str, ...] | None) -> list[str]:
+    regimes = [
+        str(regime).strip().lower()
+        for regime in (required_regimes or ["bull", "bear", "choppy"])
+        if str(regime).strip()
+    ]
+    return list(dict.fromkeys(regimes))
+
+
+def _regime_summary(
+    candidate_rows: list[dict[str, Any]],
+    *,
+    required_regimes: list[str] | tuple[str, ...] | None = None,
+) -> list[dict[str, Any]]:
+    normalized_required = _normalize_required_regimes(required_regimes)
+    by_regime: dict[str, dict[str, Any]] = {
+        regime: {
+            "intended_regime": regime,
+            "candidate_count": 0,
+            "eligible_for_promotion_review_count": 0,
+            "blocked_count": 0,
+            "best_candidate_variant_id": None,
+            "best_research_score": None,
+            "best_min_net_pnl": None,
+            "best_min_test_net_pnl": None,
+            "best_min_fill_coverage": None,
+            "best_promotion_status": None,
+            "blocker_counts": Counter(),
+            "fill_failure_counts": Counter(),
+        }
+        for regime in normalized_required
+    }
+    for row in candidate_rows:
+        regime = str(row.get("intended_regime") or "unknown").lower()
+        item = by_regime.setdefault(
+            regime,
+            {
+                "intended_regime": regime,
+                "candidate_count": 0,
+                "eligible_for_promotion_review_count": 0,
+                "blocked_count": 0,
+                "best_candidate_variant_id": None,
+                "best_research_score": None,
+                "best_min_net_pnl": None,
+                "best_min_test_net_pnl": None,
+                "best_min_fill_coverage": None,
+                "best_promotion_status": None,
+                "blocker_counts": Counter(),
+                "fill_failure_counts": Counter(),
+            },
+        )
+        item["candidate_count"] += 1
+        if row.get("promotion_status") == "eligible_for_promotion_review":
+            item["eligible_for_promotion_review_count"] += 1
+        else:
+            item["blocked_count"] += 1
+        for blocker in row.get("promotion_blockers", []):
+            item["blocker_counts"][str(blocker)] += 1
+        item["fill_failure_counts"][str(row.get("fill_failure_reason") or "unknown")] += 1
+        if item["best_research_score"] is None or _float(row.get("research_score")) > _float(
+            item["best_research_score"]
+        ):
+            item["best_candidate_variant_id"] = row.get("candidate_variant_id")
+            item["best_research_score"] = row.get("research_score")
+            item["best_min_net_pnl"] = row.get("min_net_pnl")
+            item["best_min_test_net_pnl"] = row.get("min_test_net_pnl")
+            item["best_min_fill_coverage"] = row.get("min_fill_coverage")
+            item["best_promotion_status"] = row.get("promotion_status")
+
+    order = {regime: index for index, regime in enumerate(normalized_required)}
+    result: list[dict[str, Any]] = []
+    for item in by_regime.values():
+        item["blocker_counts"] = dict(sorted(item["blocker_counts"].items()))
+        item["fill_failure_counts"] = dict(sorted(item["fill_failure_counts"].items()))
+        result.append(item)
+    return sorted(
+        result,
+        key=lambda row: (
+            order.get(str(row["intended_regime"]), len(order)),
+            str(row["intended_regime"]),
+        ),
+    )
+
+
+def _eligible_regimes(regime_summary: list[dict[str, Any]]) -> list[str]:
+    return [
+        str(row["intended_regime"])
+        for row in regime_summary
+        if int(row.get("eligible_for_promotion_review_count") or 0) > 0
+    ]
+
+
 def _has_strong_data_foundation(row: dict[str, Any]) -> bool:
     value = row.get("min_data_foundation_coverage")
     if value in (None, "", "nan"):
@@ -589,6 +691,24 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
     lines.extend(["", "## Fill Failure Counts", ""])
     for reason, count in packet["fill_failure_counts"].items():
         lines.append(f"- `{reason}`: `{count}`")
+    lines.extend(["", "## Regime Completeness", ""])
+    lines.append(f"- Required regimes: `{', '.join(packet['required_regimes'])}`")
+    lines.append(f"- Eligible regimes: `{', '.join(packet['eligible_regimes']) or 'none'}`")
+    lines.append(
+        f"- Missing eligible regimes: `{', '.join(packet['missing_eligible_regimes']) or 'none'}`"
+    )
+    lines.append(
+        f"- Regime complete for promotion review: `{packet['regime_complete_for_promotion_review']}`"
+    )
+    for row in packet["regime_summary"]:
+        lines.append(
+            "- "
+            f"`{row['intended_regime']}` candidates `{row['candidate_count']}` "
+            f"eligible `{row['eligible_for_promotion_review_count']}` "
+            f"best `{row.get('best_candidate_variant_id')}` "
+            f"best_fill `{row.get('best_min_fill_coverage')}` "
+            f"best_status `{row.get('best_promotion_status')}`"
+        )
     lines.extend(["", "## Data Repair Priority", ""])
     if not packet["data_repair_priority_candidates"]:
         lines.append("- No positive-economics data-repair candidates selected.")
@@ -626,6 +746,7 @@ def build_research_portfolio_report(
     max_strategies_per_symbol: int,
     max_symbol_weight: float,
     initial_cash: float,
+    required_regimes: list[str] | tuple[str, ...] | None = None,
     candidate_identity_mode: str = "variant",
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -649,6 +770,14 @@ def build_research_portfolio_report(
     eligible_count = sum(
         1 for row in candidate_rows if row["promotion_status"] == "eligible_for_promotion_review"
     )
+    normalized_required_regimes = _normalize_required_regimes(required_regimes)
+    regime_summary = _regime_summary(
+        candidate_rows, required_regimes=normalized_required_regimes
+    )
+    eligible_regimes = _eligible_regimes(regime_summary)
+    missing_eligible_regimes = [
+        regime for regime in normalized_required_regimes if regime not in set(eligible_regimes)
+    ]
     fill_coverage_unit = next(
         (
             row.get("fill_coverage_unit")
@@ -691,10 +820,18 @@ def build_research_portfolio_report(
         "top_candidates": candidate_rows[:50],
         "blocker_counts": _blocker_counts(candidate_rows),
         "fill_failure_counts": _fill_failure_counts(candidate_rows),
+        "required_regimes": normalized_required_regimes,
+        "regime_summary": regime_summary,
+        "eligible_regimes": eligible_regimes,
+        "missing_eligible_regimes": missing_eligible_regimes,
+        "regime_complete_for_promotion_review": not missing_eligible_regimes,
+        "promotion_allowed_regime_complete": eligible_count > 0
+        and not missing_eligible_regimes,
         "data_repair_priority_candidates": _data_repair_candidates(candidate_rows),
         "strategy_redesign_candidates": _strategy_redesign_candidates(candidate_rows),
         "next_step_contract": [
             "Treat the capital plan as research-only until fill coverage reaches the configured gate.",
+            "Treat a symbol as regime-complete only when bull, bear, and choppy required regimes each have at least one eligible governed-review candidate.",
             "Use dense daily option-universe builds when selected-contract gaps dominate otherwise positive candidates.",
             "Use strategy redesign when data foundation is strong but entry/exit bar timing still blocks fills.",
             "Use event-driven selected-contract repairs only for isolated missing entry/exit bars with weak data foundation.",
@@ -721,6 +858,7 @@ def main() -> None:
         max_strategies_per_symbol=args.max_strategies_per_symbol,
         max_symbol_weight=args.max_symbol_weight,
         initial_cash=args.initial_cash,
+        required_regimes=args.required_regimes.split(","),
         candidate_identity_mode=args.candidate_identity_mode,
     )
     print(json.dumps(packet, indent=2, default=str))

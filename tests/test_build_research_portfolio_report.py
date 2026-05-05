@@ -130,6 +130,7 @@ def test_research_portfolio_report_allows_review_when_gates_pass(tmp_path: Path)
                 "candidate_variant_id": "amd_candidate",
                 "symbol": "AMD",
                 "source_strategy_id": "amd_strategy",
+                "intended_regime": "bull",
                 "directional_option_type": "call",
                 "net_pnl": 5000.0,
                 "test_net_pnl": 300.0,
@@ -164,6 +165,9 @@ def test_research_portfolio_report_allows_review_when_gates_pass(tmp_path: Path)
     assert packet["top_candidates"][0]["fill_failure_reason"] == "fill_gate_clear"
     assert packet["capital_plan"][0]["research_only_weight"] == 0.5
     assert packet["capital_plan_unallocated_dollars"] == 12_500.0
+    assert packet["eligible_regimes"] == ["bull"]
+    assert packet["missing_eligible_regimes"] == ["bear", "choppy"]
+    assert packet["regime_complete_for_promotion_review"] is False
 
 
 def test_research_portfolio_report_prefers_eligible_candidate_over_blocked_high_score(
@@ -307,6 +311,100 @@ def test_research_portfolio_report_can_isolate_same_variant_across_profiles(
     assert eligible["base_candidate_variant_id"] == "qqq_choppy_iron_condor"
     assert eligible["aggregate_profile"] == "clean_choppy_profile"
     assert eligible["candidate_variant_id"].endswith("__profile_clean-choppy-profile")
+
+
+def test_research_portfolio_report_tracks_iwm_regime_completeness(tmp_path: Path) -> None:
+    replay_root = tmp_path / "replay"
+    rows = [
+        {
+            "candidate_variant_id": "portfolio12h__iwm__bull__call__single_leg_repair",
+            "symbol": "IWM",
+            "source_strategy_id": "iwm__bull__call__single_leg_repair",
+            "family": "single_leg_repair",
+            "intended_regime": "bull",
+            "directional_option_type": "call",
+            "net_pnl": 617.845,
+            "test_net_pnl": 829.028,
+            "fill_coverage": 0.994,
+            "option_trade_count": 166,
+            "max_drawdown": -250.0,
+            "win_rate": 0.62,
+            "profit_factor": 1.8,
+            "missing_option_price_count": 0,
+            "missing_no_selected_contract": 0,
+            "missing_no_entry_bar": 0,
+            "missing_no_exit_bar": 0,
+        },
+        {
+            "candidate_variant_id": "portfolio12h__iwm__bear__put__single_leg_repair",
+            "symbol": "IWM",
+            "source_strategy_id": "iwm__bear__put__single_leg_repair",
+            "family": "single_leg_repair",
+            "intended_regime": "bear",
+            "directional_option_type": "put",
+            "net_pnl": 500.0,
+            "test_net_pnl": -50.0,
+            "fill_coverage": 0.96,
+            "option_trade_count": 90,
+            "max_drawdown": -500.0,
+            "win_rate": 0.48,
+            "profit_factor": 1.1,
+            "missing_option_price_count": 0,
+            "missing_no_selected_contract": 0,
+            "missing_no_entry_bar": 0,
+            "missing_no_exit_bar": 0,
+        },
+        {
+            "candidate_variant_id": "portfolio12h__iwm__choppy__put__debit_put_vertical",
+            "symbol": "IWM",
+            "source_strategy_id": "iwm__choppy__put__debit_put_vertical",
+            "family": "debit_put_vertical",
+            "intended_regime": "choppy",
+            "directional_option_type": "put",
+            "net_pnl": 15_732.003,
+            "test_net_pnl": 47_262.66,
+            "fill_coverage": 0.7587,
+            "data_foundation_coverage": 0.8986,
+            "entry_bar_coverage": 0.8444,
+            "exit_bar_coverage": 1.0,
+            "option_trade_count": 217,
+            "max_drawdown": -750.0,
+            "win_rate": 0.55,
+            "profit_factor": 2.2,
+            "missing_option_price_count": 0,
+            "missing_no_selected_contract": 29,
+            "missing_no_entry_bar": 40,
+            "missing_no_exit_bar": 0,
+        },
+    ]
+    _write_profile(replay_root, "iwm_regime_example", rows)
+
+    packet = build_research_portfolio_report(
+        replay_root=replay_root,
+        output_dir=tmp_path / "out",
+        fill_coverage_gate=0.90,
+        min_option_trades=20,
+        min_test_net_pnl=0.0,
+        max_positions=5,
+        max_strategies_per_symbol=3,
+        max_symbol_weight=1.0,
+        initial_cash=25_000.0,
+        candidate_identity_mode="variant_profile",
+    )
+
+    assert packet["eligible_for_promotion_review_count"] == 1
+    assert packet["eligible_regimes"] == ["bull"]
+    assert packet["missing_eligible_regimes"] == ["bear", "choppy"]
+    assert packet["regime_complete_for_promotion_review"] is False
+    assert packet["promotion_allowed_regime_complete"] is False
+    summary_by_regime = {row["intended_regime"]: row for row in packet["regime_summary"]}
+    assert summary_by_regime["bull"]["eligible_for_promotion_review_count"] == 1
+    assert summary_by_regime["bear"]["blocker_counts"] == {
+        "test_net_pnl_not_above_0": 1
+    }
+    assert summary_by_regime["choppy"]["blocker_counts"] == {
+        "fill_coverage_below_0.90": 1
+    }
 
 
 def test_research_portfolio_report_allows_multiple_strategies_per_symbol_with_symbol_cap(

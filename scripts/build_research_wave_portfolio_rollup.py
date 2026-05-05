@@ -4,9 +4,11 @@ import argparse
 import json
 import sys
 from collections import Counter, defaultdict
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+UTC = timezone.utc
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -15,9 +17,12 @@ if str(REPO_ROOT) not in sys.path:
 from scripts.build_research_portfolio_report import (
     _blocker_counts,
     _data_repair_candidates,
+    _eligible_regimes,
     _fill_failure_reason,
     _fill_failure_counts,
     _float,
+    _normalize_required_regimes,
+    _regime_summary,
     _strategy_redesign_candidates,
     build_capital_plan,
 )
@@ -46,6 +51,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-symbol-weight", type=float, default=0.25)
     parser.add_argument("--initial-cash", type=float, default=25_000.0)
     parser.add_argument("--max-review-candidates", type=int, default=20)
+    parser.add_argument(
+        "--required-regimes",
+        default="bull,bear,choppy",
+        help=(
+            "Comma-separated regime set required for regime-complete rollup "
+            "summary. This does not change candidate-level promotion gates."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -187,6 +200,7 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         f"- Generated at: `{packet['generated_at']}`",
         f"- Status: `{packet['status']}`",
         f"- Decision: `{packet['decision']}`",
+        f"- Candidate-level decision: `{packet.get('candidate_level_decision')}`",
         f"- Source report count: `{packet['source_report_count']}`",
         f"- Candidate count: `{packet['candidate_count']}`",
         f"- Eligible count: `{packet['eligible_for_promotion_review_count']}`",
@@ -223,6 +237,25 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
     lines.extend(["", "## Fill Failure Counts", ""])
     for reason, count in packet["fill_failure_counts"].items():
         lines.append(f"- `{reason}`: `{count}`")
+
+    lines.extend(["", "## Regime Completeness", ""])
+    lines.append(f"- Required regimes: `{', '.join(packet['required_regimes'])}`")
+    lines.append(f"- Eligible regimes: `{', '.join(packet['eligible_regimes']) or 'none'}`")
+    lines.append(
+        f"- Missing eligible regimes: `{', '.join(packet['missing_eligible_regimes']) or 'none'}`"
+    )
+    lines.append(
+        f"- Regime complete for promotion review: `{packet['regime_complete_for_promotion_review']}`"
+    )
+    for row in packet["regime_summary"]:
+        lines.append(
+            "- "
+            f"`{row['intended_regime']}` candidates `{row['candidate_count']}` "
+            f"eligible `{row['eligible_for_promotion_review_count']}` "
+            f"best `{row.get('best_candidate_variant_id')}` "
+            f"best_fill `{row.get('best_min_fill_coverage')}` "
+            f"best_status `{row.get('best_promotion_status')}`"
+        )
 
     lines.extend(["", "## Symbol Summary", ""])
     for row in packet["symbol_summary"][:25]:
@@ -275,6 +308,7 @@ def build_research_wave_portfolio_rollup(
     max_symbol_weight: float,
     initial_cash: float,
     max_review_candidates: int,
+    required_regimes: list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     report_paths = discover_portfolio_reports(report_root, pattern)
@@ -292,15 +326,31 @@ def build_research_wave_portfolio_rollup(
     eligible_count = sum(
         1 for row in candidates if row.get("promotion_status") == "eligible_for_promotion_review"
     )
+    normalized_required_regimes = _normalize_required_regimes(required_regimes)
+    regime_summary = _regime_summary(
+        candidates, required_regimes=normalized_required_regimes
+    )
+    eligible_regimes = _eligible_regimes(regime_summary)
+    missing_eligible_regimes = [
+        regime for regime in normalized_required_regimes if regime not in set(eligible_regimes)
+    ]
     allocated_weight = round(sum(row["research_only_weight"] for row in capital_plan), 6)
+    candidate_level_decision = (
+        "ready_for_governed_validation_review"
+        if eligible_count > 0
+        else "research_only_blocked"
+    )
+    decision = (
+        "research_only_blocked_regime_incomplete"
+        if candidate_level_decision == "ready_for_governed_validation_review"
+        and missing_eligible_regimes
+        else candidate_level_decision
+    )
     packet = {
         "generated_at": datetime.now(UTC).isoformat(),
         "status": "research_wave_portfolio_rollup_complete",
-        "decision": (
-            "ready_for_governed_validation_review"
-            if eligible_count > 0
-            else "research_only_blocked"
-        ),
+        "decision": decision,
+        "candidate_level_decision": candidate_level_decision,
         "promotion_allowed": eligible_count > 0,
         "broker_facing": False,
         "live_manifest_effect": "none",
@@ -327,11 +377,19 @@ def build_research_wave_portfolio_rollup(
         "blocker_counts": _blocker_counts(candidates),
         "fill_failure_counts": _fill_failure_counts(candidates),
         "symbol_summary": _symbol_summary(candidates),
+        "required_regimes": normalized_required_regimes,
+        "regime_summary": regime_summary,
+        "eligible_regimes": eligible_regimes,
+        "missing_eligible_regimes": missing_eligible_regimes,
+        "regime_complete_for_promotion_review": not missing_eligible_regimes,
+        "promotion_allowed_regime_complete": eligible_count > 0
+        and not missing_eligible_regimes,
         "data_repair_priority_candidates": _data_repair_candidates(candidates, max_items=20),
         "strategy_redesign_candidates": _strategy_redesign_candidates(candidates, max_items=20),
         "next_step_contract": [
             "Treat this rollup as research-only until governed promotion review and broker-audited paper evidence are complete.",
             "Promote only candidates that keep fill coverage at or above 0.90 across the required replay stack.",
+            "Treat a symbol as regime-complete only when bull, bear, and choppy required regimes each have at least one eligible governed-review candidate.",
             "When selected-contract gaps dominate, rerun candidates through dense daily liquid-contract universes before strategy redesign.",
             "When entry/exit timing gaps dominate despite dense coverage, redesign exits or quarantine the strategy family.",
             "Do not modify live manifests, strategy selection, or risk policy from this rollup alone.",
@@ -363,6 +421,7 @@ def main() -> None:
         max_symbol_weight=args.max_symbol_weight,
         initial_cash=args.initial_cash,
         max_review_candidates=args.max_review_candidates,
+        required_regimes=args.required_regimes.split(","),
     )
     print(json.dumps(packet, indent=2, default=str))
 
