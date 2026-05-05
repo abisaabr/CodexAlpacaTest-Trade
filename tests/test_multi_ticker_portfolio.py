@@ -121,6 +121,21 @@ def _select_strategy(
         and strategy.dte_mode == dte_mode
     )
 
+
+def test_combined_governed_portfolio_loads_multiple_strategy_manifests() -> None:
+    config = load_portfolio_config("config/qqq_spy_regime_complete_paper_portfolio.yaml")
+
+    assert config.execution.underlying_symbols == ("QQQ", "SPY")
+    assert len(config.strategy_manifest_paths) == 2
+    assert len(config.strategies) == 6
+    assert Counter(strategy.underlying_symbol for strategy in config.strategies) == {
+        "QQQ": 3,
+        "SPY": 3,
+    }
+    assert {strategy.regime for strategy in config.strategies} == {"bull", "bear", "choppy"}
+    assert config.execution.submit_paper_orders is False
+
+
 def _sample_multileg_open_trade(
     *,
     strategy_name: str,

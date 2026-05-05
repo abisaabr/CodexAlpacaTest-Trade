@@ -305,6 +305,7 @@ class MultiTickerPortfolioConfig(BaseModel):
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     ownership: OwnershipConfig = Field(default_factory=OwnershipConfig)
     strategy_manifest_path: Path | None = None
+    strategy_manifest_paths: tuple[Path, ...] = ()
     strategies: tuple[StrategyConfig, ...]
 
     @field_validator("strategy_manifest_path", mode="before")
@@ -313,6 +314,17 @@ class MultiTickerPortfolioConfig(BaseModel):
         if value in (None, ""):
             return None
         return Path(str(value))
+
+    @field_validator("strategy_manifest_paths", mode="before")
+    @classmethod
+    def normalize_strategy_manifest_paths(cls, value: object) -> tuple[Path, ...]:
+        if value in (None, "", []):
+            return ()
+        if isinstance(value, str):
+            return tuple(Path(item.strip()) for item in value.split(",") if item.strip())
+        if isinstance(value, (list, tuple, set)):
+            return tuple(Path(str(item)) for item in value if str(item).strip())
+        raise TypeError("strategy_manifest_paths must be a string or sequence")
 
     @property
     def strategies_by_name(self) -> dict[str, StrategyConfig]:
@@ -595,6 +607,36 @@ def _resolve_strategy_payloads(
         if not isinstance(strategies_value, list):
             raise ValueError("Strategies config must contain a list.")
         return strategies_value
+
+    manifest_paths_value = payload.get("strategy_manifest_paths")
+    if manifest_paths_value not in (None, "", []):
+        if payload.get("strategy_manifest_path") not in (None, ""):
+            raise ValueError(
+                "Use either strategy_manifest_path or strategy_manifest_paths, not both."
+            )
+        if isinstance(manifest_paths_value, str):
+            manifest_path_values = [
+                item.strip() for item in manifest_paths_value.split(",") if item.strip()
+            ]
+        elif isinstance(manifest_paths_value, (list, tuple, set)):
+            manifest_path_values = [
+                str(item).strip() for item in manifest_paths_value if str(item).strip()
+            ]
+        else:
+            raise TypeError("strategy_manifest_paths must be a string or sequence")
+        if not manifest_path_values:
+            raise ValueError("strategy_manifest_paths must not be empty.")
+        base_dir = config_path.parent if config_path is not None else Path(__file__).resolve().parents[2]
+        resolved_manifest_paths: list[Path] = []
+        strategy_payloads: list[dict[str, object]] = []
+        for manifest_path_value in manifest_path_values:
+            manifest_path = Path(manifest_path_value)
+            if not manifest_path.is_absolute():
+                manifest_path = (base_dir / manifest_path).resolve()
+            resolved_manifest_paths.append(manifest_path)
+            strategy_payloads.extend(_load_strategy_manifest_payload(manifest_path))
+        payload["strategy_manifest_paths"] = resolved_manifest_paths
+        return strategy_payloads
 
     manifest_path_value = payload.get("strategy_manifest_path")
     manifest_path: Path | None = None
