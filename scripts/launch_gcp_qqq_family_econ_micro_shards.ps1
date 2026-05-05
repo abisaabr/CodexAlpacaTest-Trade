@@ -59,8 +59,14 @@ function Invoke-Gcloud {
 
 function Invoke-GcloudCreateInstance {
     param([string[]]$Arguments)
-    $output = & $Gcloud @Arguments 2>&1
-    $exitCode = $LASTEXITCODE
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & $Gcloud @Arguments 2>&1
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
     $output | ForEach-Object { Write-Output $_ }
     if ($exitCode -eq 0) {
         return "created"
