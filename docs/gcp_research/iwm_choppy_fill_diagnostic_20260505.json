@@ -1,0 +1,62 @@
+{
+  "candidate": {
+    "candidate_variant_id": "portfolio12h__iwm__choppy__put__debit_put_vertical__981bf7626eaa9e",
+    "family": "debit_put_vertical",
+    "full_period_net_pnl": 15732.003,
+    "intended_regime": "choppy",
+    "option_trade_count": 217,
+    "promotion_blockers": [
+      "fill_coverage_below_0.90"
+    ],
+    "promotion_status": "research_only_blocked",
+    "strategy_fill_coverage": 0.7587,
+    "strategy_id": "iwm__choppy__put__debit_put_vertical",
+    "symbol": "IWM",
+    "test_net_pnl": 47262.66
+  },
+  "coverage": {
+    "data_foundation_coverage": 0.8986,
+    "entry_bar_coverage": 0.8444,
+    "exit_bar_coverage": 1.0,
+    "fill_coverage_gate": 0.9,
+    "fill_coverage_unit": "filled_option_structures_per_source_stock_trade",
+    "strategy_fill_coverage": 0.7587
+  },
+  "decision": "research_only_diagnostic_prepared",
+  "dominant_classification": [
+    "entry_bar_gap_or_entry_timing_mismatch",
+    "selected_contract_universe_gap"
+  ],
+  "failure_counts": {
+    "no_entry_bar": 40,
+    "no_selected_contract": 29,
+    "total": 69
+  },
+  "generated_report_gcs": {
+    "json": "gs://codexalpaca-control-us/research_results/iwm_choppy_fill_diagnostic_20260505/iwm_choppy_debit_put_vertical_fill_diagnostic_20260505.json",
+    "markdown": "gs://codexalpaca-control-us/research_results/iwm_choppy_fill_diagnostic_20260505/iwm_choppy_debit_put_vertical_fill_diagnostic_20260505.md"
+  },
+  "next_micro_wave": {
+    "broker_facing": false,
+    "do_not_activate_iwm": true,
+    "entry_lag_diagnostic_minutes": [
+      0,
+      1,
+      2,
+      5
+    ],
+    "fill_gate_remains": 0.9,
+    "primary_questions": [
+      "Does the selected-contract universe lack one or both debit-put-vertical legs?",
+      "Do strict zero-minute entry timestamps land before usable option bars exist?",
+      "Can realistic paper-execution entry-lag semantics raise strategy fill coverage without weakening the gate?"
+    ]
+  },
+  "source_artifacts": {
+    "candidate_summary": "gs://codexalpaca-control-us/research_results/ticker365_iwm_bear_choppy_redesign_20260505T1505Z/workers/iwm_bc_red_c067_072/reports/research_wave/iwm_bc_red_c067_072_iwm_e0_x60_entry_liquidity_first_research_only/iwm_bc_red_c067_072_iwm_e0_x60_entry_liquidity_first_research_only/option_aware_candidate_summary.json",
+    "fill_failures": "gs://codexalpaca-control-us/research_results/ticker365_iwm_bear_choppy_redesign_20260505T1505Z/workers/iwm_bc_red_c067_072/reports/research_wave/iwm_bc_red_c067_072_iwm_e0_x60_entry_liquidity_first_research_only/iwm_bc_red_c067_072_iwm_e0_x60_entry_liquidity_first_research_only/option_aware_fill_failures.json",
+    "promotion_packet": "gs://codexalpaca-control-us/research_results/ticker365_iwm_bear_choppy_redesign_20260505T1505Z/workers/iwm_bc_red_c067_072/promotion_packet/iwm_bc_red_c067_072_promotion_packet/research_promotion_review_packet.json",
+    "wave_id": "ticker365_iwm_bear_choppy_redesign_20260505T1505Z",
+    "worker": "iwm_bc_red_c067_072"
+  }
+}
