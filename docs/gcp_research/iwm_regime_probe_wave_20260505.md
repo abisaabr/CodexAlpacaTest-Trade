@@ -128,13 +128,33 @@ Additional extension launched:
 - Launch rows: `gs://codexalpaca-control-us/research_results/ticker365_iwm_launch_20260505T1035Z/ops/iwm_extension_17_32_launch_rows.json`
 - Launch log: `gs://codexalpaca-control-us/research_results/ticker365_iwm_launch_20260505T1035Z/ops/iwm_extension_17_32_launch_log.txt`
 
+Extension `17-32` result:
+
+- Bear `17-32` completed with no eligible candidate.
+- Choppy single-leg refine `17-32` completed with no eligible candidate.
+- Some choppy candidates had positive test-period PnL, but all remained negative over the full 365-day window.
+- The four original east-zone workers failed because `us-east1-b` had insufficient resources; they were relaunched successfully into central/west zones.
+
+Additional choppy premium lane launched:
+
+- Wave: `ticker365_iwm_choppy_premium_exit_20260505T1135Z`
+- Source queue: copied from the IWM premium-exit queue.
+- Candidate ranks: `33-64` from `qqq_premium_exit_option_queue.json`
+- Coverage target: choppy defined-risk families that were not tested by the single-leg choppy refine queue:
+  - `iron_condor`
+  - `iron_butterfly`
+  - `premium_defense_spread`
+- Launch rows: `gs://codexalpaca-control-us/research_results/ticker365_iwm_choppy_premium_exit_20260505T1135Z/ops/iwm_choppy_premium_33_64_launch_rows.json`
+- Launch log: `gs://codexalpaca-control-us/research_results/ticker365_iwm_choppy_premium_exit_20260505T1135Z/ops/iwm_choppy_premium_33_64_launch_log.txt`
+
 ## Next Steps
 
 1. Continue monitoring worker status JSON under each wave's `workers/` prefix.
 2. Delete only completed terminated research workers after their GCS `status.json` says `phase=completed`.
-3. Evaluate bear/choppy `17-32` before launching more breadth.
-4. If bear/choppy `17-32` fails economics, switch to an IWM-specific redesign wave rather than continuing blind breadth.
-5. Aggregate all completed IWM worker promotion packets into a combined IWM regime packet only after an eligible bear/choppy candidate appears.
-6. If one bull, one bear, and one choppy strategy are eligible, create an IWM governed-validation runner manifest.
-7. If IWM reaches all-regime review, build a QQQ+SPY+IWM controlled validation portfolio.
-8. Do not start broker-facing paper or submit paper orders without explicit operator approval.
+3. Evaluate the choppy premium `33-64` lane before launching more choppy breadth.
+4. If choppy premium `33-64` finds a candidate, launch `65-68`; otherwise switch to IWM-specific choppy redesign.
+5. Bear needs IWM-specific redesign; broad bear candidates `1-32` did not produce an eligible candidate.
+6. Aggregate all completed IWM worker promotion packets into a combined IWM regime packet only after an eligible bear/choppy candidate appears.
+7. If one bull, one bear, and one choppy strategy are eligible, create an IWM governed-validation runner manifest.
+8. If IWM reaches all-regime review, build a QQQ+SPY+IWM controlled validation portfolio.
+9. Do not start broker-facing paper or submit paper orders without explicit operator approval.
