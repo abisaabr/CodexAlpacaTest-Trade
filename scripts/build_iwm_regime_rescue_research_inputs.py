@@ -1,0 +1,292 @@
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.build_qqq_regime_research_inputs import _variant, build_queue
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Build a targeted IWM regime-rescue queue focused on missing governed "
+            "promotion-review regimes: bear economics and choppy fill/economics."
+        )
+    )
+    parser.add_argument("--symbol", default="IWM")
+    parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--wave-id", default="ticker365_iwm_regime_rescue_20260505")
+    return parser.parse_args()
+
+
+def _bear_timing_profiles() -> list[dict[str, Any]]:
+    return [
+        {
+            "timing_profile": "iwm_bear_open_drive_15_80",
+            "hard_exit_minute": 35,
+            "min_minutes_since_open": 15,
+            "max_minutes_since_open": 80,
+            "min_trend_gap_pct": 0.00025,
+            "entry_signal_mode": "daily_first",
+            "cooldown_bars": 120,
+            "max_signals_per_day": 1,
+        },
+        {
+            "timing_profile": "iwm_bear_confirmed_break_30_120",
+            "hard_exit_minute": 55,
+            "min_minutes_since_open": 30,
+            "max_minutes_since_open": 120,
+            "min_trend_gap_pct": 0.00045,
+            "entry_signal_mode": "rising_edge",
+            "cooldown_bars": 90,
+            "max_signals_per_day": 1,
+        },
+        {
+            "timing_profile": "iwm_bear_midday_follow_95_230",
+            "hard_exit_minute": 85,
+            "min_minutes_since_open": 95,
+            "max_minutes_since_open": 230,
+            "min_trend_gap_pct": 0.00060,
+            "entry_signal_mode": "rising_edge",
+            "cooldown_bars": 90,
+            "max_signals_per_day": 1,
+        },
+        {
+            "timing_profile": "iwm_bear_late_continuation_205_335",
+            "hard_exit_minute": 65,
+            "min_minutes_since_open": 205,
+            "max_minutes_since_open": 335,
+            "min_trend_gap_pct": 0.00040,
+            "entry_signal_mode": "daily_first",
+            "cooldown_bars": 90,
+            "max_signals_per_day": 1,
+        },
+    ]
+
+
+def _bear_exit_profiles() -> list[dict[str, Any]]:
+    return [
+        {
+            "option_exit_mode": "premium_target_stop",
+            "option_exit_profile": "iwm_bear_micro_scalp",
+            "option_profit_target_pct": 0.14,
+            "option_stop_loss_pct": 0.06,
+            "option_stop_loss_credit_multiple": 0.75,
+            "option_stop_loss_risk_pct": 0.18,
+            "min_option_hold_minutes": 1,
+            "profit_target_multiple": 0.18,
+            "stop_loss_multiple": 0.07,
+        },
+        {
+            "option_exit_mode": "premium_target_stop",
+            "option_exit_profile": "iwm_bear_tight_scalp",
+            "option_profit_target_pct": 0.20,
+            "option_stop_loss_pct": 0.09,
+            "option_stop_loss_credit_multiple": 0.90,
+            "option_stop_loss_risk_pct": 0.24,
+            "min_option_hold_minutes": 2,
+            "profit_target_multiple": 0.24,
+            "stop_loss_multiple": 0.10,
+        },
+        {
+            "option_exit_mode": "premium_target_stop",
+            "option_exit_profile": "iwm_bear_asymmetric_runner",
+            "option_profit_target_pct": 0.34,
+            "option_stop_loss_pct": 0.13,
+            "option_stop_loss_credit_multiple": 1.10,
+            "option_stop_loss_risk_pct": 0.30,
+            "min_option_hold_minutes": 3,
+            "profit_target_multiple": 0.36,
+            "stop_loss_multiple": 0.14,
+        },
+    ]
+
+
+def _choppy_timing_profiles() -> list[dict[str, Any]]:
+    return [
+        {
+            "timing_profile": "iwm_choppy_lower_band_75_180",
+            "hard_exit_minute": 45,
+            "min_minutes_since_open": 75,
+            "max_minutes_since_open": 180,
+            "max_range_pct": 0.0085,
+            "max_trend_gap_pct": 0.0020,
+            "max_midpoint_distance_pct": 0.0045,
+        },
+        {
+            "timing_profile": "iwm_choppy_midday_bands_120_270",
+            "hard_exit_minute": 55,
+            "min_minutes_since_open": 120,
+            "max_minutes_since_open": 270,
+            "max_range_pct": 0.0100,
+            "max_trend_gap_pct": 0.0024,
+            "max_midpoint_distance_pct": 0.0050,
+        },
+        {
+            "timing_profile": "iwm_choppy_upper_band_late_190_340",
+            "hard_exit_minute": 50,
+            "min_minutes_since_open": 190,
+            "max_minutes_since_open": 340,
+            "max_range_pct": 0.0125,
+            "max_trend_gap_pct": 0.0030,
+            "max_midpoint_distance_pct": 0.0055,
+        },
+    ]
+
+
+def _choppy_exit_profiles() -> list[dict[str, Any]]:
+    return [
+        {
+            "option_exit_mode": "premium_target_stop",
+            "option_exit_profile": "iwm_choppy_fast_reversion",
+            "option_profit_target_pct": 0.18,
+            "option_stop_loss_pct": 0.08,
+            "min_option_hold_minutes": 1,
+            "profit_target_multiple": 0.18,
+            "stop_loss_multiple": 0.07,
+        },
+        {
+            "option_exit_mode": "premium_target_stop",
+            "option_exit_profile": "iwm_choppy_balanced_reversion",
+            "option_profit_target_pct": 0.28,
+            "option_stop_loss_pct": 0.12,
+            "min_option_hold_minutes": 2,
+            "profit_target_multiple": 0.24,
+            "stop_loss_multiple": 0.10,
+        },
+        {
+            "option_exit_mode": "premium_target_stop",
+            "option_exit_profile": "iwm_choppy_wide_reversion",
+            "option_profit_target_pct": 0.38,
+            "option_stop_loss_pct": 0.16,
+            "min_option_hold_minutes": 3,
+            "profit_target_multiple": 0.30,
+            "stop_loss_multiple": 0.13,
+        },
+    ]
+
+
+def _bear_rows(*, symbol: str, wave_id: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    family_specs = [
+        ("put", "single_leg_repair", 1),
+        ("put", "debit_put_vertical", 1),
+        ("put", "bear_call_credit_spread", 1),
+        ("put", "credit_call_vertical", 2),
+    ]
+    for timing_profile in _bear_timing_profiles():
+        for exit_profile in _bear_exit_profiles():
+            for direction, family, wing_width in family_specs:
+                parameters = {
+                    **timing_profile,
+                    **exit_profile,
+                    "dte_mode": "next_expiry",
+                    "family_template": family,
+                    "liquidity_gate": "tight",
+                    "short_width_steps": 1,
+                    "stock_proxy_mode": "breakout",
+                    "wing_width_steps": wing_width,
+                }
+                rows.append(
+                    _variant(
+                        symbol=symbol,
+                        regime="bear",
+                        direction=direction,
+                        family=family,
+                        parameters=parameters,
+                        priority=1,
+                        wave_id=wave_id,
+                    )
+                )
+    return rows
+
+
+def _choppy_rows(*, symbol: str, wave_id: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    direction_specs = [
+        ("call", "lower_band", "single_leg_repair", 1),
+        ("call", "lower_band", "debit_call_vertical", 1),
+        ("put", "upper_band", "single_leg_repair", 1),
+        ("put", "upper_band", "debit_put_vertical", 1),
+        ("call", "center", "iron_butterfly", 1),
+        ("call", "center", "iron_condor", 1),
+    ]
+    for timing_profile in _choppy_timing_profiles():
+        for exit_profile in _choppy_exit_profiles():
+            for direction, range_entry_side, family, wing_width in direction_specs:
+                for range_edge_pct in (0.0004, 0.0009):
+                    parameters = {
+                        **timing_profile,
+                        **exit_profile,
+                        "cooldown_bars": 75,
+                        "dte_mode": "next_expiry",
+                        "entry_signal_mode": "rising_edge",
+                        "family_template": family,
+                        "liquidity_gate": "tight",
+                        "max_signals_per_day": 1,
+                        "min_range_pct": 0.0012,
+                        "range_edge_pct": range_edge_pct,
+                        "range_entry_side": range_entry_side,
+                        "short_width_steps": 1,
+                        "stock_proxy_mode": "range_bound",
+                        "timeout_only_stock_proxy": True,
+                        "wing_width_steps": wing_width,
+                    }
+                    rows.append(
+                        _variant(
+                            symbol=symbol,
+                            regime="choppy",
+                            direction=direction,
+                            family=family,
+                            parameters=parameters,
+                            priority=1,
+                            wave_id=wave_id,
+                        )
+                    )
+    return rows
+
+
+def build_iwm_regime_rescue_rows(*, symbol: str, wave_id: str) -> list[dict[str, Any]]:
+    return [*_bear_rows(symbol=symbol, wave_id=wave_id), *_choppy_rows(symbol=symbol, wave_id=wave_id)]
+
+
+def main() -> None:
+    args = parse_args()
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    symbol = str(args.symbol).upper()
+    rows = build_iwm_regime_rescue_rows(symbol=symbol, wave_id=args.wave_id)
+    queue = build_queue(rows=rows, wave_id=args.wave_id)
+    manifest = {
+        "broker_facing": False,
+        "execution_effect": "none",
+        "live_manifest_effect": "none",
+        "risk_policy_effect": "none",
+        "status": "ready_for_iwm_regime_rescue_backtest",
+        "target_regimes": ["bear", "choppy"],
+        "target_symbols": sorted({row["symbol"] for row in rows}),
+        "template_count": len(rows),
+        "wave_id": args.wave_id,
+    }
+
+    variants_path = output_dir / "iwm_regime_rescue_variants.jsonl"
+    queue_path = output_dir / "iwm_regime_rescue_option_queue.json"
+    manifest_path = output_dir / "iwm_regime_rescue_manifest.json"
+    variants_path.write_text(
+        "\n".join(json.dumps(row, sort_keys=True) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+    queue_path.write_text(json.dumps(queue, indent=2, sort_keys=True), encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
+    print(json.dumps(manifest, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

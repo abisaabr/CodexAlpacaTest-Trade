@@ -1,0 +1,65 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from scripts.build_iwm_regime_rescue_research_inputs import build_iwm_regime_rescue_rows, main
+from scripts.build_qqq_regime_research_inputs import build_queue
+
+
+def test_iwm_regime_rescue_rows_target_missing_regimes_only() -> None:
+    rows = build_iwm_regime_rescue_rows(symbol="IWM", wave_id="test_wave")
+
+    regimes = {row["source_strategy_id"].split("__")[1] for row in rows}
+    families = {row["source_strategy_id"].split("__")[3] for row in rows}
+
+    assert regimes == {"bear", "choppy"}
+    assert "single_leg_repair" in families
+    assert "debit_put_vertical" in families
+    assert "bear_call_credit_spread" in families
+    assert "iron_butterfly" in families
+    assert len(rows) == 156
+    assert all(row["broker_facing"] is False for row in rows)
+    assert all(row["live_manifest_effect"] == "none" for row in rows)
+    assert all(row["risk_policy_effect"] == "none" for row in rows)
+
+
+def test_iwm_regime_rescue_queue_preserves_identity_and_research_only_state() -> None:
+    rows = build_iwm_regime_rescue_rows(symbol="IWM", wave_id="test_wave")
+    queue = build_queue(rows=rows, wave_id="test_wave")
+
+    assert queue["queue_item_count"] == len(rows)
+    assert queue["broker_facing"] is False
+    assert queue["promotion_allowed"] is False
+    assert {item["intended_regime"] for item in queue["queue_items"]} == {"bear", "choppy"}
+    assert all(item["candidate_variant_id"] for item in queue["queue_items"])
+    assert all(item["source_strategy_id"].startswith("iwm__") for item in queue["queue_items"])
+
+
+def test_iwm_regime_rescue_cli_writes_expected_files(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "build_iwm_regime_rescue_research_inputs.py",
+            "--symbol",
+            "IWM",
+            "--wave-id",
+            "test_wave",
+            "--output-dir",
+            str(tmp_path),
+        ],
+    )
+    main()
+
+    variants_path = tmp_path / "iwm_regime_rescue_variants.jsonl"
+    queue_path = tmp_path / "iwm_regime_rescue_option_queue.json"
+    manifest_path = tmp_path / "iwm_regime_rescue_manifest.json"
+    assert variants_path.exists()
+    assert queue_path.exists()
+    assert manifest_path.exists()
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    queue = json.loads(queue_path.read_text(encoding="utf-8"))
+    assert manifest["target_regimes"] == ["bear", "choppy"]
+    assert manifest["template_count"] == 156
+    assert queue["queue_item_count"] == 156
