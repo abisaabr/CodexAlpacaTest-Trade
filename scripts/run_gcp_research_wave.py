@@ -262,6 +262,10 @@ class VariantStockProxyStrategy(BaseStrategy):
 
 def _variant_direction(variant: dict[str, Any]) -> int:
     source = str(variant.get("source_strategy_id") or variant.get("variant_id") or "").lower()
+    if "__bull__" in source or "bull__" in source:
+        return 1
+    if "__bear__" in source or "bear__" in source:
+        return -1
     if "put" in source or "short" in source or "bear" in source:
         return -1
     return 1

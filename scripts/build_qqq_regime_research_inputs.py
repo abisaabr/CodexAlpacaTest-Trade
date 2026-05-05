@@ -121,6 +121,32 @@ def build_rows(*, symbol: str, wave_id: str) -> list[dict[str, Any]]:
                         wave_id=wave_id,
                     )
                 )
+    credit_specs = [
+        ("bull", "call", "bull_put_credit_spread"),
+        ("bear", "put", "bear_call_credit_spread"),
+    ]
+    for regime, direction, family in credit_specs:
+        for profile in directional_profiles:
+            for wing_width in (1, 2):
+                params = {
+                    **profile,
+                    "dte_mode": "next_expiry",
+                    "family_template": family,
+                    "short_width_steps": 1,
+                    "stock_proxy_mode": "breakout",
+                    "wing_width_steps": wing_width,
+                }
+                rows.append(
+                    _variant(
+                        symbol=symbol,
+                        regime=regime,
+                        direction=direction,
+                        family=family,
+                        parameters=params,
+                        priority=1,
+                        wave_id=wave_id,
+                    )
+                )
 
     choppy_profiles = [
         {

@@ -979,6 +979,52 @@ def _option_structure_legs(
         choices.sort(key=lambda item: (item[0], item[1]))
         return choices[0][2], "iron_condor", "selected"
 
+    if "bull_put_credit_spread" in family or "credit_put_vertical" in family:
+        put_body, put_body_entry, status = base("put")
+        if status != "selected" or not put_body or not put_body_entry:
+            return [], "credit_put_vertical", status
+        short_put, short_put_entry, status = wing(
+            "put", put_body, higher=False, width_steps=short_width
+        )
+        if status != "selected" or not short_put or not short_put_entry:
+            return [], "credit_put_vertical", status
+        long_put, long_put_entry, status = wing(
+            "put", short_put, higher=False, width_steps=vertical_width
+        )
+        if status != "selected" or not long_put or not long_put_entry:
+            return [], "credit_put_vertical", status
+        return (
+            [
+                _leg(role="short_put", side=-1, ratio=1, contract=short_put, entry_bar=short_put_entry),
+                _leg(role="long_put_wing", side=1, ratio=1, contract=long_put, entry_bar=long_put_entry),
+            ],
+            "credit_put_vertical",
+            "selected",
+        )
+
+    if "bear_call_credit_spread" in family or "credit_call_vertical" in family:
+        call_body, call_body_entry, status = base("call")
+        if status != "selected" or not call_body or not call_body_entry:
+            return [], "credit_call_vertical", status
+        short_call, short_call_entry, status = wing(
+            "call", call_body, higher=True, width_steps=short_width
+        )
+        if status != "selected" or not short_call or not short_call_entry:
+            return [], "credit_call_vertical", status
+        long_call, long_call_entry, status = wing(
+            "call", short_call, higher=True, width_steps=vertical_width
+        )
+        if status != "selected" or not long_call or not long_call_entry:
+            return [], "credit_call_vertical", status
+        return (
+            [
+                _leg(role="short_call", side=-1, ratio=1, contract=short_call, entry_bar=short_call_entry),
+                _leg(role="long_call_wing", side=1, ratio=1, contract=long_call, entry_bar=long_call_entry),
+            ],
+            "credit_call_vertical",
+            "selected",
+        )
+
     if "debit_call_vertical" in family or "debit_put_vertical" in family:
         option_type = "put" if "put" in family else "call"
         long_contract, long_entry, status = base(option_type)

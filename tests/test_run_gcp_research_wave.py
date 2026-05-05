@@ -119,6 +119,23 @@ def test_choppy_premium_strategy_uses_range_bound_timeout_proxy() -> None:
     assert strategy.timeout_bars == 75
 
 
+def test_bull_put_credit_spread_keeps_bullish_stock_proxy_direction() -> None:
+    strategy = _variant_stock_strategy(
+        {
+            "variant_id": "qqq_bull_put_credit",
+            "symbol": "QQQ",
+            "source_strategy_id": "qqq__bull__call__bull_put_credit_spread",
+            "parameters": {
+                "family_template": "bull_put_credit_spread",
+                "timing_profile": "fast",
+            },
+        }
+    )
+
+    assert strategy.direction == 1
+    assert strategy.signal_mode == "breakout"
+
+
 def test_run_writes_required_research_artifacts(tmp_path: Path) -> None:
     variants_path = tmp_path / "variants.jsonl"
     manifest_path = tmp_path / "wave.json"
