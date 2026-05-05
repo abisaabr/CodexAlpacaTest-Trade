@@ -291,3 +291,61 @@ Even if research candidates appear:
 - Get explicit operator approval.
 
 Only then should paper execution be armed.
+
+## 2026-05-05 Aggregate Completion Superseding Update
+
+This section supersedes the earlier open-work notes that said the full QQQ expansion was still underway.
+
+Current canonical status:
+
+- Controller status JSON: `gs://codexalpaca-control-us/research_results/autonomous_paper_readiness_20260504/controller/autonomous_paper_readiness_status.json`
+- Phase: `research_blocked_or_redesign_needed`
+- Next action: `design_next_research_wave_do_not_arm_runner`
+- QQQ micro summaries: `72 / 72`
+- QQQ full summaries: `18 / 18`
+- Selected strict profile: `strict-e0x60`
+- Selected selector: `entry_liquidity_first_research_only`
+- Aggregate phase: `aggregate_completed`
+- Promotion packet found: `true`
+- Eligible promotion-review count: `0`
+- Paper orders: `false`
+- Broker facing: `false`
+- Live manifest effect: `none`
+- Risk policy effect: `none`
+
+Aggregate artifacts:
+
+- Aggregate root: `gs://codexalpaca-control-us/research_results/ticker365_qqq_fill_squash_full126_20260504T1900Z/aggregate/`
+- Portfolio report: `gs://codexalpaca-control-us/research_results/ticker365_qqq_fill_squash_full126_20260504T1900Z/aggregate/portfolio_report/ticker_365d_all_available_portfolio_report/research_portfolio_report.json`
+- Promotion packet: `gs://codexalpaca-control-us/research_results/ticker365_qqq_fill_squash_full126_20260504T1900Z/aggregate/promotion_packet/ticker_365d_all_available_promotion_packet/research_promotion_review_packet.json`
+- Growth projection: `gs://codexalpaca-control-us/research_results/ticker365_qqq_fill_squash_full126_20260504T1900Z/aggregate/growth_projection/ticker_365d_all_available_growth_projection/portfolio_growth_projection.json`
+- Projection calendar packet: `gs://codexalpaca-control-us/research_results/ticker365_qqq_fill_squash_full126_20260504T1900Z/aggregate/projection_calendar/ticker_365d_all_available_projection_calendar/projection_calendar_packet.json`
+
+Result:
+
+- Fill coverage objective: achieved for this strict QQQ profile. The portfolio report reports `fill_failure_counts.fill_gate_clear = 126`.
+- Promotion objective: not achieved. The promotion packet reports `eligible_for_promotion_review_count = 0`.
+- Full-year projection: correctly blocks paper readiness. There is no capital plan, no matched trades in the projection, and the historical curve remains `$25,000` across `251` trading days.
+- Evidence grade: `not_institutional_expectation`.
+- Growth blockers: `no_capital_plan`, `missing_bull_strategy_coverage`, `missing_bear_strategy_coverage`, and `missing_choppy_strategy_coverage`.
+
+Dominant research interpretation:
+
+- The original QQQ issue was fill semantics. That has been repaired for a legitimate strict profile.
+- The current QQQ blocker is option economics and regime robustness, not raw option data coverage or strategy fill coverage.
+- Several bull single-leg repair variants had positive held-out/test PnL but failed full-period PnL. They are redesign seeds only, not promotion candidates.
+
+Controller patch applied:
+
+- `scripts/gcp_autonomous_paper_readiness_controller.py` now reads the nested aggregate promotion packet path and preserves the legacy flat fallback.
+- Completed aggregate passes now short-circuit before rebuilding the micro heatmap.
+- New focused test file: `tests/test_gcp_autonomous_paper_readiness_controller.py`.
+- Validation: `python -m pytest -q tests\test_gcp_autonomous_paper_readiness_controller.py` returned `3 passed`.
+
+Next safest handoff action:
+
+- Do not arm the paper runner.
+- Do not change live manifests.
+- Do not relax gates.
+- Design the next QQQ wave around economics, not fill. Keep `strict-e0x60`, `entry_liquidity_first_research_only`, `fill_coverage >= 0.90`, positive full-period PnL, positive test PnL, and minimum trade-count gates.
+- Candidate redesign should prioritize bull, bear, and choppy coverage separately, then only build a capital plan if all three regimes have eligible governed-validation candidates.

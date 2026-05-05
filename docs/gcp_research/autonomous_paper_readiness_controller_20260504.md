@@ -100,3 +100,39 @@ Controller repair and full-expansion launch are now complete enough for unattend
 - `79` old terminated research VMs were deleted to free regional instance-count quota; the deletion list was mirrored to `gs://codexalpaca-control-us/research_results/autonomous_paper_readiness_20260504/controller/terminated_research_instances_deleted_20260504.csv`.
 
 Operational note: a local controller pass briefly overlapped with the GCP controller, causing duplicate active workers for two chunks. The later duplicate copies were deleted, leaving one active worker per chunk. The remaining controller should be allowed to continue alone.
+
+## 2026-05-05 00:40 UTC Update
+
+The full QQQ strict-profile expansion and aggregate promotion review completed. The controller status is now reconciled and published:
+
+- Phase: `research_blocked_or_redesign_needed`
+- Next action: `design_next_research_wave_do_not_arm_runner`
+- Micro summaries: `72 / 72`
+- Full summaries: `18 / 18`
+- Aggregate phase: `aggregate_completed`
+- Promotion packet found: `true`
+- Eligible promotion-review count: `0`
+- Paper orders: `false`
+- Live manifest effect: `none`
+- Risk policy effect: `none`
+
+Canonical aggregate artifacts:
+
+- Portfolio report: `gs://codexalpaca-control-us/research_results/ticker365_qqq_fill_squash_full126_20260504T1900Z/aggregate/portfolio_report/ticker_365d_all_available_portfolio_report/research_portfolio_report.json`
+- Promotion packet: `gs://codexalpaca-control-us/research_results/ticker365_qqq_fill_squash_full126_20260504T1900Z/aggregate/promotion_packet/ticker_365d_all_available_promotion_packet/research_promotion_review_packet.json`
+- Growth projection: `gs://codexalpaca-control-us/research_results/ticker365_qqq_fill_squash_full126_20260504T1900Z/aggregate/growth_projection/ticker_365d_all_available_growth_projection/portfolio_growth_projection.json`
+
+Interpretation:
+
+- QQQ fill coverage is no longer the active blocker for this strict profile. The portfolio report shows `fill_gate_clear: 126`.
+- No QQQ candidate is paper-ready. The promotion packet reports `eligible_for_promotion_review_count: 0`.
+- Main blockers moved to option economics and robustness: `min_net_pnl_not_positive`, `test_net_pnl_not_above_0`, and some `option_trades_below_20`.
+- The full-year projection correctly stays flat at `$25,000` because the capital plan is empty. It explicitly blocks bull, bear, and choppy coverage rather than projecting from unqualified candidates.
+
+Controller repair:
+
+- The controller now reads the aggregate promotion packet from the nested aggregate writer path and retains the old flat path as a fallback.
+- The controller now short-circuits completed aggregates so recurring status passes do not rebuild the micro heatmap unnecessarily.
+- Focused validation: `python -m pytest -q tests\test_gcp_autonomous_paper_readiness_controller.py` returned `3 passed`.
+
+Next institutional step: run a QQQ economics redesign wave using the strict fill profile (`strict-e0x60`, `entry_liquidity_first_research_only`) and keep the `fill_coverage >= 0.90`, positive full-period PnL, positive test PnL, and minimum trade-count gates intact.

@@ -49,6 +49,14 @@ BARS_URI = (
     "qqq_365d_next_trading_day_5x5_20260428/option_bars_silver/"
     "option_bars/underlying=QQQ/"
 )
+AGGREGATE_STATUS_PATH = "aggregate/status/ticker_365d_aggregate_status.json"
+AGGREGATE_PROMOTION_PACKET_PATHS = [
+    (
+        "aggregate/promotion_packet/ticker_365d_all_available_promotion_packet/"
+        "research_promotion_review_packet.json"
+    ),
+    "aggregate/promotion_packet/research_promotion_review_packet.json",
+]
 HARD_RULES = [
     "Do not start trading.",
     "Do not submit paper orders.",
@@ -690,6 +698,16 @@ def select_best_strict_profile(args: argparse.Namespace) -> tuple[dict[str, Any]
     return profile, selectors, selection
 
 
+def existing_strict_profile_selection(args: argparse.Namespace) -> dict[str, Any] | None:
+    selection_uri = (
+        f"{args.full_prefix}/selection/qqq_fill_squash_selected_strict_profile.json"
+    )
+    if not gcs_object_exists(args, selection_uri):
+        return None
+    selection = parse_json_or_none(storage_cat(args, selection_uri))
+    return selection if isinstance(selection, dict) else None
+
+
 def launch_micro_phase(args: argparse.Namespace, instances: list[dict[str, Any]]) -> list[str]:
     launched: list[str] = []
     for chunk in chunks(42, args.chunk_size):
@@ -745,14 +763,18 @@ def launch_full_phase(
 
 
 def aggregate_phase(args: argparse.Namespace) -> dict[str, Any]:
-    status_uri = f"{args.full_prefix}/aggregate/status/ticker_365d_aggregate_status.json"
-    packet_uri = f"{args.full_prefix}/aggregate/promotion_packet/research_promotion_review_packet.json"
+    status_uri = f"{args.full_prefix}/{AGGREGATE_STATUS_PATH}"
+    packet_uri = f"{args.full_prefix}/{AGGREGATE_PROMOTION_PACKET_PATHS[0]}"
     status = None
     packet = None
     if gcs_object_exists(args, status_uri):
         status = parse_json_or_none(storage_cat(args, status_uri))
-    if gcs_object_exists(args, packet_uri):
-        packet = parse_json_or_none(storage_cat(args, packet_uri))
+    for candidate_path in AGGREGATE_PROMOTION_PACKET_PATHS:
+        candidate_uri = f"{args.full_prefix}/{candidate_path}"
+        if gcs_object_exists(args, candidate_uri):
+            packet_uri = candidate_uri
+            packet = parse_json_or_none(storage_cat(args, candidate_uri))
+            break
     eligible = None
     decision = None
     if isinstance(packet, dict):
@@ -849,6 +871,10 @@ def controller_pass(args: argparse.Namespace) -> dict[str, Any]:
     micro_count = count_objects(args, args.micro_prefix, "**/option_aware_candidate_summary.json")
     progress_count = count_objects(args, args.micro_prefix, "**/candidate_summary_progress.jsonl")
     full_count = count_objects(args, args.full_prefix, "**/option_aware_candidate_summary.json")
+    aggregate = aggregate_phase(args)
+    aggregate_status = aggregate.get("status") if isinstance(aggregate.get("status"), dict) else {}
+    aggregate_phase_name = aggregate_status.get("phase") if isinstance(aggregate_status, dict) else None
+    eligible = aggregate.get("eligible_for_promotion_review_count")
     profile: dict[str, Any] | None = None
     selectors: list[str] = []
     selection: dict[str, Any] | None = None
@@ -856,6 +882,61 @@ def controller_pass(args: argparse.Namespace) -> dict[str, Any]:
     phase = "micro_fill_squash"
     next_action = "continue_micro_wave"
     full_expected = 0
+
+    if aggregate_phase_name == "aggregate_completed":
+        selection = existing_strict_profile_selection(args)
+        full_expected = int(
+            aggregate_status.get("expected_summary_count")
+            or (selection or {}).get("expected_summary_count")
+            or 0
+        )
+        selectors = list((selection or {}).get("selected_expansion_selectors") or [])
+        phase = (
+            "research_promotion_candidates_available"
+            if eligible and int(eligible) > 0
+            else "research_blocked_or_redesign_needed"
+        )
+        next_action = (
+            "run_independent_reproduction_then_runner_preflight"
+            if eligible and int(eligible) > 0
+            else "design_next_research_wave_do_not_arm_runner"
+        )
+        status = {
+            "phase": phase,
+            "next_action": next_action,
+            "actions": ["aggregate_complete_no_vm_changes_needed"],
+            "micro_wave_id": MICRO_WAVE_ID,
+            "micro_prefix": args.micro_prefix,
+            "micro_summary_count": micro_count,
+            "micro_progress_file_count": progress_count,
+            "micro_summary_threshold": args.micro_summary_threshold,
+            "full_wave_id": FULL_WAVE_ID,
+            "full_prefix": args.full_prefix,
+            "full_summary_count": full_count,
+            "full_expected_summary_count": full_expected,
+            "selected_profile": (selection or {}).get("selected_profile"),
+            "selected_selectors": selectors,
+            "selection": selection,
+            "aggregate_phase": aggregate_phase_name,
+            "aggregate_packet_found": aggregate.get("packet_found"),
+            "aggregate_packet_uri": aggregate.get("packet_uri"),
+            "aggregate_decision": aggregate.get("decision"),
+            "eligible_for_promotion_review_count": eligible,
+            "running_cpu_estimate": running_cpu(instances),
+            "active_qqq_instances": [
+                {
+                    "name": instance.get("name"),
+                    "zone": instance_zone(instance),
+                    "status": instance.get("status"),
+                    "machine_type": machine_type_name(instance),
+                }
+                for instance in instances
+                if str(instance.get("name", "")).startswith(("qqqfs-", "qqqfull-"))
+                and str(instance.get("status")) in ACTIVE_STATUSES
+            ],
+        }
+        write_status(args, status)
+        return status
 
     if micro_count < args.micro_summary_threshold:
         launched = launch_micro_phase(args, instances)
@@ -904,6 +985,7 @@ def controller_pass(args: argparse.Namespace) -> dict[str, Any]:
         "selection": selection,
         "aggregate_phase": aggregate_phase_name,
         "aggregate_packet_found": aggregate.get("packet_found"),
+        "aggregate_packet_uri": aggregate.get("packet_uri"),
         "aggregate_decision": aggregate.get("decision"),
         "eligible_for_promotion_review_count": eligible,
         "running_cpu_estimate": running_cpu(instances),
