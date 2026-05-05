@@ -14,7 +14,7 @@ param(
     [string]$TargetRegimes = "bear,choppy",
     [string]$ChoppyFamilies = "",
     [string]$ChoppySignalDelayBars = "0",
-    [ValidateSet("rescue", "timewindow_refine")]
+    [ValidateSet("rescue", "timewindow_refine", "timewindow_micro_exit")]
     [string]$ChoppyProfileSet = "rescue",
     [switch]$PrepareOnly
 )

@@ -76,6 +76,25 @@ def test_iwm_choppy_timewindow_refine_builds_high_fill_single_leg_grid() -> None
     assert all(row["broker_facing"] is False for row in rows)
 
 
+def test_iwm_choppy_timewindow_micro_exit_builds_tight_exit_grid() -> None:
+    rows = build_iwm_regime_rescue_rows(
+        symbol="IWM",
+        wave_id="test_wave",
+        target_regimes={"choppy"},
+        choppy_profile_set="timewindow_micro_exit",
+    )
+
+    assert len(rows) == 108
+    assert {row["parameters"]["family_template"] for row in rows} == {"single_leg_repair"}
+    assert {row["parameters"]["range_entry_side"] for row in rows} == {"lower_band"}
+    assert min(row["parameters"]["option_stop_loss_pct"] for row in rows) == 0.05
+    assert max(row["parameters"]["option_stop_loss_pct"] for row in rows) == 0.10
+    assert min(row["parameters"]["option_profit_target_pct"] for row in rows) == 0.12
+    assert max(row["parameters"]["option_profit_target_pct"] for row in rows) == 0.25
+    assert {row["parameters"]["min_option_hold_minutes"] for row in rows} == {1, 2}
+    assert all(row["broker_facing"] is False for row in rows)
+
+
 def test_iwm_regime_rescue_cli_writes_expected_files(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         "sys.argv",
