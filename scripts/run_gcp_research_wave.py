@@ -19,6 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "reports" / "research_wave"
 DEFAULT_EVIDENCE_MODE = "metadata_proxy_smoke"
 REAL_STOCK_BAR_EVIDENCE_MODE = "real_stock_bar_smoke"
+MARKET_TIMEZONE = "America/New_York"
 REQUIRED_OUTPUTS = [
     "research_run_manifest",
     "normalized_backtest_results",
@@ -233,9 +234,10 @@ class VariantStockProxyStrategy(BaseStrategy):
         )
         frame["volume_ratio"] = frame["volume"] / frame["volume_sma"].replace(0, pd.NA)
         volume_ok = frame["volume_ratio"].fillna(0).ge(self.min_volume_ratio)
-        timestamps = pd.to_datetime(frame["timestamp"])
-        minutes_since_open = (
-            (timestamps.dt.hour * 60 + timestamps.dt.minute) - (9 * 60 + 30)
+        timestamps = pd.to_datetime(frame["timestamp"], utc=True)
+        market_timestamps = timestamps.dt.tz_convert(MARKET_TIMEZONE)
+        minutes_since_open = (market_timestamps.dt.hour * 60 + market_timestamps.dt.minute) - (
+            9 * 60 + 30
         )
         time_ok = minutes_since_open.ge(self.min_minutes_since_open) & minutes_since_open.le(
             self.max_minutes_since_open
@@ -283,14 +285,16 @@ class VariantStockProxyStrategy(BaseStrategy):
                 & volume_ok
             )
             frame["signal"] = -active.fillna(False).astype(int)
-        frame["signal"] = self._throttle_signals(frame, timestamps)
+        frame["signal"] = self._throttle_signals(frame, market_timestamps)
         frame["stop_pct"] = self.stop_pct
         frame["target_pct"] = self.target_pct
         frame["timeout_bars"] = self.timeout_bars
         frame["size_fraction"] = 1.0
         return self.finalize_signal_frame(frame)
 
-    def _throttle_signals(self, frame: pd.DataFrame, timestamps: pd.Series) -> pd.Series:
+    def _throttle_signals(
+        self, frame: pd.DataFrame, market_timestamps: pd.Series
+    ) -> pd.Series:
         raw = frame["signal"].fillna(0).astype(int)
         if (
             self.entry_signal_mode == "continuous"
@@ -299,7 +303,7 @@ class VariantStockProxyStrategy(BaseStrategy):
         ):
             return raw
 
-        trade_dates = timestamps.dt.date
+        trade_dates = market_timestamps.dt.date
         throttled = pd.Series(0, index=frame.index, dtype=int)
         for _, group_index in frame.groupby(["symbol", trade_dates], sort=False).groups.items():
             indices = list(group_index)

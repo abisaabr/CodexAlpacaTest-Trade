@@ -152,7 +152,7 @@ def test_variant_stock_proxy_throttles_to_daily_first_signal() -> None:
             },
         }
     )
-    timestamps = pd.date_range("2026-01-05 09:30", periods=80, freq="min")
+    timestamps = pd.date_range("2026-01-05 14:30", periods=80, freq="min", tz="UTC")
     bars = pd.DataFrame(
         {
             "symbol": ["QQQ"] * len(timestamps),
@@ -187,7 +187,7 @@ def test_variant_stock_proxy_respects_entry_window() -> None:
             },
         }
     )
-    timestamps = pd.date_range("2026-01-05 09:30", periods=80, freq="min")
+    timestamps = pd.date_range("2026-01-05 14:30", periods=80, freq="min", tz="UTC")
     prices = [100.0 - index * 0.1 for index in range(len(timestamps))]
     bars = pd.DataFrame(
         {
@@ -205,7 +205,8 @@ def test_variant_stock_proxy_respects_entry_window() -> None:
     fired = signals.loc[signals["signal"] != 0, "timestamp"]
 
     assert len(fired) == 1
-    minute_since_open = fired.iloc[0].hour * 60 + fired.iloc[0].minute - (9 * 60 + 30)
+    fired_local = fired.dt.tz_convert("America/New_York").iloc[0]
+    minute_since_open = fired_local.hour * 60 + fired_local.minute - (9 * 60 + 30)
     assert 30 <= minute_since_open <= 40
 
 
