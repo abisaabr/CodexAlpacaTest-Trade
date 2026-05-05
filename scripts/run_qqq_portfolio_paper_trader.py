@@ -3,7 +3,10 @@ from __future__ import annotations
 import argparse
 import json
 
-from _bootstrap import bootstrap_repo_root
+try:
+    from _bootstrap import bootstrap_repo_root
+except ModuleNotFoundError:  # pragma: no cover - importable module fallback
+    from scripts._bootstrap import bootstrap_repo_root
 
 bootstrap_repo_root()
 
@@ -35,6 +38,11 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def resolve_submit_paper_orders(args: argparse.Namespace, portfolio_config: object) -> bool:
+    del portfolio_config
+    return bool(args.submit_paper_orders)
+
+
 def main() -> None:
     args = parse_args()
     settings = load_settings(config_file=args.config)
@@ -43,7 +51,7 @@ def main() -> None:
     trader = QQQPortfolioPaperTrader(
         settings,
         portfolio_config,
-        submit_paper_orders=args.submit_paper_orders or portfolio_config.execution.submit_paper_orders,
+        submit_paper_orders=resolve_submit_paper_orders(args, portfolio_config),
     )
     result = trader.run(run_once=args.run_once)
     print(json.dumps(result, indent=2))

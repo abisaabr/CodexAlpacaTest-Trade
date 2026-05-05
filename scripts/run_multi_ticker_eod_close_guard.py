@@ -6,7 +6,10 @@ import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from _bootstrap import bootstrap_repo_root
+try:
+    from _bootstrap import bootstrap_repo_root
+except ModuleNotFoundError:  # pragma: no cover - importable module fallback
+    from scripts._bootstrap import bootstrap_repo_root
 
 bootstrap_repo_root()
 
@@ -62,6 +65,11 @@ def _now_et() -> datetime:
     return datetime.now(tz=ET)
 
 
+def resolve_submit_paper_orders(args: argparse.Namespace, portfolio_config: object) -> bool:
+    del portfolio_config
+    return bool(args.submit_paper_orders)
+
+
 def _run_close_guard_once(args: argparse.Namespace) -> dict[str, object]:
     settings = load_settings(config_file=args.config)
     configure_logging(settings.log_level)
@@ -69,7 +77,7 @@ def _run_close_guard_once(args: argparse.Namespace) -> dict[str, object]:
     trader = MultiTickerPortfolioPaperTrader(
         settings,
         portfolio_config,
-        submit_paper_orders=args.submit_paper_orders or portfolio_config.execution.submit_paper_orders,
+        submit_paper_orders=resolve_submit_paper_orders(args, portfolio_config),
     )
     logger = trader.logger
     lease_status = trader.acquire_runtime_ownership(role="eod_close_guard")
