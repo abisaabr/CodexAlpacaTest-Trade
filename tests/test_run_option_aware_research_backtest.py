@@ -54,6 +54,37 @@ def test_candidate_window_supports_non_overlapping_gcp_shards() -> None:
     assert scope_count == 6
 
 
+def test_candidate_window_can_balance_bull_bear_choppy_regimes() -> None:
+    rows = [
+        {"candidate_variant_id": "v1", "intended_regime": "bull"},
+        {"candidate_variant_id": "v2", "intended_regime": "bull"},
+        {"candidate_variant_id": "v3", "intended_regime": "bull"},
+        {"candidate_variant_id": "v4", "intended_regime": "bear"},
+        {"candidate_variant_id": "v5", "intended_regime": "bear"},
+        {"candidate_variant_id": "v6", "intended_regime": "choppy"},
+        {"candidate_variant_id": "v7", "intended_regime": "choppy"},
+    ]
+
+    selected, start_offset, end_index, scope_count = _candidate_window(
+        rows,
+        top_n=6,
+        candidate_selection_mode="regime_balanced",
+        regime_balance_order=("bull", "bear", "choppy", "unclassified"),
+    )
+
+    assert [row["candidate_variant_id"] for row in selected] == [
+        "v1",
+        "v4",
+        "v6",
+        "v2",
+        "v5",
+        "v7",
+    ]
+    assert start_offset == 0
+    assert end_index == 6
+    assert scope_count == 6
+
+
 def test_option_aware_backtest_prices_stock_signal_windows_against_options(
     tmp_path: Path,
 ) -> None:

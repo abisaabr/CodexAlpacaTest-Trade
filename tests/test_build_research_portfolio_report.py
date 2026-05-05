@@ -405,6 +405,19 @@ def test_research_portfolio_report_tracks_iwm_regime_completeness(tmp_path: Path
     assert summary_by_regime["choppy"]["blocker_counts"] == {
         "fill_coverage_below_0.90": 1
     }
+    summary_by_symbol_regime = {
+        (row["symbol"], row["intended_regime"]): row
+        for row in packet["symbol_regime_summary"]
+    }
+    assert summary_by_symbol_regime[("IWM", "bull")][
+        "eligible_for_promotion_review_count"
+    ] == 1
+    assert summary_by_symbol_regime[("IWM", "bear")]["blocker_counts"] == {
+        "test_net_pnl_not_above_0": 1
+    }
+    assert summary_by_symbol_regime[("IWM", "choppy")]["blocker_counts"] == {
+        "fill_coverage_below_0.90": 1
+    }
 
 
 def test_research_portfolio_report_allows_multiple_strategies_per_symbol_with_symbol_cap(

@@ -72,6 +72,12 @@ def test_build_portfolio_overnight_research_inputs_expands_templates_round_robin
     assert all(item["promotion_allowed"] is False for item in queue["queue_items"])
     put_variant = next(row for row in generated_variants if "__put__" in row["variant_id"])
     assert "put" in put_variant["source_strategy_id"]
+    assert put_variant["directional_option_type"] == "put"
+    assert put_variant["intended_regime"] == "bear"
+    assert put_variant["family"] == "debit_put_vertical"
+    assert put_variant["parameters"]["directional_option_type"] == "put"
+    assert put_variant["parameters"]["intended_regime"] == "bear"
+    assert put_variant["parameters"]["family"] == "debit_put_vertical"
 
 
 def test_build_portfolio_overnight_research_inputs_prefers_explicit_metadata(
@@ -119,3 +125,9 @@ def test_build_portfolio_overnight_research_inputs_prefers_explicit_metadata(
     assert item["intended_regime"] == "choppy"
     assert item["family"] == "liquidity_first_reversion_call"
     assert "__choppy__call__liquidity_first_reversion_call__" in item["candidate_variant_id"]
+    generated_variant = json.loads(
+        Path(manifest["outputs"]["variants_jsonl"]).read_text(encoding="utf-8").splitlines()[0]
+    )
+    assert generated_variant["directional_option_type"] == "call"
+    assert generated_variant["intended_regime"] == "choppy"
+    assert generated_variant["family"] == "liquidity_first_reversion_call"

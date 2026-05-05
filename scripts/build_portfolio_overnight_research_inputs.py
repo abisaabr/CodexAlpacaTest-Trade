@@ -213,15 +213,27 @@ def build_inputs(
         for template_key, template in ordered_templates:
             slug = _template_slug(template_key)
             variant = dict(template)
+            parameters = (
+                dict(variant.get("parameters"))
+                if isinstance(variant.get("parameters"), dict)
+                else {}
+            )
             direction = _direction(variant)
             intended_regime = _intended_regime(variant)
             family = _family(variant)
+            parameters.setdefault("directional_option_type", direction)
+            parameters.setdefault("intended_regime", intended_regime)
+            parameters.setdefault("family", family)
+            variant["parameters"] = parameters
             variant_id = (
                 f"portfolio12h__{symbol.lower()}__{intended_regime}__{direction}__"
                 f"{_text_slug(family)}__{slug}"
             )
             variant["variant_id"] = variant_id
             variant["symbol"] = symbol
+            variant["directional_option_type"] = direction
+            variant["intended_regime"] = intended_regime
+            variant["family"] = family
             variant["source_strategy_id"] = (
                 f"{symbol.lower()}__{intended_regime}__{direction}__{_text_slug(family)}"
             )

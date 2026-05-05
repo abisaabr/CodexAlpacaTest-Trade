@@ -522,6 +522,95 @@ def _regime_summary(
     )
 
 
+def _symbol_regime_summary(
+    candidate_rows: list[dict[str, Any]],
+    *,
+    required_regimes: list[str] | tuple[str, ...] | None = None,
+) -> list[dict[str, Any]]:
+    normalized_required = _normalize_required_regimes(required_regimes)
+    symbols = sorted(
+        {
+            str(row.get("symbol") or "").upper()
+            for row in candidate_rows
+            if str(row.get("symbol") or "").strip()
+        }
+    )
+    order = {regime: index for index, regime in enumerate(normalized_required)}
+    by_symbol_regime: dict[tuple[str, str], dict[str, Any]] = {}
+    for symbol in symbols:
+        for regime in normalized_required:
+            by_symbol_regime[(symbol, regime)] = {
+                "symbol": symbol,
+                "intended_regime": regime,
+                "candidate_count": 0,
+                "eligible_for_promotion_review_count": 0,
+                "blocked_count": 0,
+                "best_candidate_variant_id": None,
+                "best_research_score": None,
+                "best_min_net_pnl": None,
+                "best_min_test_net_pnl": None,
+                "best_min_fill_coverage": None,
+                "best_promotion_status": None,
+                "blocker_counts": Counter(),
+                "fill_failure_counts": Counter(),
+            }
+
+    for row in candidate_rows:
+        symbol = str(row.get("symbol") or "").upper()
+        if not symbol:
+            continue
+        regime = str(row.get("intended_regime") or "unknown").lower()
+        item = by_symbol_regime.setdefault(
+            (symbol, regime),
+            {
+                "symbol": symbol,
+                "intended_regime": regime,
+                "candidate_count": 0,
+                "eligible_for_promotion_review_count": 0,
+                "blocked_count": 0,
+                "best_candidate_variant_id": None,
+                "best_research_score": None,
+                "best_min_net_pnl": None,
+                "best_min_test_net_pnl": None,
+                "best_min_fill_coverage": None,
+                "best_promotion_status": None,
+                "blocker_counts": Counter(),
+                "fill_failure_counts": Counter(),
+            },
+        )
+        item["candidate_count"] += 1
+        if row.get("promotion_status") == "eligible_for_promotion_review":
+            item["eligible_for_promotion_review_count"] += 1
+        else:
+            item["blocked_count"] += 1
+        for blocker in row.get("promotion_blockers", []):
+            item["blocker_counts"][str(blocker)] += 1
+        item["fill_failure_counts"][str(row.get("fill_failure_reason") or "unknown")] += 1
+        if item["best_research_score"] is None or _float(row.get("research_score")) > _float(
+            item["best_research_score"]
+        ):
+            item["best_candidate_variant_id"] = row.get("candidate_variant_id")
+            item["best_research_score"] = row.get("research_score")
+            item["best_min_net_pnl"] = row.get("min_net_pnl")
+            item["best_min_test_net_pnl"] = row.get("min_test_net_pnl")
+            item["best_min_fill_coverage"] = row.get("min_fill_coverage")
+            item["best_promotion_status"] = row.get("promotion_status")
+
+    result: list[dict[str, Any]] = []
+    for item in by_symbol_regime.values():
+        item["blocker_counts"] = dict(sorted(item["blocker_counts"].items()))
+        item["fill_failure_counts"] = dict(sorted(item["fill_failure_counts"].items()))
+        result.append(item)
+    return sorted(
+        result,
+        key=lambda row: (
+            str(row["symbol"]),
+            order.get(str(row["intended_regime"]), len(order)),
+            str(row["intended_regime"]),
+        ),
+    )
+
+
 def _eligible_regimes(regime_summary: list[dict[str, Any]]) -> list[str]:
     return [
         str(row["intended_regime"])
@@ -709,6 +798,17 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
             f"best_fill `{row.get('best_min_fill_coverage')}` "
             f"best_status `{row.get('best_promotion_status')}`"
         )
+    lines.extend(["", "## Symbol Regime Coverage", ""])
+    for row in packet.get("symbol_regime_summary", []):
+        lines.append(
+            "- "
+            f"`{row['symbol']}` `{row['intended_regime']}` "
+            f"candidates `{row['candidate_count']}` "
+            f"eligible `{row['eligible_for_promotion_review_count']}` "
+            f"best `{row.get('best_candidate_variant_id')}` "
+            f"best_fill `{row.get('best_min_fill_coverage')}` "
+            f"best_status `{row.get('best_promotion_status')}`"
+        )
     lines.extend(["", "## Data Repair Priority", ""])
     if not packet["data_repair_priority_candidates"]:
         lines.append("- No positive-economics data-repair candidates selected.")
@@ -774,6 +874,9 @@ def build_research_portfolio_report(
     regime_summary = _regime_summary(
         candidate_rows, required_regimes=normalized_required_regimes
     )
+    symbol_regime_summary = _symbol_regime_summary(
+        candidate_rows, required_regimes=normalized_required_regimes
+    )
     eligible_regimes = _eligible_regimes(regime_summary)
     missing_eligible_regimes = [
         regime for regime in normalized_required_regimes if regime not in set(eligible_regimes)
@@ -822,6 +925,7 @@ def build_research_portfolio_report(
         "fill_failure_counts": _fill_failure_counts(candidate_rows),
         "required_regimes": normalized_required_regimes,
         "regime_summary": regime_summary,
+        "symbol_regime_summary": symbol_regime_summary,
         "eligible_regimes": eligible_regimes,
         "missing_eligible_regimes": missing_eligible_regimes,
         "regime_complete_for_promotion_review": not missing_eligible_regimes,

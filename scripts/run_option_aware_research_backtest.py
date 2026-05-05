@@ -61,6 +61,9 @@ OPTION_SESSION_START = "09:35"
 OPTION_SESSION_END = "15:55"
 STRATEGY_FILL_COVERAGE_GATE = 0.90
 REGIME_TOKENS = {"bull", "bear", "choppy"}
+CANDIDATE_SELECTION_PRIORITY_ORDER = "priority_order"
+CANDIDATE_SELECTION_REGIME_BALANCED = "regime_balanced"
+DEFAULT_REGIME_BALANCE_ORDER = ("bull", "bear", "choppy", "unclassified")
 
 
 @dataclass(frozen=True)
@@ -91,6 +94,24 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--top-n", type=int, default=25)
+    parser.add_argument(
+        "--candidate-selection-mode",
+        choices=[CANDIDATE_SELECTION_PRIORITY_ORDER, CANDIDATE_SELECTION_REGIME_BALANCED],
+        default=CANDIDATE_SELECTION_PRIORITY_ORDER,
+        help=(
+            "How to build the candidate window before sharding. The default preserves "
+            "existing queue priority order. regime_balanced round-robins bull/bear/choppy "
+            "items so global top-N sweeps do not starve non-bull regimes."
+        ),
+    )
+    parser.add_argument(
+        "--regime-balance-order",
+        default=",".join(DEFAULT_REGIME_BALANCE_ORDER),
+        help=(
+            "Comma-separated regime order used when --candidate-selection-mode "
+            "is regime_balanced."
+        ),
+    )
     parser.add_argument(
         "--candidate-start-index",
         type=int,
@@ -1619,14 +1640,86 @@ def _symbol_filter(value: str | None) -> set[str] | None:
     return symbols or None
 
 
+def _regime_balance_order(value: str | None) -> tuple[str, ...]:
+    if not value:
+        return DEFAULT_REGIME_BALANCE_ORDER
+    order: list[str] = []
+    for item in value.split(","):
+        regime = item.strip().lower()
+        if regime and regime not in order:
+            order.append(regime)
+    return tuple(order) or DEFAULT_REGIME_BALANCE_ORDER
+
+
+def _queue_item_regime(item: dict[str, Any]) -> str:
+    for key in ("intended_regime", "regime"):
+        explicit = str(item.get(key) or "").strip().lower()
+        if explicit in REGIME_TOKENS:
+            return explicit
+    haystack = " ".join(
+        str(item.get(key) or "")
+        for key in (
+            "candidate_variant_id",
+            "source_strategy_id",
+            "strategy_id",
+            "family",
+            "strategy_family",
+        )
+    ).lower()
+    for token in re.split(r"[^a-z]+", haystack):
+        if token in REGIME_TOKENS:
+            return token
+    return "unclassified"
+
+
+def _regime_balanced_queue_items(
+    queue_items: list[dict[str, Any]],
+    *,
+    regime_balance_order: tuple[str, ...] = DEFAULT_REGIME_BALANCE_ORDER,
+) -> list[dict[str, Any]]:
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    seen_order: list[str] = []
+    for item in queue_items:
+        regime = _queue_item_regime(item)
+        if regime not in buckets:
+            buckets[regime] = []
+            seen_order.append(regime)
+        buckets[regime].append(item)
+    ordered_regimes: list[str] = []
+    for regime in regime_balance_order:
+        if regime in buckets and regime not in ordered_regimes:
+            ordered_regimes.append(regime)
+    for regime in seen_order:
+        if regime not in ordered_regimes:
+            ordered_regimes.append(regime)
+
+    balanced: list[dict[str, Any]] = []
+    while any(buckets[regime] for regime in ordered_regimes):
+        for regime in ordered_regimes:
+            if buckets[regime]:
+                balanced.append(buckets[regime].pop(0))
+    return balanced
+
+
 def _candidate_window(
     filtered_queue_items: list[dict[str, Any]],
     *,
     top_n: int,
     candidate_start_index: int = 1,
     candidate_count: int | None = None,
+    candidate_selection_mode: str = CANDIDATE_SELECTION_PRIORITY_ORDER,
+    regime_balance_order: tuple[str, ...] = DEFAULT_REGIME_BALANCE_ORDER,
 ) -> tuple[list[dict[str, Any]], int, int, int]:
-    top_queue_items = filtered_queue_items[:top_n] if top_n > 0 else filtered_queue_items
+    if candidate_selection_mode == CANDIDATE_SELECTION_REGIME_BALANCED:
+        scoped_queue_items = _regime_balanced_queue_items(
+            filtered_queue_items,
+            regime_balance_order=regime_balance_order,
+        )
+    elif candidate_selection_mode == CANDIDATE_SELECTION_PRIORITY_ORDER:
+        scoped_queue_items = filtered_queue_items
+    else:
+        raise ValueError(f"unsupported candidate_selection_mode={candidate_selection_mode!r}")
+    top_queue_items = scoped_queue_items[:top_n] if top_n > 0 else scoped_queue_items
     start_offset = max(int(candidate_start_index or 1), 1) - 1
     if candidate_count is None or int(candidate_count) <= 0:
         candidate_end_index = len(top_queue_items)
@@ -2044,6 +2137,8 @@ def build_option_aware_backtest(
     contract_selection_method: str = CONTRACT_SELECTION_NEAREST,
     candidate_start_index: int = 1,
     candidate_count: int | None = None,
+    candidate_selection_mode: str = CANDIDATE_SELECTION_PRIORITY_ORDER,
+    regime_balance_order: tuple[str, ...] = DEFAULT_REGIME_BALANCE_ORDER,
     progress_dir: Path | None = None,
 ) -> dict[str, Any]:
     if max_entry_staleness is None:
@@ -2099,6 +2194,8 @@ def build_option_aware_backtest(
         top_n=top_n,
         candidate_start_index=candidate_start_index,
         candidate_count=candidate_count,
+        candidate_selection_mode=candidate_selection_mode,
+        regime_balance_order=regime_balance_order,
     )
     print(
         "option_aware_candidate_loop_start "
@@ -2106,6 +2203,8 @@ def build_option_aware_backtest(
         f"top_n={top_n} candidate_start_index={start_offset + 1} "
         f"candidate_count={candidate_count or ''} "
         f"candidate_scope_count={candidate_scope_count} "
+        f"candidate_selection_mode={candidate_selection_mode} "
+        f"regime_balance_order={','.join(regime_balance_order)} "
         f"contract_selection_method={contract_selection_method}",
         flush=True,
     )
@@ -2294,6 +2393,8 @@ def build_option_aware_backtest(
         "candidate_start_index": start_offset + 1,
         "candidate_end_index": candidate_end_index,
         "candidate_count_requested": candidate_count,
+        "candidate_selection_mode": candidate_selection_mode,
+        "regime_balance_order": list(regime_balance_order),
         "stock_trade_cache_entry_count": len(stock_trade_cache),
         "symbol_filter": sorted(symbol_filter) if symbol_filter else [],
         "skip_blocked_queue_items": bool(skip_blocked_queue_items),
@@ -2378,6 +2479,8 @@ def write_markdown(path: Path, payload: dict[str, Any]) -> None:
         f"- Generated at: `{payload['generated_at']}`",
         f"- Status: `{payload['status']}`",
         f"- Candidate count: `{payload['candidate_count']}`",
+        f"- Candidate selection mode: `{payload.get('candidate_selection_mode')}`",
+        f"- Regime balance order: `{','.join(payload.get('regime_balance_order') or [])}`",
         f"- Option trade count: `{payload['option_trade_count']}`",
         f"- Promotion allowed: `{payload['promotion_allowed']}`",
         f"- Broker facing: `{payload['broker_facing']}`",
@@ -2475,6 +2578,8 @@ def main() -> None:
         top_n=args.top_n,
         candidate_start_index=args.candidate_start_index,
         candidate_count=args.candidate_count,
+        candidate_selection_mode=args.candidate_selection_mode,
+        regime_balance_order=_regime_balance_order(args.regime_balance_order),
         symbol_filter=_symbol_filter(args.symbol_filter),
         skip_blocked_queue_items=args.skip_blocked_queue_items,
         initial_cash=args.initial_cash,
