@@ -57,6 +57,23 @@ function Invoke-Gcloud {
     }
 }
 
+function Invoke-GcloudCreateInstance {
+    param([string[]]$Arguments)
+    $output = & $Gcloud @Arguments 2>&1
+    $exitCode = $LASTEXITCODE
+    $output | ForEach-Object { Write-Output $_ }
+    if ($exitCode -eq 0) {
+        return "created"
+    }
+    $message = ($output | Out-String)
+    if ($message -match "CPUS_ALL_REGIONS" -or $message -match "Quota") {
+        Write-Output "quota_limit_reached=true"
+        Write-Output "quota_pause_reason=$($message.Trim() -replace '\s+', ' ')"
+        return "quota_limited"
+    }
+    throw "gcloud failed: $($Arguments -join ' ')"
+}
+
 function ConvertTo-MetadataArg {
     param([hashtable]$Metadata)
     return (($Metadata.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ",")
@@ -198,7 +215,7 @@ foreach ($row in $launchRows) {
         worker_id = $row.worker_id
     }
 
-    Invoke-Gcloud @(
+    $createStatus = Invoke-GcloudCreateInstance @(
         "compute", "instances", "create", $row.instance_name,
         "--project", $Project,
         "--zone", $row.zone,
@@ -212,6 +229,9 @@ foreach ($row in $launchRows) {
         "--metadata-from-file", "startup-script=$StartupScript",
         "--quiet"
     )
+    if ($createStatus -eq "quota_limited") {
+        break
+    }
     $launched += 1
     Write-Output "launched_instance=$($row.instance_name) candidate_index=$($row.candidate_start_index) zone=$($row.zone)"
 }
