@@ -54,6 +54,7 @@ $QueuePath = Join-Path $InputsDir "$OutputPrefix`_option_queue.json"
 $ManifestPath = Join-Path $InputsDir "$OutputPrefix`_manifest.json"
 $MetadataSelectors = $Selectors.Replace(",", ";")
 $MetadataLagProfiles = $LagProfiles.Replace(",", ";")
+$MetadataRegimeBalanceOrder = $RegimeBalanceOrder.Replace(",", ";")
 
 Set-Location $RepoRoot
 New-Item -ItemType Directory -Path $InputsDir -Force | Out-Null
@@ -197,7 +198,7 @@ for ($candidateStart = $StartCandidateIndex; $candidateStart -le $TotalCandidate
         lag_profiles = $MetadataLagProfiles
         live_manifest_effect = "none"
         machine_type = $MachineType
-        regime_balance_order = $RegimeBalanceOrder
+        regime_balance_order = $MetadataRegimeBalanceOrder
         risk_policy_effect = "none"
         selectors = $MetadataSelectors
         symbol = $Symbol
@@ -246,7 +247,7 @@ foreach ($row in $launchRows) {
         lag_profiles = $MetadataLagProfiles
         max_entry_staleness_minutes = "$MaxEntryStalenessMinutes"
         profile_name = "$SymbolSlug-regime-rescue-$CandidateSelectionMode-e${MaxEntryStalenessMinutes}"
-        regime_balance_order = $RegimeBalanceOrder
+        regime_balance_order = $MetadataRegimeBalanceOrder
         selectors = $MetadataSelectors
         slippage_bps = "10"
         source_archive_uri = $SourceArchiveUri

@@ -41,6 +41,7 @@ EXIT_BAR_LOOKUP_MODE="$(metadata_value exit_bar_lookup_mode "first_bar_at_or_aft
 STOCK_SESSION_FILTER="$(metadata_value stock_session_filter "option_rth_same_day")"
 SELECTORS_CSV="${SELECTORS_CSV//;/,}"
 LAG_PROFILES_CSV="${LAG_PROFILES_CSV//;/,}"
+REGIME_BALANCE_ORDER="${REGIME_BALANCE_ORDER//;/,}"
 
 count_csv_values() {
   local value="${1//;/,}"
