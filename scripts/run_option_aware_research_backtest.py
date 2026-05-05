@@ -1595,6 +1595,8 @@ def _stock_trade_cache_key(variant: dict[str, Any], *, stock_session_filter: str
         "min_range_pct",
         "max_range_pct",
         "max_midpoint_distance_pct",
+        "range_entry_side",
+        "range_edge_pct",
         "entry_signal_mode",
         "cooldown_bars",
         "max_signals_per_day",

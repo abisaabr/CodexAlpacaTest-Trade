@@ -186,6 +186,8 @@ class VariantStockProxyStrategy(BaseStrategy):
         min_range_pct: float = 0.0015,
         max_range_pct: float = 0.018,
         max_midpoint_distance_pct: float = 0.006,
+        range_entry_side: str = "center",
+        range_edge_pct: float = 0.001,
         min_minutes_since_open: int = 5,
         max_minutes_since_open: int = 385,
         entry_signal_mode: str = "continuous",
@@ -207,6 +209,8 @@ class VariantStockProxyStrategy(BaseStrategy):
         self.min_range_pct = min_range_pct
         self.max_range_pct = max_range_pct
         self.max_midpoint_distance_pct = max_midpoint_distance_pct
+        self.range_entry_side = range_entry_side
+        self.range_edge_pct = range_edge_pct
         self.min_minutes_since_open = min_minutes_since_open
         self.max_minutes_since_open = max_minutes_since_open
         self.entry_signal_mode = entry_signal_mode
@@ -260,7 +264,14 @@ class VariantStockProxyStrategy(BaseStrategy):
                 & trend_gap_pct.le(self.max_trend_gap_pct).fillna(False)
                 & midpoint_distance_pct.le(self.max_midpoint_distance_pct).fillna(False)
             )
-            frame["signal"] = active.fillna(False).astype(int)
+            if self.range_entry_side == "lower_band":
+                edge = frame["close"].le(midpoint * (1.0 - self.range_edge_pct)).fillna(False)
+                frame["signal"] = (active & edge).fillna(False).astype(int)
+            elif self.range_entry_side == "upper_band":
+                edge = frame["close"].ge(midpoint * (1.0 + self.range_edge_pct)).fillna(False)
+                frame["signal"] = -(active & edge).fillna(False).astype(int)
+            else:
+                frame["signal"] = active.fillna(False).astype(int)
         elif self.direction > 0:
             trend_gap_pct = (frame["fast_sma"] - frame["slow_sma"]) / frame[
                 "close"
@@ -424,6 +435,8 @@ def _variant_stock_strategy(variant: dict[str, Any]) -> VariantStockProxyStrateg
         min_range_pct=float(parameters.get("min_range_pct") or 0.0015),
         max_range_pct=float(parameters.get("max_range_pct") or 0.018),
         max_midpoint_distance_pct=float(parameters.get("max_midpoint_distance_pct") or 0.006),
+        range_entry_side=str(parameters.get("range_entry_side") or "center").lower(),
+        range_edge_pct=float(parameters.get("range_edge_pct") or 0.001),
         min_minutes_since_open=int(parameters.get("min_minutes_since_open") or 5),
         max_minutes_since_open=int(parameters.get("max_minutes_since_open") or 385),
         entry_signal_mode=str(parameters.get("entry_signal_mode") or "continuous"),

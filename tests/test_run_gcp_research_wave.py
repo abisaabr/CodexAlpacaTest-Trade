@@ -119,6 +119,54 @@ def test_choppy_premium_strategy_uses_range_bound_timeout_proxy() -> None:
     assert strategy.timeout_bars == 75
 
 
+def test_choppy_range_reversion_can_emit_lower_and_upper_band_signals() -> None:
+    timestamps = pd.date_range("2026-01-05 14:30", periods=100, freq="min", tz="UTC")
+    prices = [100.0 + ((index % 20) - 10) * 0.025 for index in range(len(timestamps))]
+    bars = pd.DataFrame(
+        {
+            "symbol": ["QQQ"] * len(timestamps),
+            "timestamp": timestamps,
+            "open": prices,
+            "high": [price + 0.08 for price in prices],
+            "low": [price - 0.08 for price in prices],
+            "close": prices,
+            "volume": [1000] * len(timestamps),
+        }
+    )
+    lower_strategy = _variant_stock_strategy(
+        {
+            "variant_id": "qqq_choppy_lower",
+            "symbol": "QQQ",
+            "source_strategy_id": "qqq__choppy__call__single_leg_repair",
+            "parameters": {
+                "range_edge_pct": 0.0005,
+                "range_entry_side": "lower_band",
+                "stock_proxy_mode": "range_bound",
+            },
+        }
+    )
+    upper_strategy = _variant_stock_strategy(
+        {
+            "variant_id": "qqq_choppy_upper",
+            "symbol": "QQQ",
+            "source_strategy_id": "qqq__choppy__put__single_leg_repair",
+            "parameters": {
+                "range_edge_pct": 0.0005,
+                "range_entry_side": "upper_band",
+                "stock_proxy_mode": "range_bound",
+            },
+        }
+    )
+
+    lower_signals = lower_strategy.generate_signals(bars)["signal"]
+    upper_signals = upper_strategy.generate_signals(bars)["signal"]
+
+    assert int((lower_signals > 0).sum()) > 0
+    assert int((upper_signals < 0).sum()) > 0
+    assert int((lower_signals < 0).sum()) == 0
+    assert int((upper_signals > 0).sum()) == 0
+
+
 def test_bull_put_credit_spread_keeps_bullish_stock_proxy_direction() -> None:
     strategy = _variant_stock_strategy(
         {
