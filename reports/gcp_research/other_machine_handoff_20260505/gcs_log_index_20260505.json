@@ -1,28 +1,81 @@
 {
-  "generated_at_utc": "2026-05-05T16:02:52.808324+00:00",
+  "generated_at_utc": "2026-05-05T16:10:55.777384+00:00",
   "prefixes": [
     {
       "prefix": "gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/",
-      "object_count": 2,
-      "total_line": "TOTAL: 2 objects, 23499 bytes (22.95 KiB)",
+      "object_count": 7,
+      "total_line": "TOTAL: 7 objects, 66702685 bytes (63.61 MiB)",
       "sample_latest_objects": [
         {
-          "bytes": 16215,
-          "timestamp": "2026-05-05T16:02:07Z",
+          "bytes": 26194,
+          "timestamp": "2026-05-05T16:03:43Z",
           "url": "gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/gcs_log_index_20260505.json"
         },
         {
-          "bytes": 7284,
-          "timestamp": "2026-05-05T16:02:03Z",
+          "bytes": 14151,
+          "timestamp": "2026-05-05T16:10:25Z",
+          "url": "gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/other_machine_codex_takeover_prompt_20260505.md"
+        },
+        {
+          "bytes": 7569,
+          "timestamp": "2026-05-05T16:03:40Z",
           "url": "gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/other_machine_handoff_20260505.md"
+        },
+        {
+          "bytes": 768,
+          "timestamp": "2026-05-05T16:08:11Z",
+          "url": "gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/raw_chat/codex_raw_chat_handoff_20260505T1605Z/README_RAW_CHAT_HANDOFF.txt"
+        },
+        {
+          "bytes": 66647413,
+          "timestamp": "2026-05-05T16:08:07Z",
+          "url": "gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/raw_chat/codex_raw_chat_handoff_20260505T1605Z/codex_raw_chat_handoff_20260505T1605Z.zip"
+        },
+        {
+          "bytes": 814,
+          "timestamp": "2026-05-05T16:08:18Z",
+          "url": "gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/raw_chat/codex_raw_chat_handoff_20260505T1605Z/raw_chat_bundle_summary.json"
+        },
+        {
+          "bytes": 5776,
+          "timestamp": "2026-05-05T16:08:15Z",
+          "url": "gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/raw_chat/codex_raw_chat_handoff_20260505T1605Z/raw_chat_manifest.json"
+        }
+      ],
+      "errors": ""
+    },
+    {
+      "prefix": "gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/raw_chat/codex_raw_chat_handoff_20260505T1605Z/",
+      "object_count": 4,
+      "total_line": "TOTAL: 4 objects, 66654771 bytes (63.57 MiB)",
+      "sample_latest_objects": [
+        {
+          "bytes": 768,
+          "timestamp": "2026-05-05T16:08:11Z",
+          "url": "gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/raw_chat/codex_raw_chat_handoff_20260505T1605Z/README_RAW_CHAT_HANDOFF.txt"
+        },
+        {
+          "bytes": 66647413,
+          "timestamp": "2026-05-05T16:08:07Z",
+          "url": "gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/raw_chat/codex_raw_chat_handoff_20260505T1605Z/codex_raw_chat_handoff_20260505T1605Z.zip"
+        },
+        {
+          "bytes": 814,
+          "timestamp": "2026-05-05T16:08:18Z",
+          "url": "gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/raw_chat/codex_raw_chat_handoff_20260505T1605Z/raw_chat_bundle_summary.json"
+        },
+        {
+          "bytes": 5776,
+          "timestamp": "2026-05-05T16:08:15Z",
+          "url": "gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/raw_chat/codex_raw_chat_handoff_20260505T1605Z/raw_chat_manifest.json"
         }
       ],
       "errors": ""
     },
     {
       "prefix": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/",
-      "object_count": 51,
-      "total_line": "TOTAL: 51 objects, 468640 bytes (457.66 KiB)",
+      "object_count": 52,
+      "total_line": "TOTAL: 52 objects, 484375 bytes (473.02 KiB)",
       "sample_latest_objects": [
         {
           "bytes": 3316,
@@ -130,7 +183,7 @@
     {
       "prefix": "gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/",
       "object_count": 19,
-      "total_line": "TOTAL: 19 objects, 8756445 bytes (8.35 MiB)",
+      "total_line": "TOTAL: 19 objects, 9762649 bytes (9.31 MiB)",
       "sample_latest_objects": [
         {
           "bytes": 3312,
@@ -139,82 +192,82 @@
         },
         {
           "bytes": 36884,
-          "timestamp": "2026-05-05T15:58:08Z",
+          "timestamp": "2026-05-05T16:08:13Z",
           "url": "gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/gcp_rth_session/outputs/apt_install.log"
         },
         {
           "bytes": 2171,
-          "timestamp": "2026-05-05T15:58:08Z",
+          "timestamp": "2026-05-05T16:08:13Z",
           "url": "gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/gcp_rth_session/outputs/apt_update.log"
         },
         {
-          "bytes": 66928,
-          "timestamp": "2026-05-05T15:58:08Z",
+          "bytes": 74807,
+          "timestamp": "2026-05-05T16:08:13Z",
           "url": "gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/gcp_rth_session/outputs/heartbeat_stderr.txt"
         },
         {
           "bytes": 0,
-          "timestamp": "2026-05-05T15:58:08Z",
+          "timestamp": "2026-05-05T16:08:13Z",
           "url": "gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/gcp_rth_session/outputs/heartbeat_stdout.txt"
         },
         {
           "bytes": 0,
-          "timestamp": "2026-05-05T15:58:08Z",
+          "timestamp": "2026-05-05T16:08:13Z",
           "url": "gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/gcp_rth_session/outputs/pip_bootstrap_stderr.txt"
         },
         {
           "bytes": 1406,
-          "timestamp": "2026-05-05T15:58:08Z",
+          "timestamp": "2026-05-05T16:08:13Z",
           "url": "gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/gcp_rth_session/outputs/pip_bootstrap_stdout.txt"
         },
         {
           "bytes": 0,
-          "timestamp": "2026-05-05T15:58:08Z",
+          "timestamp": "2026-05-05T16:08:13Z",
           "url": "gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/gcp_rth_session/outputs/pip_install_stderr.txt"
         },
         {
           "bytes": 12392,
-          "timestamp": "2026-05-05T15:58:08Z",
+          "timestamp": "2026-05-05T16:08:13Z",
           "url": "gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/gcp_rth_session/outputs/pip_install_stdout.txt"
         },
         {
           "bytes": 1759,
-          "timestamp": "2026-05-05T15:58:08Z",
+          "timestamp": "2026-05-05T16:08:13Z",
           "url": "gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/gcp_rth_session/outputs/preflight_result.json"
         },
         {
           "bytes": 0,
-          "timestamp": "2026-05-05T15:58:08Z",
+          "timestamp": "2026-05-05T16:08:13Z",
           "url": "gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/gcp_rth_session/outputs/preflight_stderr.txt"
         },
         {
           "bytes": 1760,
-          "timestamp": "2026-05-05T15:58:08Z",
+          "timestamp": "2026-05-05T16:08:13Z",
           "url": "gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/gcp_rth_session/outputs/preflight_stdout.txt"
         },
         {
           "bytes": 234,
-          "timestamp": "2026-05-05T15:58:08Z",
+          "timestamp": "2026-05-05T16:08:13Z",
           "url": "gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/gcp_rth_session/outputs/session_heartbeat.json"
         },
         {
           "bytes": 0,
-          "timestamp": "2026-05-05T15:58:08Z",
+          "timestamp": "2026-05-05T16:08:13Z",
           "url": "gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/gcp_rth_session/outputs/session_stderr.txt"
         },
         {
-          "bytes": 8128674,
-          "timestamp": "2026-05-05T15:58:08Z",
+          "bytes": 9126999,
+          "timestamp": "2026-05-05T16:08:13Z",
           "url": "gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/gcp_rth_session/outputs/session_stdout.txt"
         },
         {
           "bytes": 265,
-          "timestamp": "2026-05-05T15:58:08Z",
+          "timestamp": "2026-05-05T16:08:13Z",
           "url": "gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/gcp_rth_session/outputs/source_download.log"
         },
         {
           "bytes": 3431,
-          "timestamp": "2026-05-05T15:58:08Z",
+          "timestamp": "2026-05-05T16:08:13Z",
           "url": "gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/gcp_rth_session/outputs/startup_console.log"
         },
         {
@@ -340,8 +393,8 @@
     },
     {
       "prefix": "gs://codexalpaca-control-us/gcp_research/",
-      "object_count": 57,
-      "total_line": "TOTAL: 57 objects, 495775 bytes (484.16 KiB)",
+      "object_count": 59,
+      "total_line": "TOTAL: 59 objects, 525946 bytes (513.62 KiB)",
       "sample_latest_objects": [
         {
           "bytes": 1671,

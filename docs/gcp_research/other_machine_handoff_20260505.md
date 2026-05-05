@@ -30,9 +30,15 @@ Machine-readable index:
 - Local repo path: `reports/gcp_research/other_machine_handoff_20260505/gcs_log_index_20260505.json`
 - GCS mirror: `gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/gcs_log_index_20260505.json`
 
+Robust takeover prompt:
+
+- Local repo path: `docs/gcp_research/other_machine_codex_takeover_prompt_20260505.md`
+- GCS mirror: `gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/other_machine_codex_takeover_prompt_20260505.md`
+
 Indexed prefixes:
 
 - Handoff packet: `gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/`
+- Temporary raw chat packet: `gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/raw_chat/codex_raw_chat_handoff_20260505T1605Z/`
 - Repo docs snapshot: `gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/`
 - QQQ/SPY paper session: `gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/`
 - IWM bear/choppy redesign: `gs://codexalpaca-control-us/research_results/ticker365_iwm_bear_choppy_redesign_20260505T1505Z/`
@@ -41,11 +47,12 @@ Indexed prefixes:
 
 Current index counts:
 
-- Handoff packet: `2` objects, `22.95 KiB`
-- Repo docs snapshot: `51` objects, `457.66 KiB`
-- QQQ/SPY paper session: `19` objects, `8.35 MiB`
+- Handoff packet: `7` objects, `63.61 MiB`
+- Temporary raw chat packet: `4` objects, `63.57 MiB`
+- Repo docs snapshot: `52` objects, `473.02 KiB`
+- QQQ/SPY paper session: `19` objects, `9.31 MiB`
 - IWM bear/choppy redesign: `252` objects, `98.98 MiB`
-- GCP research handoff docs: `57` objects, `484.16 KiB`
+- GCP research handoff docs: `59` objects, `513.62 KiB`
 - Fill coverage diagnostic packet: `7` objects, `53.66 KiB`
 
 ## Active Paper Session
@@ -122,7 +129,21 @@ The terminated IWM workers already uploaded logs/artifacts to GCS. They are not 
 
 ## Raw Chat Logs
 
-Raw Codex chat/session logs are local on this machine, not part of the repo and not mirrored to GCS by default.
+Raw Codex chat/session logs are local on this machine. At the operator's request, a temporary raw chat handoff archive was uploaded to GCS for machine transfer. Prefer the sanitized GitHub/GCS handoff docs for canonical operational decisions.
+
+Temporary GCS archive:
+
+- Prefix: `gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/raw_chat/codex_raw_chat_handoff_20260505T1605Z/`
+- Archive: `codex_raw_chat_handoff_20260505T1605Z.zip`
+- Archive bytes: `66647413`
+- SHA256: `07D4FC0A47D12560A978D2AAEBAF9A673822E375CB3E958E12D151103ECF6F37`
+- File count: `14`
+- Manifest: `raw_chat_manifest.json`
+- Summary: `raw_chat_bundle_summary.json`
+
+Delete after handoff:
+
+- `gsutil rm -r gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/raw_chat/codex_raw_chat_handoff_20260505T1605Z/`
 
 Primary local locations found:
 
@@ -140,7 +161,7 @@ Known spawned subagent session IDs from this workstream:
 - Einstein: `019de17a-f9f2-7aa0-be23-8c7e1135bc11`
 - Euler: `019df377-e081-7280-9c85-7d5d33c22e53`
 
-Do not upload raw chat logs to GitHub or GCS unless they are redacted first. They may contain service-account paths, broker/project details, local machine paths, pasted tokens, and transient instructions that are not canonical.
+Raw chat logs may contain service-account paths, broker/project details, local machine paths, pasted tokens, and transient instructions that are not canonical. Delete the temporary GCS archive after the receiving machine confirms it has what it needs.
 
 ## Canonical Recovery Procedure
 
@@ -149,11 +170,12 @@ For the other machine:
 1. Pull `https://github.com/abisaabr/CodexAlpacaTest-Trade.git`.
 2. Check out `codex/phase2-fill-semantics-20260430`.
 3. Read this file first: `docs/gcp_research/other_machine_handoff_20260505.md`.
-4. Read the active paper session packet: `docs/gcp_research/qqq_spy_rth_paper_session_status_20260505.md`.
-5. Read the final IWM packet: `docs/gcp_research/iwm_bear_choppy_redesign_wave_20260505.md`.
-6. Verify GCS object availability using `reports/gcp_research/other_machine_handoff_20260505/gcs_log_index_20260505.json`.
-7. Monitor the active paper session heartbeat from GCS before making any runtime decision.
-8. Do not promote or activate any new strategy unless the generated promotion-review packet says `eligible_for_promotion_review`.
+4. Read the takeover prompt: `docs/gcp_research/other_machine_codex_takeover_prompt_20260505.md`.
+5. Read the active paper session packet: `docs/gcp_research/qqq_spy_rth_paper_session_status_20260505.md`.
+6. Read the final IWM packet: `docs/gcp_research/iwm_bear_choppy_redesign_wave_20260505.md`.
+7. Verify GCS object availability using `reports/gcp_research/other_machine_handoff_20260505/gcs_log_index_20260505.json`.
+8. Monitor the active paper session heartbeat from GCS before making any runtime decision.
+9. Do not promote or activate any new strategy unless the generated promotion-review packet says `eligible_for_promotion_review`.
 
 ## Next Operator Actions
 
