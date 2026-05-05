@@ -32,6 +32,8 @@ Machine-readable index:
 
 Indexed prefixes:
 
+- Handoff packet: `gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/`
+- Repo docs snapshot: `gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/`
 - QQQ/SPY paper session: `gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/`
 - IWM bear/choppy redesign: `gs://codexalpaca-control-us/research_results/ticker365_iwm_bear_choppy_redesign_20260505T1505Z/`
 - GCP research handoff docs: `gs://codexalpaca-control-us/gcp_research/`
@@ -39,9 +41,11 @@ Indexed prefixes:
 
 Current index counts:
 
+- Handoff packet: `2` objects, `22.95 KiB`
+- Repo docs snapshot: `51` objects, `457.66 KiB`
 - QQQ/SPY paper session: `19` objects, `8.35 MiB`
 - IWM bear/choppy redesign: `252` objects, `98.98 MiB`
-- GCP research handoff docs: `5` objects, `19.39 KiB`
+- GCP research handoff docs: `57` objects, `484.16 KiB`
 - Fill coverage diagnostic packet: `7` objects, `53.66 KiB`
 
 ## Active Paper Session

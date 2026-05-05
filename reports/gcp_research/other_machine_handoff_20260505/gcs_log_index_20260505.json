@@ -1,6 +1,132 @@
 {
-  "generated_at_utc": "2026-05-05T16:00:27.829579+00:00",
+  "generated_at_utc": "2026-05-05T16:02:52.808324+00:00",
   "prefixes": [
+    {
+      "prefix": "gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/",
+      "object_count": 2,
+      "total_line": "TOTAL: 2 objects, 23499 bytes (22.95 KiB)",
+      "sample_latest_objects": [
+        {
+          "bytes": 16215,
+          "timestamp": "2026-05-05T16:02:07Z",
+          "url": "gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/gcs_log_index_20260505.json"
+        },
+        {
+          "bytes": 7284,
+          "timestamp": "2026-05-05T16:02:03Z",
+          "url": "gs://codexalpaca-control-us/research_results/other_machine_handoff_20260505/other_machine_handoff_20260505.md"
+        }
+      ],
+      "errors": ""
+    },
+    {
+      "prefix": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/",
+      "object_count": 51,
+      "total_line": "TOTAL: 51 objects, 468640 bytes (457.66 KiB)",
+      "sample_latest_objects": [
+        {
+          "bytes": 3316,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_regime_redesign_wave_20260505.md"
+        },
+        {
+          "bytes": 2690,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_spy_controlled_validation_status_20260505.md"
+        },
+        {
+          "bytes": 3837,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_spy_realtime_broker_canary_status_20260505.md"
+        },
+        {
+          "bytes": 2254,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_spy_realtime_gcp_canary_status_20260505.md"
+        },
+        {
+          "bytes": 1671,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_spy_realtime_paper_launch_packet_status_20260505.md"
+        },
+        {
+          "bytes": 3312,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_spy_rth_paper_session_status_20260505.md"
+        },
+        {
+          "bytes": 577,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_timing_redesign_20260504/inputs/qqq_timing_redesign_launch_rows.json"
+        },
+        {
+          "bytes": 105909,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_timing_redesign_20260504/inputs/qqq_timing_redesign_option_queue.json"
+        },
+        {
+          "bytes": 93420,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_timing_redesign_20260504/inputs/qqq_timing_redesign_variants.jsonl"
+        },
+        {
+          "bytes": 48199,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_timing_redesign_20260504/qqq_fill_failure_heatmap.json"
+        },
+        {
+          "bytes": 4160,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_timing_redesign_20260504/qqq_fill_failure_heatmap.md"
+        },
+        {
+          "bytes": 14512,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_timing_redesign_20260504/strategy_redesign_targets.csv"
+        },
+        {
+          "bytes": 7256,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/spy_regime_probe_wave_20260505.md"
+        },
+        {
+          "bytes": 3344,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/ticker365_entry_asof_rescue_wave_20260503.md"
+        },
+        {
+          "bytes": 2325,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/ticker365_fill_repair_wave_20260503.md"
+        },
+        {
+          "bytes": 1636,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/ticker365_paper_readiness_watch_20260503.md"
+        },
+        {
+          "bytes": 7333,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/ticker365_qqq_timing_redesign_wave_20260504.md"
+        },
+        {
+          "bytes": 1216,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/ticker365_qqq_timing_smoke_20260504.md"
+        },
+        {
+          "bytes": 4618,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/ticker365_timing_rescue_wave_20260503.md"
+        },
+        {
+          "bytes": 4786,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/ticker_365d_all_available_backtest_20260501.md"
+        }
+      ],
+      "errors": ""
+    },
     {
       "prefix": "gs://codexalpaca-control-us/research_results/qqq-spy-rth-paper-session-20260505T143315Z/",
       "object_count": 19,
@@ -214,13 +340,88 @@
     },
     {
       "prefix": "gs://codexalpaca-control-us/gcp_research/",
-      "object_count": 5,
-      "total_line": "TOTAL: 5 objects, 19851 bytes (19.39 KiB)",
+      "object_count": 57,
+      "total_line": "TOTAL: 57 objects, 495775 bytes (484.16 KiB)",
       "sample_latest_objects": [
         {
-          "bytes": 6760,
-          "timestamp": "2026-05-05T15:58:08Z",
-          "url": "gs://codexalpaca-control-us/gcp_research/iwm_bear_choppy_redesign_wave_20260505.md"
+          "bytes": 1671,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_spy_realtime_paper_launch_packet_status_20260505.md"
+        },
+        {
+          "bytes": 3312,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_spy_rth_paper_session_status_20260505.md"
+        },
+        {
+          "bytes": 577,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_timing_redesign_20260504/inputs/qqq_timing_redesign_launch_rows.json"
+        },
+        {
+          "bytes": 105909,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_timing_redesign_20260504/inputs/qqq_timing_redesign_option_queue.json"
+        },
+        {
+          "bytes": 93420,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_timing_redesign_20260504/inputs/qqq_timing_redesign_variants.jsonl"
+        },
+        {
+          "bytes": 48199,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_timing_redesign_20260504/qqq_fill_failure_heatmap.json"
+        },
+        {
+          "bytes": 4160,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_timing_redesign_20260504/qqq_fill_failure_heatmap.md"
+        },
+        {
+          "bytes": 14512,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/qqq_timing_redesign_20260504/strategy_redesign_targets.csv"
+        },
+        {
+          "bytes": 7256,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/spy_regime_probe_wave_20260505.md"
+        },
+        {
+          "bytes": 3344,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/ticker365_entry_asof_rescue_wave_20260503.md"
+        },
+        {
+          "bytes": 2325,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/ticker365_fill_repair_wave_20260503.md"
+        },
+        {
+          "bytes": 1636,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/ticker365_paper_readiness_watch_20260503.md"
+        },
+        {
+          "bytes": 7333,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/ticker365_qqq_timing_redesign_wave_20260504.md"
+        },
+        {
+          "bytes": 1216,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/ticker365_qqq_timing_smoke_20260504.md"
+        },
+        {
+          "bytes": 4618,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/ticker365_timing_rescue_wave_20260503.md"
+        },
+        {
+          "bytes": 4786,
+          "timestamp": "2026-05-05T16:02:32Z",
+          "url": "gs://codexalpaca-control-us/gcp_research/repo_docs_snapshot_20260505/docs/gcp_research/ticker_365d_all_available_backtest_20260501.md"
         },
         {
           "bytes": 3344,
