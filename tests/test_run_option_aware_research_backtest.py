@@ -393,6 +393,61 @@ def test_iron_butterfly_pairs_body_strikes_under_liquidity_first_selection() -> 
     assert body_strikes == {"short_call_body": 100.0, "short_put_body": 100.0}
 
 
+def test_dte_mode_blocks_unavailable_same_day_contracts() -> None:
+    trade_date = pd.Timestamp("2026-04-21").date()
+    entry_time = pd.Timestamp("2026-04-21T13:35:00Z")
+    contracts = pd.DataFrame(
+        {
+            "trade_date": [trade_date],
+            "underlying_symbol": ["QQQ"],
+            "symbol": ["QQQ260424C00100000"],
+            "option_type": ["call"],
+            "strike_price": [100.0],
+            "dte": [3],
+            "relative_strike_step": [0],
+        }
+    )
+    option_bars = pd.DataFrame(
+        {
+            "symbol": ["QQQ260424C00100000"],
+            "timestamp": [entry_time],
+            "close": [2.0],
+            "volume": [10],
+        }
+    )
+    option_index = _build_option_research_index(
+        contracts=contracts,
+        option_bars=option_bars,
+        option_trades=pd.DataFrame(),
+    )
+
+    legs, structure, status = _option_structure_legs(
+        queue_item={
+            "candidate_variant_id": "qqq_same_day_call",
+            "symbol": "QQQ",
+            "directional_option_type": "call",
+            "family": "single_leg_repair",
+            "parameter_set": '{"dte_mode":"same_day"}',
+        },
+        variant={"parameters": {"dte_mode": "same_day"}},
+        contracts=contracts,
+        option_bars=option_bars,
+        option_trades=pd.DataFrame(),
+        option_index=option_index,
+        symbol="QQQ",
+        trade_date=trade_date,
+        entry_time=entry_time,
+        max_entry_lag=timedelta(minutes=1),
+        entry_lookup_mode="first_bar_at_or_after_entry_within_lag",
+        max_entry_staleness=timedelta(minutes=0),
+        contract_selection_method=CONTRACT_SELECTION_LIQUIDITY_FIRST,
+    )
+
+    assert legs == []
+    assert structure == "single_leg"
+    assert status == "no_selected_contract"
+
+
 def test_exit_lookup_defaults_to_strict_at_or_after() -> None:
     bars = pd.DataFrame(
         {

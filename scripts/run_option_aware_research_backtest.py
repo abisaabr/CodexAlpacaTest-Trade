@@ -386,6 +386,26 @@ def _candidate_contracts_from_index(
     )
 
 
+def _filter_contracts_for_dte_mode(frame: pd.DataFrame, dte_mode: str | None) -> pd.DataFrame:
+    if frame.empty or "dte" not in frame.columns:
+        return frame
+    mode = str(dte_mode or "").lower()
+    if not mode:
+        return frame
+    dte = pd.to_numeric(frame["dte"], errors="coerce")
+    if mode == "same_day":
+        return frame[dte <= 0].copy()
+    if mode in {"next", "next_expiry", "next_trading_day"}:
+        eligible = frame[dte > 0].copy()
+        eligible_dte = pd.to_numeric(eligible["dte"], errors="coerce")
+        if eligible.empty:
+            eligible = frame.copy()
+            eligible_dte = dte
+        min_dte = eligible_dte.min()
+        return eligible[eligible_dte == min_dte].copy()
+    return frame
+
+
 def _choose_contract(
     *,
     contracts: pd.DataFrame,
@@ -393,6 +413,7 @@ def _choose_contract(
     symbol: str,
     option_type: str,
     trade_date: Any,
+    dte_mode: str | None = None,
 ) -> dict[str, Any] | None:
     frame = (
         _candidate_contracts_from_index(
@@ -409,6 +430,7 @@ def _choose_contract(
             trade_date=trade_date,
         )
     )
+    frame = _filter_contracts_for_dte_mode(frame, dte_mode)
     if frame.empty:
         return None
     return frame.iloc[0].to_dict()
@@ -427,6 +449,7 @@ def _choose_entry_liquidity_first_contract(
     max_lag: timedelta,
     entry_lookup_mode: str,
     max_entry_staleness: timedelta,
+    dte_mode: str | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str]:
     frame = (
         _candidate_contracts_from_index(
@@ -443,6 +466,7 @@ def _choose_entry_liquidity_first_contract(
             trade_date=trade_date,
         )
     )
+    frame = _filter_contracts_for_dte_mode(frame, dte_mode)
     if frame.empty:
         return None, None, "no_selected_contract"
 
@@ -512,8 +536,9 @@ def _contract_frame_for_type(
     symbol: str,
     option_type: str,
     trade_date: Any,
+    dte_mode: str | None = None,
 ) -> pd.DataFrame:
-    return (
+    frame = (
         _candidate_contracts_from_index(
             option_index=option_index,
             symbol=symbol,
@@ -528,6 +553,7 @@ def _contract_frame_for_type(
             trade_date=trade_date,
         )
     ).copy()
+    return _filter_contracts_for_dte_mode(frame, dte_mode)
 
 
 def _contract_strike(contract: dict[str, Any]) -> float:
@@ -570,6 +596,7 @@ def _select_contract_with_entry(
     entry_lookup_mode: str,
     max_entry_staleness: timedelta,
     contract_selection_method: str,
+    dte_mode: str | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str]:
     if contract_selection_method == CONTRACT_SELECTION_LIQUIDITY_FIRST:
         return _choose_entry_liquidity_first_contract(
@@ -584,6 +611,7 @@ def _select_contract_with_entry(
             max_lag=max_lag,
             entry_lookup_mode=entry_lookup_mode,
             max_entry_staleness=max_entry_staleness,
+            dte_mode=dte_mode,
         )
 
     contract = _choose_contract(
@@ -592,6 +620,7 @@ def _select_contract_with_entry(
         symbol=symbol,
         option_type=option_type,
         trade_date=trade_date,
+        dte_mode=dte_mode,
     )
     if not contract:
         return None, None, "no_selected_contract"
@@ -760,6 +789,7 @@ def _option_structure_legs(
 ) -> tuple[list[dict[str, Any]], str, str]:
     family = _option_structure_family(queue_item, variant)
     parameters = _variant_parameters(queue_item, variant)
+    dte_mode = str(parameters.get("dte_mode") or "").lower()
     option_type = str(queue_item.get("directional_option_type") or "").lower()
     vertical_width = int(parameters.get("vertical_width_steps") or parameters.get("wing_width_steps") or 1)
     far_width = int(parameters.get("far_wing_width_steps") or max(vertical_width + 1, 2))
@@ -778,6 +808,7 @@ def _option_structure_legs(
             entry_lookup_mode=entry_lookup_mode,
             max_entry_staleness=max_entry_staleness,
             contract_selection_method=contract_selection_method,
+            dte_mode=dte_mode,
         )
 
     def wing(
@@ -810,6 +841,7 @@ def _option_structure_legs(
             symbol=symbol,
             option_type="call",
             trade_date=trade_date,
+            dte_mode=dte_mode,
         )
         if call_frame.empty:
             return [], "iron_butterfly", "no_selected_contract"
