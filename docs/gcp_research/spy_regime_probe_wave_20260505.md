@@ -128,9 +128,40 @@ Capital plan from the combined packet:
 - Bear weight: `0.385667`
 - Bull weight: `0.082676`
 
+## Runner Packet
+
+SPY now has a broker-free governed-validation runner packet matching the QQQ runner shape.
+
+- Promotion manifest: `config/promotion_manifests/spy_regime_complete_governed_validation_20260505.yaml`
+- Portfolio config: `config/spy_regime_complete_paper_portfolio.yaml`
+- Default order submission: `false`
+- Broker-facing trading: `false`
+- Live manifest effect: `none`
+- Risk policy effect: `none`
+- Runner strategy count: `3`
+
+No-order startup preflight:
+
+- Local: `reports/gcp_research/spy_regime_complete_20260505/paper_launch_pack/startup_preflight_no_orders_0820ET.json`
+- GCS: `gs://codexalpaca-control-us/research_results/spy_regime_complete_20260505/paper_launch_pack/startup_preflight_no_orders_0820ET.json`
+- Result: `startup_preflight_pending`
+- Pending reason: `SPY stock frame not ready yet`
+- Broker/account checks reached successfully:
+  - Buying power: `399225.72`
+  - Broker equity: `99806.43`
+  - Broker positions: `0`
+  - Open orders: `0`
+- Orders submitted: `false`
+
+Validation:
+
+- `config/spy_regime_complete_paper_portfolio.yaml` loads with `3` SPY governed strategies.
+- Focused runner gate: `67 passed`
+
 ## Next Steps
 
-1. Create a SPY governed-validation runner manifest only after reviewing the combined packet.
-2. Do not add SPY to broker-facing paper until QQQ broker-free shadow/preflight is clean and the operator explicitly approves.
-3. Repeat the same lane for IWM.
-4. If IWM reaches all-regime review, then build a QQQ+SPY+IWM controlled validation portfolio.
+1. Keep QQQ as the first paper-readiness candidate.
+2. Re-run QQQ and SPY no-order startup preflights after live RTH stock frames are available.
+3. Do not add SPY to broker-facing paper until QQQ broker-free shadow/preflight is clean and the operator explicitly approves.
+4. IWM is bull-only after the first full pass and should not be added to the paper portfolio until targeted bear/choppy redesign produces eligible candidates.
+5. If QQQ and SPY both pass broker-free shadow validation, build a controlled QQQ+SPY validation portfolio.
