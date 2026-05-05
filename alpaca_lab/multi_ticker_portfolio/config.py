@@ -38,6 +38,9 @@ class StrategyConfig(BaseModel):
         "credit_bear",
         "long_straddle",
         "iron_condor",
+        "governed_breakout_call",
+        "governed_breakout_put",
+        "governed_lower_band_reversion_call",
     ]
     timing_profile: Literal["reactive", "fast", "base", "slow", "patient", "governed_late"] = "base"
     hard_exit_minute: int
@@ -50,11 +53,36 @@ class StrategyConfig(BaseModel):
     source_strategy_id: str | None = None
     promotion_manifest_path: str | None = None
     governed_validation_packet_uri: str | None = None
+    promotion_status: str | None = None
+    min_fill_coverage: float | None = None
+    min_data_foundation_coverage: float | None = None
+    min_option_trade_count: int | None = None
+    min_net_pnl: float | None = None
+    min_test_net_pnl: float | None = None
+    profit_factor: float | None = None
     research_profile: str | None = None
     research_entry_timing_mode: str | None = None
     research_entry_offset_minutes: int | None = None
     research_exit_offset_minutes: int | None = None
     runner_semantics_status: str | None = None
+    stock_proxy_mode: Literal["breakout", "range_bound"] | None = None
+    entry_signal_mode: Literal["continuous", "daily_first", "rising_edge"] | None = None
+    min_minutes_since_open: int | None = None
+    max_minutes_since_open: int | None = None
+    min_trend_gap_pct: float | None = None
+    max_trend_gap_pct: float | None = None
+    min_range_pct: float | None = None
+    max_range_pct: float | None = None
+    max_midpoint_distance_pct: float | None = None
+    range_entry_side: Literal["center", "lower_band", "upper_band"] | None = None
+    range_edge_pct: float | None = None
+    liquidity_gate: Literal["tight", "loose"] | None = None
+    option_exit_mode: Literal["premium_target_stop"] | None = None
+    option_exit_profile: str | None = None
+    option_profit_target_pct: float | None = None
+    option_stop_loss_pct: float | None = None
+    min_option_hold_minutes: int | None = None
+    runner_hard_exit_mode: Literal["absolute_minute", "minutes_after_entry"] | None = None
 
     @field_validator("underlying_symbol", mode="before")
     @classmethod

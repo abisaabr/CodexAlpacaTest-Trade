@@ -19,9 +19,10 @@ from alpaca_lab.config import LabSettings
 from alpaca_lab.multi_ticker_portfolio.config import StrategyConfig
 
 DEFAULT_PROMOTION_MANIFEST = (
-    REPO_ROOT / "config" / "promotion_manifests" / "qqq_option_native_governed_validation_20260430.yaml"
+    REPO_ROOT / "config" / "promotion_manifests" / "qqq_regime_complete_governed_validation_20260505.yaml"
 )
-DEFAULT_OUTPUT_DIR = REPO_ROOT / "reports" / "gcp_research" / "qqq_option_native_paper_launch_pack_20260430"
+DEFAULT_PORTFOLIO_CONFIG = REPO_ROOT / "config" / "qqq_regime_complete_paper_portfolio.yaml"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "reports" / "gcp_research" / "qqq_regime_complete_paper_launch_pack_20260505"
 
 AUDIT_IDENTITY_FIELDS = (
     "candidate_variant_id",
@@ -85,7 +86,7 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> Path:
     for strategy in strategies:
         lines.append(
             "| {regime} | `{candidate}` | `{source}` | `{family}` | `{fill}` | `{test_pnl}` | `{status}` |".format(
-                regime=strategy.get("intended_regime"),
+                regime=strategy.get("intended_regime") or strategy.get("regime"),
                 candidate=strategy.get("candidate_variant_id"),
                 source=strategy.get("source_strategy_id"),
                 family=strategy.get("family"),
@@ -121,7 +122,7 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> Path:
             "",
             "```powershell",
             "python scripts\\build_qqq_paper_launch_pack.py",
-            "python scripts\\run_multi_ticker_portfolio_paper_trader.py --portfolio-config config\\multi_ticker_paper_portfolio.yaml --startup-preflight --no-submit-paper-orders",
+            "python scripts\\run_multi_ticker_portfolio_paper_trader.py --portfolio-config config\\qqq_regime_complete_paper_portfolio.yaml --startup-preflight --no-submit-paper-orders",
             "```",
             "",
             "Hard rule: this packet does not start trading, does not modify the live paper-runner manifest, and does not change risk policy.",
@@ -133,7 +134,18 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> Path:
     return path
 
 
-def _adapter_safety_checks() -> list[dict[str, Any]]:
+def _sample_option_symbol(strategy: dict[str, Any]) -> str:
+    option_type = str(strategy.get("directional_option_type") or "").lower()
+    if option_type not in {"call", "put"}:
+        for leg in strategy.get("legs") or []:
+            if str(leg.get("side")) == "long":
+                option_type = str(leg.get("option_type") or "").lower()
+                break
+    suffix = "C00425000" if option_type == "call" else "P00425000"
+    return f"QQQ260501{suffix}"
+
+
+def _adapter_safety_checks(strategies: list[dict[str, Any]]) -> list[dict[str, Any]]:
     broker = AlpacaBrokerAdapter(
         LabSettings(
             default_underlyings=("QQQ",),
@@ -141,40 +153,37 @@ def _adapter_safety_checks() -> list[dict[str, Any]]:
             alpaca_secret_key="paper-secret",
         )
     )
-    requests = [
-        broker.build_order_request(
-            symbol="QQQ260501C00425000",
-            side="buy",
-            strategy_name="qqq_bull_long_call_atm",
-            asset_class="option",
-            qty=1,
-            order_type="limit",
-            limit_price=2.50,
-            extra={"position_intent": "buy_to_open"},
-        ),
-        broker.build_multileg_order_request(
-            strategy_name="qqq_bear_call_credit_spread",
-            qty=1,
-            limit_price=-0.80,
-            legs=[
-                OrderLeg("QQQ260501C00430000", "sell", position_intent="sell_to_open"),
-                OrderLeg("QQQ260501C00435000", "buy", position_intent="buy_to_open"),
-            ],
-        ),
-        broker.build_multileg_order_request(
-            strategy_name="qqq_choppy_iron_condor",
-            qty=1,
-            limit_price=-1.10,
-            legs=[
-                OrderLeg("QQQ260501P00415000", "buy", position_intent="buy_to_open"),
-                OrderLeg("QQQ260501P00420000", "sell", position_intent="sell_to_open"),
-                OrderLeg("QQQ260501C00430000", "sell", position_intent="sell_to_open"),
-                OrderLeg("QQQ260501C00435000", "buy", position_intent="buy_to_open"),
-            ],
-        ),
-    ]
     results: list[dict[str, Any]] = []
-    for request in requests:
+    for strategy in strategies:
+        legs = strategy.get("legs") or []
+        if len(legs) <= 1:
+            leg = legs[0] if legs else {"side": "long"}
+            request = broker.build_order_request(
+                symbol=_sample_option_symbol(strategy),
+                side="buy" if str(leg.get("side")) == "long" else "sell",
+                strategy_name=str(strategy.get("name") or strategy.get("source_strategy_id")),
+                asset_class="option",
+                qty=1,
+                order_type="limit",
+                limit_price=2.50,
+                extra={"position_intent": "buy_to_open" if str(leg.get("side")) == "long" else "sell_to_open"},
+            )
+        else:
+            request = broker.build_multileg_order_request(
+                strategy_name=str(strategy.get("name") or strategy.get("source_strategy_id")),
+                qty=1,
+                limit_price=-0.80,
+                legs=[
+                    OrderLeg(
+                        _sample_option_symbol({"directional_option_type": leg.get("option_type")}),
+                        "buy" if str(leg.get("side")) == "long" else "sell",
+                        position_intent="buy_to_open"
+                        if str(leg.get("side")) == "long"
+                        else "sell_to_open",
+                    )
+                    for leg in legs
+                ],
+            )
         preview = broker.submit_order(request, dry_run=True)
         results.append(
             {
@@ -195,12 +204,28 @@ def build_launch_pack(*, promotion_manifest_path: Path, output_dir: Path) -> dic
 
     strategy_fields = set(StrategyConfig.model_fields)
     missing_audit_fields = [field for field in AUDIT_IDENTITY_FIELDS if field not in strategy_fields]
-    adapter_checks = _adapter_safety_checks()
+    schema_required = any("name" in strategy for strategy in strategies)
+    validated_strategy_count = 0
+    validation_errors: list[str] = []
+    if schema_required:
+        for index, strategy in enumerate(strategies, start=1):
+            try:
+                StrategyConfig.model_validate(strategy)
+                validated_strategy_count += 1
+            except Exception as exc:  # noqa: BLE001 - launch pack should report all schema blockers.
+                validation_errors.append(f"strategy[{index}]: {exc}")
+    adapter_checks = _adapter_safety_checks(strategies)
     eligible_count = sum(
         1
         for strategy in strategies
         if str(strategy.get("promotion_status")) == "eligible_for_promotion_review"
     )
+    runner_aligned_count = sum(
+        1
+        for strategy in strategies
+        if str(strategy.get("runner_semantics_status")) == "runner_aligned"
+    )
+    explicit_runner_semantics = any("runner_semantics_status" in strategy for strategy in strategies)
     checks = [
         {
             "name": "promotion_manifest_scope",
@@ -224,18 +249,40 @@ def build_launch_pack(*, promotion_manifest_path: Path, output_dir: Path) -> dic
             else f"Missing fields: {missing_audit_fields}",
         },
         {
+            "name": "strategy_schema_validation",
+            "status": "passed"
+            if (validated_strategy_count == len(strategies) or not schema_required)
+            else "failed",
+            "detail": (
+                f"Validated {validated_strategy_count}/{len(strategies)} strategies."
+                if schema_required and not validation_errors
+                else "Legacy promotion manifest is not a runner strategy manifest."
+                if not schema_required
+                else "; ".join(validation_errors[:3])
+            ),
+        },
+        {
+            "name": "runner_semantics_alignment",
+            "status": "passed"
+            if (runner_aligned_count == len(strategies) or not explicit_runner_semantics)
+            else "failed",
+            "detail": f"Found {runner_aligned_count}/{len(strategies)} strategies marked runner_aligned."
+            if explicit_runner_semantics
+            else "Legacy manifest has no explicit runner_semantics_status field.",
+        },
+        {
             "name": "broker_adapter_dry_run_order_shapes",
             "status": "passed"
             if all(result["status"] == "dry_run" for result in adapter_checks)
             else "failed",
-            "detail": "Bull long-call, bear call-credit-spread, and choppy iron-condor requests pass dry-run validation.",
+            "detail": "Governed strategy order requests pass dry-run validation.",
         },
     ]
     broker_free_ready = all(check["status"] == "passed" for check in checks)
     blockers = [
-        "Do not start broker-facing paper until a separate operator-approved runner PR wires these exact candidates into a controlled manifest.",
+        "Do not start broker-facing paper until an operator explicitly approves the controlled QQQ manifest for order submission.",
         "The current live multi-ticker manifest remains unchanged and still contains the broader 94-strategy book.",
-        "The governed research replay used fixed late-session entry/exit semantics; the production runner signals are not yet proven equivalent to that edge.",
+        "Run broker-free shadow validation first to compare production-runner signals against the governed research replay edge.",
         "Run startup preflight with --no-submit-paper-orders on the target GCP VM before any broker-facing attempt.",
     ]
     packet = {

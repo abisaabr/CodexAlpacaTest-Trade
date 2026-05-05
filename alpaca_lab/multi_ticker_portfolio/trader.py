@@ -33,6 +33,7 @@ from alpaca_lab.multi_ticker_portfolio.config import (
 )
 from alpaca_lab.multi_ticker_portfolio.signals import (
     build_stock_frame,
+    governed_research_signal_is_true,
     infer_symbol_regime,
     signal_is_true,
 )
@@ -192,6 +193,8 @@ class OpenTrade:
     research_entry_offset_minutes: int | None = None
     research_exit_offset_minutes: int | None = None
     runner_semantics_status: str | None = None
+    min_option_hold_minutes: int | None = None
+    runner_hard_exit_mode: str | None = None
     notes: list[str] = field(default_factory=list)
 
 
@@ -228,6 +231,8 @@ class CompletedTrade:
     research_entry_offset_minutes: int | None = None
     research_exit_offset_minutes: int | None = None
     runner_semantics_status: str | None = None
+    min_option_hold_minutes: int | None = None
+    runner_hard_exit_mode: str | None = None
     entry_total_fees: float = 0.0
     exit_total_fees: float = 0.0
     entry_regulatory_fees: float = 0.0
@@ -776,6 +781,8 @@ class MultiTickerPortfolioPaperTrader:
             "research_entry_offset_minutes": trade.research_entry_offset_minutes,
             "research_exit_offset_minutes": trade.research_exit_offset_minutes,
             "runner_semantics_status": trade.runner_semantics_status,
+            "min_option_hold_minutes": trade.min_option_hold_minutes,
+            "runner_hard_exit_mode": trade.runner_hard_exit_mode,
         }
 
     def _notify_lines(self, *lines: object) -> bool:
@@ -1502,6 +1509,8 @@ class MultiTickerPortfolioPaperTrader:
             "research_entry_offset_minutes": strategy.research_entry_offset_minutes,
             "research_exit_offset_minutes": strategy.research_exit_offset_minutes,
             "runner_semantics_status": strategy.runner_semantics_status,
+            "min_option_hold_minutes": strategy.min_option_hold_minutes,
+            "runner_hard_exit_mode": strategy.runner_hard_exit_mode,
             "signal_name": strategy.signal_name,
             "timing_profile": strategy.timing_profile,
             "current_minute": int(current_minute),
@@ -1715,6 +1724,8 @@ class MultiTickerPortfolioPaperTrader:
             research_entry_offset_minutes=strategy.research_entry_offset_minutes,
             research_exit_offset_minutes=strategy.research_exit_offset_minutes,
             runner_semantics_status=strategy.runner_semantics_status,
+            min_option_hold_minutes=strategy.min_option_hold_minutes,
+            runner_hard_exit_mode=strategy.runner_hard_exit_mode,
         )
         delta_shares, vega_dollars = self._expected_entry_greeks(open_trade)
         portfolio_delta_shares, portfolio_vega_dollars = self._current_portfolio_expected_greeks(session)
@@ -2237,11 +2248,18 @@ class MultiTickerPortfolioPaperTrader:
             + current_close_cashflow * int(trade.quantity)
             - exit_fee_breakdown.total_fees
         )
-        if current_pnl >= trade.profit_target_dollars * int(trade.quantity):
-            return True, "profit_target", current_pnl
-        if current_pnl <= -trade.stop_loss_dollars * int(trade.quantity):
-            return True, "stop_loss", current_pnl
-        if current_minute >= trade.hard_exit_minute:
+        hold_minutes = max(0, current_minute - int(trade.entry_minute))
+        min_hold_minutes = int(trade.min_option_hold_minutes or 0)
+        if hold_minutes >= min_hold_minutes:
+            if current_pnl >= trade.profit_target_dollars * int(trade.quantity):
+                return True, "profit_target", current_pnl
+            if current_pnl <= -trade.stop_loss_dollars * int(trade.quantity):
+                return True, "stop_loss", current_pnl
+        if str(trade.runner_hard_exit_mode or "absolute_minute") == "minutes_after_entry":
+            hard_exit_due = hold_minutes >= int(trade.hard_exit_minute)
+        else:
+            hard_exit_due = current_minute >= trade.hard_exit_minute
+        if hard_exit_due:
             return True, "time_exit", current_pnl
         return False, "", current_pnl
 
@@ -2388,6 +2406,8 @@ class MultiTickerPortfolioPaperTrader:
             research_entry_offset_minutes=trade.research_entry_offset_minutes,
             research_exit_offset_minutes=trade.research_exit_offset_minutes,
             runner_semantics_status=trade.runner_semantics_status,
+            min_option_hold_minutes=trade.min_option_hold_minutes,
+            runner_hard_exit_mode=trade.runner_hard_exit_mode,
             entry_total_fees=round(entry_fee_breakdown.total_fees, 4),
             exit_total_fees=round(exit_fee_breakdown.total_fees, 4),
             entry_regulatory_fees=round(entry_fee_breakdown.regulatory_fees, 4),
@@ -2706,6 +2726,8 @@ class MultiTickerPortfolioPaperTrader:
             research_entry_offset_minutes=trade.research_entry_offset_minutes,
             research_exit_offset_minutes=trade.research_exit_offset_minutes,
             runner_semantics_status=trade.runner_semantics_status,
+            min_option_hold_minutes=trade.min_option_hold_minutes,
+            runner_hard_exit_mode=trade.runner_hard_exit_mode,
             entry_total_fees=round(entry_fee_breakdown.total_fees, 4),
             exit_total_fees=round(exit_fee_breakdown.total_fees, 4),
             entry_regulatory_fees=round(entry_fee_breakdown.regulatory_fees, 4),
@@ -3415,11 +3437,29 @@ class MultiTickerPortfolioPaperTrader:
             if snapshot is None or snapshot.option_chain.empty:
                 continue
             for strategy in strategies:
-                if not signal_is_true(
-                    strategy.signal_name,
-                    snapshot.stock_frame,
-                    timing_profile=strategy.timing_profile,
-                ):
+                if strategy.signal_name.startswith("governed_"):
+                    signal_active = governed_research_signal_is_true(
+                        strategy.signal_name,
+                        snapshot.stock_frame,
+                        hard_exit_minute=strategy.hard_exit_minute,
+                        liquidity_gate=strategy.liquidity_gate,
+                        min_minutes_since_open=strategy.min_minutes_since_open,
+                        max_minutes_since_open=strategy.max_minutes_since_open,
+                        min_trend_gap_pct=strategy.min_trend_gap_pct,
+                        max_trend_gap_pct=strategy.max_trend_gap_pct,
+                        min_range_pct=strategy.min_range_pct,
+                        max_range_pct=strategy.max_range_pct,
+                        max_midpoint_distance_pct=strategy.max_midpoint_distance_pct,
+                        range_entry_side=strategy.range_entry_side,
+                        range_edge_pct=strategy.range_edge_pct,
+                    )
+                else:
+                    signal_active = signal_is_true(
+                        strategy.signal_name,
+                        snapshot.stock_frame,
+                        timing_profile=strategy.timing_profile,
+                    )
+                if not signal_active:
                     continue
                 attempt_id = f"{strategy.name}:{session.trade_date}:{snapshot.current_minute}:{time.time_ns()}"
                 open_trade, signal_event = self._evaluate_entry(
