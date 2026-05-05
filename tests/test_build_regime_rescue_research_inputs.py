@@ -76,3 +76,48 @@ def test_symbol_generic_bear_signal_window_refine_builds_strict_bear_grid(
     assert {row["parameters"]["breakout_window"] for row in rows} == {26, 34, 45}
     assert min(row["parameters"]["min_trend_gap_pct"] for row in rows) == 0.0009
     assert max(row["parameters"]["min_trend_gap_pct"] for row in rows) == 0.002
+
+
+def test_symbol_generic_full_regime_grid_includes_baseline_bull_rows(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "build_regime_rescue_research_inputs.py",
+            "--symbol",
+            "AAPL",
+            "--wave-id",
+            "test_wave",
+            "--output-dir",
+            str(tmp_path),
+            "--target-regimes",
+            "bull,bear,choppy",
+        ],
+    )
+    main()
+
+    manifest = json.loads((tmp_path / "aapl_regime_rescue_manifest.json").read_text())
+    rows = [
+        json.loads(line)
+        for line in (tmp_path / "aapl_regime_rescue_variants.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+
+    assert manifest["target_regimes"] == ["bear", "bull", "choppy"]
+    assert manifest["bull_profile_set"] == "baseline"
+    assert manifest["template_count"] == 172
+    assert len(rows) == 172
+    assert {row["symbol"] for row in rows} == {"AAPL"}
+    assert {row["source_strategy_id"].split("__")[1] for row in rows} == {
+        "bull",
+        "bear",
+        "choppy",
+    }
+    bull_rows = [
+        row for row in rows if row["source_strategy_id"].split("__")[1] == "bull"
+    ]
+    assert len(bull_rows) == 16
+    assert {row["parameters"]["stock_proxy_mode"] for row in bull_rows} == {"breakout"}

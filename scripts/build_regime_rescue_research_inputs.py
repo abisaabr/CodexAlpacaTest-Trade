@@ -14,13 +14,17 @@ from scripts.build_iwm_regime_rescue_research_inputs import (  # noqa: E402
     _csv_set,
     build_iwm_regime_rescue_rows,
 )
-from scripts.build_qqq_regime_research_inputs import _variant, build_queue  # noqa: E402
+from scripts.build_qqq_regime_research_inputs import (  # noqa: E402
+    _variant,
+    build_queue,
+    build_rows as build_regime_baseline_rows,
+)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Build a symbol-generic bear/choppy regime-rescue queue using the "
+            "Build a symbol-generic bull/bear/choppy regime-rescue queue using the "
             "current liquidity-first strategy templates. This is research-only "
             "input generation; it does not start trading or modify live manifests."
         )
@@ -30,6 +34,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--wave-id", required=True)
     parser.add_argument("--target-regimes", default="bear,choppy")
     parser.add_argument("--output-prefix", default="")
+    parser.add_argument(
+        "--bull-profile-set",
+        choices=("baseline",),
+        default="baseline",
+        help=(
+            "Bull grid to build when target-regimes includes bull. The baseline grid "
+            "uses the compact trend-following call/vertical/credit templates that "
+            "proved useful in the QQQ/SPY fill-friendly tournament."
+        ),
+    )
     parser.add_argument(
         "--choppy-families",
         default="",
@@ -61,6 +75,14 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     return parser.parse_args()
+
+
+def _bull_baseline_rows(*, symbol: str, wave_id: str) -> list[dict]:
+    return [
+        row
+        for row in build_regime_baseline_rows(symbol=symbol, wave_id=wave_id)
+        if "__bull__" in str(row.get("source_strategy_id", ""))
+    ]
 
 
 def _bear_signal_window_refine_rows(*, symbol: str, wave_id: str) -> list[dict]:
@@ -160,11 +182,16 @@ def main() -> None:
     target_regimes = _csv_set(args.target_regimes)
     choppy_families = _csv_set(args.choppy_families)
 
+    rows = []
+    non_bull_regimes = set(target_regimes)
+    if "bull" in non_bull_regimes:
+        rows.extend(_bull_baseline_rows(symbol=symbol, wave_id=args.wave_id))
+        non_bull_regimes.remove("bull")
+
     if args.bear_profile_set == "signal_window_refine":
-        rows = []
-        if "bear" in target_regimes:
+        if "bear" in non_bull_regimes:
             rows.extend(_bear_signal_window_refine_rows(symbol=symbol, wave_id=args.wave_id))
-        remaining_regimes = set(target_regimes) - {"bear"}
+        remaining_regimes = set(non_bull_regimes) - {"bear"}
         if remaining_regimes:
             rows.extend(
                 build_iwm_regime_rescue_rows(
@@ -176,19 +203,20 @@ def main() -> None:
                     choppy_profile_set=args.choppy_profile_set,
                 )
             )
-    else:
+    elif non_bull_regimes:
         rows = build_iwm_regime_rescue_rows(
             symbol=symbol,
             wave_id=args.wave_id,
-            target_regimes=target_regimes,
+            target_regimes=non_bull_regimes,
             choppy_signal_delay_bars=_csv_ints(args.choppy_signal_delay_bars),
             choppy_families=choppy_families or None,
             choppy_profile_set=args.choppy_profile_set,
-        )
+        ) + rows
     queue = build_queue(rows=rows, wave_id=args.wave_id)
     manifest = {
         "broker_facing": False,
         "bear_profile_set": args.bear_profile_set,
+        "bull_profile_set": args.bull_profile_set,
         "builder": "build_regime_rescue_research_inputs.py",
         "choppy_families": sorted(choppy_families),
         "choppy_profile_set": args.choppy_profile_set,
