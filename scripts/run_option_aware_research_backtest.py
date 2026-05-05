@@ -52,6 +52,8 @@ ENTRY_LOOKUP_AT_OR_AFTER = "first_bar_at_or_after_entry_within_lag"
 ENTRY_LOOKUP_AT_OR_AFTER_OR_ASOF = "first_bar_at_or_after_or_asof_entry_within_lag"
 EXIT_LOOKUP_AT_OR_AFTER = "first_bar_at_or_after_exit_within_lag"
 EXIT_LOOKUP_AT_OR_AFTER_OR_PRIOR = "first_bar_at_or_after_or_prior_exit_within_lag"
+OPTION_EXIT_STOCK_PROXY = "stock_proxy_exit"
+OPTION_EXIT_PREMIUM_TARGET_STOP = "premium_target_stop"
 STOCK_SESSION_FILTER_NONE = "none"
 STOCK_SESSION_FILTER_OPTION_RTH_SAME_DAY = "option_rth_same_day"
 OPTION_SESSION_TIMEZONE = "America/New_York"
@@ -1123,6 +1125,42 @@ def _credit_structure_spread_widths(legs: list[dict[str, Any]]) -> list[float]:
     return call_widths + put_widths
 
 
+def _leg_entry_price_after_slippage(leg: dict[str, Any], slippage_bps: float) -> float:
+    side = int(leg["side"])
+    close = float(leg["entry_bar"]["close"])
+    multiplier = 1.0 + slippage_bps / 10000.0 if side > 0 else 1.0 - slippage_bps / 10000.0
+    return close * multiplier
+
+
+def _leg_exit_price_after_slippage(leg: dict[str, Any], exit_bar: dict[str, Any], slippage_bps: float) -> float:
+    side = int(leg["side"])
+    close = float(exit_bar["close"])
+    multiplier = 1.0 - slippage_bps / 10000.0 if side > 0 else 1.0 + slippage_bps / 10000.0
+    return close * multiplier
+
+
+def _structure_entry_debit_per_unit(legs: list[dict[str, Any]], slippage_bps: float) -> float:
+    total = 0.0
+    for leg in legs:
+        side = int(leg["side"])
+        ratio = int(leg["ratio"])
+        total += side * _leg_entry_price_after_slippage(leg, slippage_bps) * ratio * 100.0
+    return total
+
+
+def _structure_exit_value_per_unit(
+    legs: list[dict[str, Any]],
+    exit_bars: list[dict[str, Any]],
+    slippage_bps: float,
+) -> float:
+    total = 0.0
+    for leg, exit_bar in zip(legs, exit_bars, strict=True):
+        side = int(leg["side"])
+        ratio = int(leg["ratio"])
+        total += side * _leg_exit_price_after_slippage(leg, exit_bar, slippage_bps) * ratio * 100.0
+    return total
+
+
 def _invalid_credit_structure(legs: list[dict[str, Any]], entry_debit_per_unit: float) -> bool:
     if entry_debit_per_unit >= 0:
         return False
@@ -1306,6 +1344,134 @@ def _exit_option_bar(
     return frame.iloc[-1].to_dict()
 
 
+def _planned_exit_bars(
+    *,
+    legs: list[dict[str, Any]],
+    option_bars: pd.DataFrame,
+    option_index: OptionResearchIndex | None,
+    exit_time: pd.Timestamp,
+    max_exit_lag: timedelta,
+    exit_lookup_mode: str,
+) -> tuple[list[dict[str, Any]], str | None]:
+    exit_bars: list[dict[str, Any]] = []
+    for leg in legs:
+        contract_symbol = str(leg["contract"]["symbol"])
+        exit_bar = _exit_option_bar(
+            option_bars=option_bars,
+            option_index=option_index,
+            contract_symbol=contract_symbol,
+            timestamp=exit_time,
+            max_lag=max_exit_lag,
+            lookup_mode=exit_lookup_mode,
+        )
+        if not exit_bar:
+            return [], contract_symbol
+        exit_bars.append(exit_bar)
+    return exit_bars, None
+
+
+def _candidate_option_exit_times(
+    *,
+    legs: list[dict[str, Any]],
+    option_bars: pd.DataFrame,
+    option_index: OptionResearchIndex | None,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+) -> list[pd.Timestamp]:
+    if not legs:
+        return []
+    primary_symbol = str(legs[0]["contract"]["symbol"])
+    if option_index:
+        frame = option_index.bars_by_symbol.get(primary_symbol)
+    else:
+        frame = option_bars[option_bars["symbol"].astype(str) == primary_symbol].sort_values("timestamp")
+    if frame is None or frame.empty:
+        return []
+    timestamps = pd.to_datetime(frame["timestamp"], utc=True)
+    mask = timestamps.ge(start) & timestamps.le(end)
+    return [pd.Timestamp(value) for value in timestamps.loc[mask].tolist()]
+
+
+def _float_parameter(parameters: dict[str, Any], key: str, default: float) -> float:
+    value = parameters.get(key)
+    if value in (None, ""):
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _resolve_option_exit_bars(
+    *,
+    legs: list[dict[str, Any]],
+    option_bars: pd.DataFrame,
+    option_index: OptionResearchIndex | None,
+    parameters: dict[str, Any],
+    entry_debit_per_unit: float,
+    risk_per_unit: float,
+    entry_time: pd.Timestamp,
+    planned_exit_time: pd.Timestamp,
+    max_exit_lag: timedelta,
+    exit_lookup_mode: str,
+    slippage_bps: float,
+) -> tuple[list[dict[str, Any]], str, str | None]:
+    option_exit_mode = str(parameters.get("option_exit_mode") or OPTION_EXIT_STOCK_PROXY).lower()
+    if option_exit_mode == OPTION_EXIT_PREMIUM_TARGET_STOP:
+        entry_credit = max(-entry_debit_per_unit, 0.0)
+        if entry_credit > 0:
+            profit_threshold = entry_credit * _float_parameter(
+                parameters, "option_profit_target_pct", 0.35
+            )
+            credit_stop = entry_credit * _float_parameter(
+                parameters, "option_stop_loss_credit_multiple", 1.25
+            )
+            risk_stop = risk_per_unit * _float_parameter(parameters, "option_stop_loss_risk_pct", 0.35)
+            loss_threshold = -min(credit_stop, risk_stop)
+        else:
+            profit_threshold = risk_per_unit * _float_parameter(
+                parameters, "option_profit_target_pct", 0.35
+            )
+            loss_threshold = -risk_per_unit * _float_parameter(
+                parameters, "option_stop_loss_pct", 0.25
+            )
+        min_hold_minutes = _float_parameter(parameters, "min_option_hold_minutes", 1.0)
+        scan_start = entry_time + timedelta(minutes=min_hold_minutes)
+        for timestamp in _candidate_option_exit_times(
+            legs=legs,
+            option_bars=option_bars,
+            option_index=option_index,
+            start=scan_start,
+            end=planned_exit_time,
+        ):
+            exit_bars, missing_symbol = _planned_exit_bars(
+                legs=legs,
+                option_bars=option_bars,
+                option_index=option_index,
+                exit_time=timestamp,
+                max_exit_lag=timedelta(0),
+                exit_lookup_mode=EXIT_LOOKUP_AT_OR_AFTER,
+            )
+            if missing_symbol:
+                continue
+            exit_value = _structure_exit_value_per_unit(legs, exit_bars, slippage_bps)
+            pnl_per_unit = exit_value - entry_debit_per_unit
+            if pnl_per_unit >= profit_threshold:
+                return exit_bars, "option_profit_target", None
+            if pnl_per_unit <= loss_threshold:
+                return exit_bars, "option_stop_loss", None
+
+    exit_bars, missing_symbol = _planned_exit_bars(
+        legs=legs,
+        option_bars=option_bars,
+        option_index=option_index,
+        exit_time=planned_exit_time,
+        max_exit_lag=max_exit_lag,
+        exit_lookup_mode=exit_lookup_mode,
+    )
+    return exit_bars, OPTION_EXIT_STOCK_PROXY, missing_symbol
+
+
 def _trade_print_count(
     *,
     option_trades: pd.DataFrame,
@@ -1420,6 +1586,22 @@ def _stock_trade_cache_key(variant: dict[str, Any], *, stock_session_filter: str
         "liquidity_gate": str(timing["liquidity_gate"]),
         "stock_session_filter": stock_session_filter,
     }
+    for key in (
+        "stock_proxy_mode",
+        "min_minutes_since_open",
+        "max_minutes_since_open",
+        "min_trend_gap_pct",
+        "max_trend_gap_pct",
+        "min_range_pct",
+        "max_range_pct",
+        "max_midpoint_distance_pct",
+        "entry_signal_mode",
+        "cooldown_bars",
+        "max_signals_per_day",
+        "timeout_only_stock_proxy",
+    ):
+        if key in parameters:
+            payload[key] = parameters[key]
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
@@ -1572,6 +1754,7 @@ def _option_rows_for_candidate(
     option_type = str(queue_item.get("directional_option_type") or "").lower()
     symbol = str(queue_item.get("symbol") or "").upper()
     identity = _candidate_identity(queue_item, variant)
+    parameters = _variant_parameters(queue_item, variant)
     failure_rows: list[dict[str, Any]] = []
 
     def failure_row(
@@ -1649,76 +1832,9 @@ def _option_rows_for_candidate(
             )
             continue
 
-        exit_bars: list[dict[str, Any]] = []
-        missing_exit_symbol = ""
-        for leg_item in legs:
-            contract_symbol = str(leg_item["contract"]["symbol"])
-            exit_bar = _exit_option_bar(
-                option_bars=option_bars,
-                option_index=option_index,
-                contract_symbol=contract_symbol,
-                timestamp=exit_time,
-                max_lag=max_exit_lag,
-                lookup_mode=exit_lookup_mode,
-            )
-            if not exit_bar:
-                missing_exit_symbol = contract_symbol
-                break
-            exit_bars.append(exit_bar)
-        if len(exit_bars) != len(legs):
-            missing_counts["no_exit_bar"] += 1
-            first_entry = legs[0]["entry_bar"] if legs else {}
-            failure_rows.append(
-                failure_row(
-                    reason="no_exit_bar",
-                    trade=trade,
-                    contract_symbol=missing_exit_symbol,
-                    lookup_time=exit_time,
-                    extra={
-                        "option_entry_time": str(first_entry.get("timestamp", "")),
-                        "option_structure": option_structure,
-                    },
-                )
-            )
-            continue
-
-        leg_details: list[dict[str, Any]] = []
-        entry_debit_per_unit = 0.0
-        exit_value_per_unit = 0.0
-        total_contract_units = 0
-        for leg_item, exit_bar in zip(legs, exit_bars, strict=True):
-            side = int(leg_item["side"])
-            ratio = int(leg_item["ratio"])
-            raw_entry = float(leg_item["entry_bar"]["close"])
-            raw_exit = float(exit_bar["close"])
-            entry_price = raw_entry * (
-                1.0 + side * slippage_bps / 10000.0
-                if side > 0
-                else 1.0 - slippage_bps / 10000.0
-            )
-            exit_price = raw_exit * (
-                1.0 - side * slippage_bps / 10000.0
-                if side > 0
-                else 1.0 + slippage_bps / 10000.0
-            )
-            entry_debit_per_unit += side * entry_price * ratio * 100.0
-            exit_value_per_unit += side * exit_price * ratio * 100.0
-            total_contract_units += abs(ratio)
-            leg_details.append(
-                {
-                    "role": leg_item["role"],
-                    "side": side,
-                    "ratio": ratio,
-                    "contract_symbol": str(leg_item["contract"]["symbol"]),
-                    "strike": _contract_strike(leg_item["contract"]),
-                    "entry_price_after_slippage": round(entry_price, 4),
-                    "exit_price_after_slippage": round(exit_price, 4),
-                    "entry_time": str(leg_item["entry_bar"]["timestamp"]),
-                    "exit_time": str(exit_bar["timestamp"]),
-                    "relative_strike_step": leg_item["contract"].get("relative_strike_step"),
-                    "dte": leg_item["contract"].get("dte"),
-                }
-            )
+        leg_contract_symbols = ";".join(str(leg["contract"]["symbol"]) for leg in legs)
+        entry_debit_per_unit = _structure_entry_debit_per_unit(legs, slippage_bps)
+        total_contract_units = sum(abs(int(leg["ratio"])) for leg in legs)
         if _invalid_credit_structure(legs, entry_debit_per_unit):
             missing_counts["invalid_credit_structure"] = (
                 missing_counts.get("invalid_credit_structure", 0) + 1
@@ -1727,7 +1843,7 @@ def _option_rows_for_candidate(
                 failure_row(
                     reason="invalid_credit_structure",
                     trade=trade,
-                    contract_symbol=";".join(item["contract_symbol"] for item in leg_details),
+                    contract_symbol=leg_contract_symbols,
                     lookup_time=entry_time,
                     extra={
                         "entry_debit_per_unit": round(entry_debit_per_unit, 4),
@@ -1748,7 +1864,7 @@ def _option_rows_for_candidate(
                 failure_row(
                     reason="too_expensive",
                     trade=trade,
-                    contract_symbol=";".join(item["contract_symbol"] for item in leg_details),
+                    contract_symbol=leg_contract_symbols,
                     lookup_time=entry_time,
                     extra={
                         "entry_debit_per_unit": round(entry_debit_per_unit, 4),
@@ -1759,6 +1875,60 @@ def _option_rows_for_candidate(
                 )
             )
             continue
+        option_entry_time = max(pd.Timestamp(leg["entry_bar"]["timestamp"]) for leg in legs)
+        exit_bars, option_exit_reason, missing_exit_symbol = _resolve_option_exit_bars(
+            legs=legs,
+            option_bars=option_bars,
+            option_index=option_index,
+            parameters=parameters,
+            entry_debit_per_unit=entry_debit_per_unit,
+            risk_per_unit=risk_per_unit,
+            entry_time=option_entry_time,
+            planned_exit_time=exit_time,
+            max_exit_lag=max_exit_lag,
+            exit_lookup_mode=exit_lookup_mode,
+            slippage_bps=slippage_bps,
+        )
+        if len(exit_bars) != len(legs):
+            missing_counts["no_exit_bar"] += 1
+            first_entry = legs[0]["entry_bar"] if legs else {}
+            failure_rows.append(
+                failure_row(
+                    reason="no_exit_bar",
+                    trade=trade,
+                    contract_symbol=missing_exit_symbol,
+                    lookup_time=exit_time,
+                    extra={
+                        "option_entry_time": str(first_entry.get("timestamp", "")),
+                        "option_exit_reason": option_exit_reason,
+                        "option_structure": option_structure,
+                    },
+                )
+            )
+            continue
+
+        leg_details: list[dict[str, Any]] = []
+        exit_value_per_unit = _structure_exit_value_per_unit(legs, exit_bars, slippage_bps)
+        for leg_item, exit_bar in zip(legs, exit_bars, strict=True):
+            side = int(leg_item["side"])
+            ratio = int(leg_item["ratio"])
+            entry_price = _leg_entry_price_after_slippage(leg_item, slippage_bps)
+            exit_price = _leg_exit_price_after_slippage(leg_item, exit_bar, slippage_bps)
+            leg_details.append(
+                {
+                    "role": leg_item["role"],
+                    "side": side,
+                    "ratio": ratio,
+                    "contract_symbol": str(leg_item["contract"]["symbol"]),
+                    "strike": _contract_strike(leg_item["contract"]),
+                    "entry_price_after_slippage": round(entry_price, 4),
+                    "exit_price_after_slippage": round(exit_price, 4),
+                    "entry_time": str(leg_item["entry_bar"]["timestamp"]),
+                    "exit_time": str(exit_bar["timestamp"]),
+                    "relative_strike_step": leg_item["contract"].get("relative_strike_step"),
+                    "dte": leg_item["contract"].get("dte"),
+                }
+            )
         fees = fee_per_contract * quantity * 2.0 * total_contract_units
         pnl = (exit_value_per_unit - entry_debit_per_unit) * quantity - fees
         primary_leg = leg_details[0]
@@ -1791,6 +1961,8 @@ def _option_rows_for_candidate(
                 "option_pnl": round(pnl, 4),
                 "option_return_pct": round(pnl / (risk_per_unit * quantity), 6),
                 "stock_exit_reason": trade.get("exit_reason"),
+                "option_exit_reason": option_exit_reason,
+                "option_exit_mode": str(parameters.get("option_exit_mode") or OPTION_EXIT_STOCK_PROXY),
                 "contract_selection_method": contract_selection_method,
                 "contract_dte": ";".join(str(item["dte"]) for item in leg_details),
                 "contract_relative_strike_step": ";".join(
@@ -2019,6 +2191,7 @@ def build_option_aware_backtest(
         all_failure_rows.extend(failure_rows)
         economics = _summarize_trade_rows(rows)
         split = _split_summary(rows, test_date_count=test_date_count)
+        parameters = _variant_parameters(queue_item, variant)
         summary = {
             "candidate_variant_id": variant_id,
             "symbol": queue_item.get("symbol"),
@@ -2065,6 +2238,7 @@ def build_option_aware_backtest(
             "live_manifest_effect": "none",
             "risk_policy_effect": "none",
             "contract_selection_method": contract_selection_method,
+            "option_exit_mode": str(parameters.get("option_exit_mode") or OPTION_EXIT_STOCK_PROXY),
             "test_date_count": int(test_date_count),
             "contract_selection_lookahead": (
                 "entry_window_only"

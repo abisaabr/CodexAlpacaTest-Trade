@@ -21,6 +21,8 @@ from scripts.run_option_aware_research_backtest import (
     _option_structure_legs,
     _path_matches_symbol_filter,
     _recommendation,
+    _resolve_option_exit_bars,
+    _stock_trade_cache_key,
     _structure_risk_per_unit,
     build_option_aware_backtest,
 )
@@ -683,6 +685,92 @@ def test_exit_lookup_defaults_to_strict_at_or_after() -> None:
         max_lag=timedelta(minutes=5),
         lookup_mode=EXIT_LOOKUP_AT_OR_AFTER_OR_PRIOR,
     )["close"] == 2.50
+
+
+def test_option_native_exit_closes_credit_spread_at_profit_target() -> None:
+    entry_time = pd.Timestamp("2026-05-01T14:00:00Z")
+    target_time = pd.Timestamp("2026-05-01T14:01:00Z")
+    planned_exit = pd.Timestamp("2026-05-01T14:05:00Z")
+    option_bars = pd.DataFrame(
+        {
+            "symbol": [
+                "QQQ260515C00101000",
+                "QQQ260515C00102000",
+                "QQQ260515C00101000",
+                "QQQ260515C00102000",
+            ],
+            "timestamp": [target_time, target_time, planned_exit, planned_exit],
+            "close": [0.60, 0.20, 1.30, 0.40],
+        }
+    )
+    option_index = _build_option_research_index(
+        contracts=pd.DataFrame(),
+        option_bars=option_bars,
+        option_trades=pd.DataFrame(),
+    )
+    legs = [
+        {
+            "role": "short_call",
+            "side": -1,
+            "ratio": 1,
+            "contract": {"symbol": "QQQ260515C00101000", "strike_price": 101.0},
+            "entry_bar": {"timestamp": entry_time, "close": 1.00},
+        },
+        {
+            "role": "long_call_wing",
+            "side": 1,
+            "ratio": 1,
+            "contract": {"symbol": "QQQ260515C00102000", "strike_price": 102.0},
+            "entry_bar": {"timestamp": entry_time, "close": 0.30},
+        },
+    ]
+
+    exit_bars, reason, missing_symbol = _resolve_option_exit_bars(
+        legs=legs,
+        option_bars=option_bars,
+        option_index=option_index,
+        parameters={
+            "option_exit_mode": "premium_target_stop",
+            "option_profit_target_pct": 0.30,
+            "option_stop_loss_credit_multiple": 2.0,
+            "option_stop_loss_risk_pct": 1.0,
+            "min_option_hold_minutes": 1,
+        },
+        entry_debit_per_unit=-70.0,
+        risk_per_unit=30.0,
+        entry_time=entry_time,
+        planned_exit_time=planned_exit,
+        max_exit_lag=timedelta(minutes=1),
+        exit_lookup_mode=EXIT_LOOKUP_AT_OR_AFTER,
+        slippage_bps=0.0,
+    )
+
+    assert missing_symbol is None
+    assert reason == "option_profit_target"
+    assert [pd.Timestamp(row["timestamp"]) for row in exit_bars] == [target_time, target_time]
+
+
+def test_stock_trade_cache_key_includes_entry_window_filters() -> None:
+    base = {
+        "variant_id": "qqq_a",
+        "symbol": "QQQ",
+        "source_strategy_id": "qqq__bull__call__single_leg_repair",
+        "parameters": {
+            "timing_profile": "morning_trend",
+            "hard_exit_minute": 75,
+            "stop_loss_multiple": 0.1,
+            "profit_target_multiple": 0.26,
+            "min_minutes_since_open": 15,
+        },
+    }
+    shifted = json.loads(json.dumps(base))
+    shifted["parameters"]["min_minutes_since_open"] = 120
+
+    assert _stock_trade_cache_key(
+        base, stock_session_filter=STOCK_SESSION_FILTER_OPTION_RTH_SAME_DAY
+    ) != _stock_trade_cache_key(
+        shifted, stock_session_filter=STOCK_SESSION_FILTER_OPTION_RTH_SAME_DAY
+    )
 
 
 def test_stock_session_filter_keeps_only_same_day_option_rth_trades() -> None:
