@@ -804,44 +804,74 @@ def _option_structure_legs(
         )
 
     if "iron_butterfly" in family:
-        call_contract, call_entry, status = base("call")
-        if status != "selected" or not call_contract or not call_entry:
-            return [], "iron_butterfly", status
-        put_contract, put_entry, status = _select_matching_body_contract_with_entry(
+        call_frame = _contract_frame_for_type(
             contracts=contracts,
-            option_bars=option_bars,
             option_index=option_index,
             symbol=symbol,
-            option_type="put",
+            option_type="call",
             trade_date=trade_date,
-            base_contract=call_contract,
-            entry_time=entry_time,
-            max_lag=max_entry_lag,
-            entry_lookup_mode=entry_lookup_mode,
-            max_entry_staleness=max_entry_staleness,
         )
-        if status != "selected" or not put_contract or not put_entry:
-            return [], "iron_butterfly", status
-        call_wing, call_wing_entry, status = wing(
-            "call", call_contract, higher=True, width_steps=vertical_width
-        )
-        if status != "selected" or not call_wing or not call_wing_entry:
-            return [], "iron_butterfly", status
-        put_wing, put_wing_entry, status = wing(
-            "put", put_contract, higher=False, width_steps=vertical_width
-        )
-        if status != "selected" or not put_wing or not put_wing_entry:
-            return [], "iron_butterfly", status
-        return (
-            [
+        if call_frame.empty:
+            return [], "iron_butterfly", "no_selected_contract"
+        choices: list[tuple[tuple[float, ...], str, list[dict[str, Any]]]] = []
+        statuses: list[str] = []
+        for call_contract in call_frame.to_dict("records"):
+            call_entry = _contract_entry_bar(
+                contract=call_contract,
+                option_bars=option_bars,
+                option_index=option_index,
+                entry_time=entry_time,
+                max_lag=max_entry_lag,
+                entry_lookup_mode=entry_lookup_mode,
+                max_entry_staleness=max_entry_staleness,
+            )
+            if not call_entry:
+                statuses.append("no_entry_bar")
+                continue
+            put_contract, put_entry, status = _select_matching_body_contract_with_entry(
+                contracts=contracts,
+                option_bars=option_bars,
+                option_index=option_index,
+                symbol=symbol,
+                option_type="put",
+                trade_date=trade_date,
+                base_contract=call_contract,
+                entry_time=entry_time,
+                max_lag=max_entry_lag,
+                entry_lookup_mode=entry_lookup_mode,
+                max_entry_staleness=max_entry_staleness,
+            )
+            if status != "selected" or not put_contract or not put_entry:
+                statuses.append(status)
+                continue
+            call_wing, call_wing_entry, status = wing(
+                "call", call_contract, higher=True, width_steps=vertical_width
+            )
+            if status != "selected" or not call_wing or not call_wing_entry:
+                statuses.append(status)
+                continue
+            put_wing, put_wing_entry, status = wing(
+                "put", put_contract, higher=False, width_steps=vertical_width
+            )
+            if status != "selected" or not put_wing or not put_wing_entry:
+                statuses.append(status)
+                continue
+            legs = [
                 _leg(role="short_call_body", side=-1, ratio=1, contract=call_contract, entry_bar=call_entry),
                 _leg(role="short_put_body", side=-1, ratio=1, contract=put_contract, entry_bar=put_entry),
                 _leg(role="long_call_wing", side=1, ratio=1, contract=call_wing, entry_bar=call_wing_entry),
                 _leg(role="long_put_wing", side=1, ratio=1, contract=put_wing, entry_bar=put_wing_entry),
-            ],
-            "iron_butterfly",
-            "selected",
-        )
+            ]
+            volume = float(call_entry.get("volume") or 0.0) + float(put_entry.get("volume") or 0.0)
+            abs_step = abs(float(call_contract.get("relative_strike_step") or 0.0))
+            dte = float(call_contract.get("dte") or 999.0)
+            strike = _contract_strike(call_contract)
+            choices.append(((-volume, abs_step, dte, strike), str(call_contract["symbol"]), legs))
+        if not choices:
+            status = "no_entry_bar" if statuses and all(item == "no_entry_bar" for item in statuses) else "no_selected_contract"
+            return [], "iron_butterfly", status
+        choices.sort(key=lambda item: (item[0], item[1]))
+        return choices[0][2], "iron_butterfly", "selected"
 
     if "debit_call_vertical" in family or "debit_put_vertical" in family:
         option_type = "put" if "put" in family else "call"
