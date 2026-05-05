@@ -1,6 +1,7 @@
 param(
     [string]$WaveId = "ticker365_iwm_regime_rescue_20260505T1700Z",
     [string]$InstanceSuffix = "20260505r1",
+    [int]$StartCandidateIndex = 1,
     [int]$CandidateCountPerWorker = 8,
     [int]$TotalCandidates = 156,
     [int]$TopN = 156,
@@ -49,6 +50,9 @@ $Zones = @(
 )
 if ($Zones.Count -eq 0) {
     throw "at least one zone is required"
+}
+if ($StartCandidateIndex -lt 1 -or $StartCandidateIndex -gt $TotalCandidates) {
+    throw "StartCandidateIndex must be between 1 and TotalCandidates"
 }
 
 function Invoke-Gcloud {
@@ -144,7 +148,7 @@ Invoke-Gcloud @("storage", "cp", $QueuePath, $InputQueueUri, "--project", $Proje
 Invoke-Gcloud @("storage", "cp", $ManifestPath, "$GcsPrefix/inputs/iwm_regime_rescue_manifest.json", "--project", $Project)
 
 $launchRows = @()
-for ($candidateStart = 1; $candidateStart -le $TotalCandidates; $candidateStart += $CandidateCountPerWorker) {
+for ($candidateStart = $StartCandidateIndex; $candidateStart -le $TotalCandidates; $candidateStart += $CandidateCountPerWorker) {
     $candidateEnd = [Math]::Min($candidateStart + $CandidateCountPerWorker - 1, $TotalCandidates)
     $zone = $Zones[(($launchRows.Count) % $Zones.Count)]
     $startSlug = "{0:D3}" -f $candidateStart
@@ -242,4 +246,5 @@ foreach ($row in $launchRows) {
 
 Write-Output "wave_id=$WaveId"
 Write-Output "gcs_prefix=$GcsPrefix"
+Write-Output "start_candidate_index=$StartCandidateIndex"
 Write-Output "launched=$launched"
