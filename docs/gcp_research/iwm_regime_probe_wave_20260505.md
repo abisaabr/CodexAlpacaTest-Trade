@@ -147,14 +147,32 @@ Additional choppy premium lane launched:
 - Launch rows: `gs://codexalpaca-control-us/research_results/ticker365_iwm_choppy_premium_exit_20260505T1135Z/ops/iwm_choppy_premium_33_64_launch_rows.json`
 - Launch log: `gs://codexalpaca-control-us/research_results/ticker365_iwm_choppy_premium_exit_20260505T1135Z/ops/iwm_choppy_premium_33_64_launch_log.txt`
 
+Choppy premium `33-64` result:
+
+- No eligible candidate.
+- Best full-period net PnL remained negative.
+- Many defined-risk structures also failed the `0.90` fill gate because multi-leg same-structure execution is harder than the repaired single-leg path.
+- Best observed choppy premium candidate by full-period PnL:
+  - Candidate: `portfolio12h__iwm__choppy__call__iron_condor__ee3ea3ecae7051`
+  - Net PnL: `-12174.878`
+  - Test Net PnL: `370.809`
+  - Fill coverage: `0.6939`
+  - Blockers: `fill_coverage_below_0.90`, `min_net_pnl_not_positive`
+- Cleanup log: `gs://codexalpaca-control-us/research_results/ticker365_iwm_choppy_premium_exit_20260505T1135Z/ops/ops_cleanup_completed_iwm_choppy_premium_workers_1.txt`
+
+Institutional conclusion:
+
+- IWM is not regime-complete.
+- IWM has one governed-validation-review eligible bull candidate only.
+- IWM should not be added to the paper portfolio yet.
+- Further IWM work should be an IWM-specific bear/choppy redesign wave, not more blind breadth from the current QQQ/SPY templates.
+
 ## Next Steps
 
 1. Continue monitoring worker status JSON under each wave's `workers/` prefix.
 2. Delete only completed terminated research workers after their GCS `status.json` says `phase=completed`.
-3. Evaluate the choppy premium `33-64` lane before launching more choppy breadth.
-4. If choppy premium `33-64` finds a candidate, launch `65-68`; otherwise switch to IWM-specific choppy redesign.
-5. Bear needs IWM-specific redesign; broad bear candidates `1-32` did not produce an eligible candidate.
-6. Aggregate all completed IWM worker promotion packets into a combined IWM regime packet only after an eligible bear/choppy candidate appears.
-7. If one bull, one bear, and one choppy strategy are eligible, create an IWM governed-validation runner manifest.
-8. If IWM reaches all-regime review, build a QQQ+SPY+IWM controlled validation portfolio.
-9. Do not start broker-facing paper or submit paper orders without explicit operator approval.
+3. Do not launch choppy premium `65-68`; `33-64` was sufficiently negative to stop blind breadth.
+4. Build a targeted IWM-specific bear/choppy redesign wave if IWM remains a priority.
+5. Aggregate IWM only as a bull-only research finding unless a future redesign produces bear/choppy eligibility.
+6. Keep the paper-ready portfolio focused on QQQ first, then QQQ+SPY.
+7. Do not start broker-facing paper or submit paper orders without explicit operator approval.
