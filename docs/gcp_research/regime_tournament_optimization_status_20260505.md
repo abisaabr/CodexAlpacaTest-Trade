@@ -56,7 +56,7 @@ Top examples:
 | IWM | bear | single_leg_repair | 1419.675 | 1689.620 | 0.9056 | 163 |
 | IWM | choppy | single_leg_repair | 2675.750 | 284.970 | 1.0000 | 57 |
 
-## Active GCP Wave
+## AAPL/NVDA Wave Result
 
 - Wave ID: `aapl_nvda_full_regime_rescue_20260505T2245Z`
 - GCS root: `gs://codexalpaca-control-us/research_results/aapl_nvda_full_regime_rescue_20260505T2245Z/`
@@ -72,10 +72,35 @@ Top examples:
 
 Launch state at this handoff:
 
-- AAPL shards `1-21`, `22-42`, and `43-63` completed.
-- AAPL shards `64-84`, `85-105`, `106-126`, `127-147`, and `148-166` are running.
-- NVDA shards `1-21`, `22-42`, `43-63`, `64-84`, `85-105`, `106-126`, `127-147`, and `148-166` are running or staging.
-- A quota cleanup deleted 38 terminated `regime-rescue` instances only. Running workers were not touched.
+Result:
+
+- AAPL packet: `reports/gcp_research/aapl_nvda_full_regime_rescue_20260505T2245Z/aggregate/aapl_promotion_packet/research_promotion_review_packet.json`
+- NVDA packet: `reports/gcp_research/aapl_nvda_full_regime_rescue_20260505T2245Z/aggregate/nvda_promotion_packet/research_promotion_review_packet.json`
+- Combined packet: `reports/gcp_research/aapl_nvda_full_regime_rescue_20260505T2245Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- GCS combined packet: `gs://codexalpaca-control-us/research_results/aapl_nvda_full_regime_rescue_20260505T2245Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json`
+- Decision: `research_only_blocked_regime_incomplete`
+- AAPL: `498` candidates, `6` eligible, eligible regimes `bull`, missing regimes `bear,choppy`.
+- NVDA: `498` candidates, `6` eligible, eligible regimes `bull`, missing regimes `bear,choppy`.
+- Combined: `996` candidates, `12` eligible, eligible regimes `bull`, missing regimes `bear,choppy`.
+- Dominant blockers: full-period net PnL and test net PnL, not fill coverage.
+- AAPL blocker counts: `fill_coverage_below_0.90=19`, `min_net_pnl_not_positive=491`, `test_net_pnl_not_above_0=446`.
+- NVDA blocker counts: `fill_coverage_below_0.90=24`, `min_net_pnl_not_positive=489`, `test_net_pnl_not_above_0=455`.
+- Completed AAPL/NVDA workers self-terminated. The 16 terminated `regime-rescue` instances were deleted after outputs were uploaded and mirrored.
+
+## Active GCP Wave
+
+- Wave ID: `amd_amzn_full_regime_rescue_20260505T2315Z`
+- GCS root: `gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/`
+- Source commit: `ae7b37a`
+- Symbols: `AMD`, `AMZN`
+- Grid: `bull,bear,choppy`
+- Per-symbol candidates: `166`
+- Candidate shard size: `21`
+- Selector: `entry_liquidity_first_research_only`
+- Lag profiles: `0:60,10:60,30:120`
+- Bear profile set: `signal_window_refine`
+- Choppy profile set: `timewindow_quality_filter`
+- Launch state: all 8 AMD shards and all 8 AMZN shards launched.
 
 ## Data Coverage Inventory
 
@@ -100,7 +125,7 @@ QQQ uses the separate 365d next-trading-day 5x5 prefix:
 
 ## Next Loop
 
-1. Monitor `aapl_nvda_full_regime_rescue_20260505T2245Z` until all 16 shards complete.
+1. Monitor `amd_amzn_full_regime_rescue_20260505T2315Z` until all 16 shards complete.
 2. Pull worker artifacts locally and build strict portfolio reports plus promotion-review packets per symbol and combined.
 3. If AAPL/NVDA are regime-complete, record them as governed-review candidates only.
 4. If a regime is missing, classify the dominant blocker: fill coverage, full-period economics, test PnL, or trade count.
