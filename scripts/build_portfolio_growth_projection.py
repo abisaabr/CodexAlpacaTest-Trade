@@ -24,11 +24,38 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument("--portfolio-report-json", required=True)
+    parser.add_argument(
+        "--additional-portfolio-report-json",
+        action="append",
+        default=[],
+        help=(
+            "Additional portfolio report, promotion packet, or rollup JSON carrying "
+            "a capital_plan. May be repeated for combined portfolio projections."
+        ),
+    )
     parser.add_argument("--replay-root", required=True)
+    parser.add_argument(
+        "--additional-replay-root",
+        action="append",
+        default=[],
+        help=(
+            "Additional replay root containing option_aware_trade_economics.csv files. "
+            "May be repeated for combined portfolio projections."
+        ),
+    )
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--initial-cash", type=float, default=25_000.0)
     parser.add_argument("--target-equity", type=float, default=300_000.0)
     parser.add_argument("--backtest-allocation-fraction", type=float, default=0.05)
+    parser.add_argument(
+        "--max-symbol-weight",
+        type=float,
+        default=None,
+        help=(
+            "Optional cap applied after merging capital plans. Candidate weights are "
+            "rescaled within each symbol and research_only_dollars are recomputed."
+        ),
+    )
     parser.add_argument("--annual-trading-days", type=int, default=252)
     parser.add_argument("--projection-years", type=int, default=5)
     parser.add_argument("--bootstrap-runs", type=int, default=2000)
@@ -73,7 +100,7 @@ def _profile_name(path: Path) -> str:
 def _load_trade_economics(replay_root: Path) -> pd.DataFrame:
     frames: list[pd.DataFrame] = []
     for path in sorted(replay_root.rglob("option_aware_trade_economics.csv")):
-        frame = pd.read_csv(path)
+        frame = pd.read_csv(path, low_memory=False)
         if frame.empty:
             continue
         frame["aggregate_profile"] = _profile_name(path)
@@ -95,6 +122,36 @@ def _load_trade_economics(replay_root: Path) -> pd.DataFrame:
         raise ValueError("Trade economics files must include trade_date")
     trades["trade_date"] = pd.to_datetime(trades["trade_date"], errors="coerce").dt.date
     trades = trades.dropna(subset=["trade_date", "candidate_variant_id", "option_pnl"])
+    dedupe_columns = [
+        column
+        for column in [
+            "candidate_variant_id",
+            "aggregate_profile",
+            "symbol",
+            "contract_symbol",
+            "option_entry_time",
+            "option_exit_time",
+            "option_pnl",
+            "quantity",
+        ]
+        if column in trades.columns
+    ]
+    if dedupe_columns:
+        trades = trades.drop_duplicates(subset=dedupe_columns)
+    return trades
+
+
+def _load_trade_economics_roots(replay_roots: list[Path]) -> pd.DataFrame:
+    frames = []
+    for replay_root in replay_roots:
+        frame = _load_trade_economics(replay_root)
+        if frame.empty:
+            continue
+        frame["replay_root"] = str(replay_root)
+        frames.append(frame)
+    if not frames:
+        return pd.DataFrame()
+    trades = pd.concat(frames, ignore_index=True)
     dedupe_columns = [
         column
         for column in [
@@ -150,11 +207,130 @@ def _load_projection_calendar(
     return calendar[["trade_date", "calendar_regime"]]
 
 
-def _capital_plan(portfolio_report: dict[str, Any]) -> list[dict[str, Any]]:
+def _capital_plan(
+    portfolio_report: dict[str, Any], *, source_path: Path | None = None
+) -> list[dict[str, Any]]:
     plan = portfolio_report.get("capital_plan") or []
     if not isinstance(plan, list):
         return []
-    return [row for row in plan if isinstance(row, dict)]
+    rows = []
+    for row in plan:
+        if not isinstance(row, dict):
+            continue
+        normalized = dict(row)
+        if source_path is not None:
+            normalized["source_portfolio_report_json"] = str(source_path)
+        rows.append(normalized)
+    return rows
+
+
+def _cap_weights(raw_weights: dict[str, float], max_weight: float) -> dict[str, float]:
+    if not raw_weights:
+        return {}
+    if max_weight <= 0:
+        raise ValueError("--max-symbol-weight must be positive when provided")
+    weights = {key: max(float(value), 0.0) for key, value in raw_weights.items()}
+    total = sum(weights.values())
+    if total <= 0:
+        equal = min(1.0 / len(weights), max_weight)
+        return {key: equal for key in weights}
+    weights = {key: value / total for key, value in weights.items()}
+    capped: dict[str, float] = {}
+    remaining = dict(weights)
+    remaining_weight = 1.0
+    while remaining:
+        total_remaining = sum(remaining.values())
+        if total_remaining <= 0:
+            equal = remaining_weight / len(remaining)
+            capped.update({key: equal for key in remaining})
+            break
+        progress = False
+        for key, value in list(remaining.items()):
+            proposed = remaining_weight * value / total_remaining
+            if proposed > max_weight:
+                capped[key] = max_weight
+                remaining_weight -= max_weight
+                remaining.pop(key)
+                progress = True
+        if not progress:
+            capped.update(
+                {
+                    key: remaining_weight * value / total_remaining
+                    for key, value in remaining.items()
+                }
+            )
+            break
+    return {key: round(value, 6) for key, value in capped.items()}
+
+
+def _merge_capital_plans(
+    *,
+    portfolio_report_jsons: list[Path],
+    initial_cash: float,
+    max_symbol_weight: float | None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    capital_plan: list[dict[str, Any]] = []
+    source_counts: dict[str, int] = {}
+    for path in portfolio_report_jsons:
+        report = _load_json(path)
+        rows = _capital_plan(report, source_path=path)
+        capital_plan.extend(rows)
+        source_counts[str(path)] = len(rows)
+    if not capital_plan:
+        return [], {
+            "mode": "no_capital_plan",
+            "source_capital_plan_counts": source_counts,
+            "max_symbol_weight": max_symbol_weight,
+        }
+    original_weight = sum(_float(row.get("research_only_weight")) for row in capital_plan)
+    if max_symbol_weight is None:
+        return capital_plan, {
+            "mode": "source_capital_plan_weights",
+            "source_capital_plan_counts": source_counts,
+            "original_allocated_weight": round(original_weight, 6),
+            "max_symbol_weight": None,
+        }
+    symbol_raw_weights: dict[str, float] = {}
+    for row in capital_plan:
+        symbol = str(row.get("symbol") or "UNKNOWN").upper()
+        symbol_raw_weights[symbol] = symbol_raw_weights.get(symbol, 0.0) + _float(
+            row.get("research_only_weight")
+        )
+    symbol_weights = _cap_weights(symbol_raw_weights, max_symbol_weight)
+    symbol_original_weights = dict(symbol_raw_weights)
+    reweighted: list[dict[str, Any]] = []
+    for row in capital_plan:
+        symbol = str(row.get("symbol") or "UNKNOWN").upper()
+        symbol_original = symbol_original_weights.get(symbol, 0.0)
+        original_candidate_weight = _float(row.get("research_only_weight"))
+        candidate_weight = (
+            symbol_weights.get(symbol, 0.0) * original_candidate_weight / symbol_original
+            if symbol_original > 0
+            else 0.0
+        )
+        normalized = dict(row)
+        normalized["source_research_only_weight"] = original_candidate_weight
+        normalized["source_research_only_dollars"] = _float(row.get("research_only_dollars"))
+        normalized["research_only_weight"] = round(candidate_weight, 6)
+        normalized["research_only_dollars"] = round(candidate_weight * initial_cash, 2)
+        reweighted.append(normalized)
+    return reweighted, {
+        "mode": "portfolio_level_symbol_cap_reweight",
+        "source_capital_plan_counts": source_counts,
+        "original_allocated_weight": round(original_weight, 6),
+        "original_symbol_weights": {
+            key: round(value, 6) for key, value in sorted(symbol_original_weights.items())
+        },
+        "reweighted_symbol_weights": {
+            key: round(value, 6) for key, value in sorted(symbol_weights.items())
+        },
+        "reweighted_allocated_weight": round(
+            sum(_float(row.get("research_only_weight")) for row in reweighted), 6
+        ),
+        "max_symbol_weight": max_symbol_weight,
+    }
+
+
 
 
 def _select_capital_plan_trades(
@@ -676,6 +852,7 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
     grade = packet["evidence_grade"]
     projection_calendar = packet.get("projection_calendar", {})
     regime_coverage = packet.get("regime_coverage", {})
+    capital_plan_merge = packet.get("capital_plan_merge", {})
     lines = [
         "# Portfolio Growth Projection",
         "",
@@ -687,6 +864,15 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         f"- Initial cash: `${packet['initial_cash']}`",
         f"- Target equity: `${packet['target_equity']}`",
         f"- Evidence grade: `{grade['grade']}`",
+        "",
+        "## Capital Plan Merge",
+        "",
+        f"- Merge mode: `{capital_plan_merge.get('mode')}`",
+        f"- Maximum symbol weight: `{capital_plan_merge.get('max_symbol_weight')}`",
+        f"- Original allocated weight: `{capital_plan_merge.get('original_allocated_weight')}`",
+        f"- Reweighted allocated weight: `{capital_plan_merge.get('reweighted_allocated_weight')}`",
+        f"- Original symbol weights: `{capital_plan_merge.get('original_symbol_weights')}`",
+        f"- Reweighted symbol weights: `{capital_plan_merge.get('reweighted_symbol_weights')}`",
         "",
         "## Full-Year Calendar Coverage",
         "",
@@ -815,11 +1001,19 @@ def build_growth_projection(
     seed: int,
     calendar_csv: Path | None = None,
     calendar_date_column: str = "trade_date",
+    additional_portfolio_report_jsons: list[Path] | None = None,
+    additional_replay_roots: list[Path] | None = None,
+    max_symbol_weight: float | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
-    portfolio_report = _load_json(portfolio_report_json)
-    capital_plan = _capital_plan(portfolio_report)
-    trades = _load_trade_economics(replay_root)
+    portfolio_report_jsons = [portfolio_report_json] + list(additional_portfolio_report_jsons or [])
+    replay_roots = [replay_root] + list(additional_replay_roots or [])
+    capital_plan, capital_plan_merge = _merge_capital_plans(
+        portfolio_report_jsons=portfolio_report_jsons,
+        initial_cash=initial_cash,
+        max_symbol_weight=max_symbol_weight,
+    )
+    trades = _load_trade_economics_roots(replay_roots)
     calendar = _load_projection_calendar(
         calendar_csv=calendar_csv,
         date_column=calendar_date_column,
@@ -882,10 +1076,14 @@ def build_growth_projection(
         "live_manifest_effect": "none",
         "risk_policy_effect": "none",
         "portfolio_report_json": str(portfolio_report_json),
+        "portfolio_report_jsons": [str(path) for path in portfolio_report_jsons],
         "replay_root": str(replay_root),
+        "replay_roots": [str(path) for path in replay_roots],
         "initial_cash": initial_cash,
         "target_equity": target_equity,
         "backtest_allocation_fraction": backtest_allocation_fraction,
+        "max_symbol_weight": max_symbol_weight,
+        "capital_plan_merge": capital_plan_merge,
         "capital_plan_count": len(capital_plan),
         "matched_trade_count": int(len(selected_trades)),
         "matched_daily_count": int(len(active_daily_curve)),
@@ -929,6 +1127,11 @@ def main() -> None:
         seed=args.seed,
         calendar_csv=Path(args.calendar_csv) if args.calendar_csv else None,
         calendar_date_column=args.calendar_date_column,
+        additional_portfolio_report_jsons=[
+            Path(path) for path in args.additional_portfolio_report_json
+        ],
+        additional_replay_roots=[Path(path) for path in args.additional_replay_root],
+        max_symbol_weight=args.max_symbol_weight,
     )
     print(json.dumps(packet, indent=2, sort_keys=True))
 

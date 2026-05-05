@@ -93,3 +93,101 @@ def test_full_year_calendar_carries_cash_and_reports_regime_gaps(tmp_path: Path)
     assert "missing_bear_strategy_coverage" in packet["evidence_grade"]["blockers"]
     assert (tmp_path / "out" / "portfolio_growth_equity_curve.csv").exists()
     assert (tmp_path / "out" / "portfolio_growth_active_day_equity_curve.csv").exists()
+
+
+def test_combined_reports_reweight_by_symbol_cap(tmp_path: Path) -> None:
+    replay_a = tmp_path / "replay_a"
+    replay_b = tmp_path / "replay_b"
+    (replay_a / "profile_qqq").mkdir(parents=True)
+    (replay_b / "profile_iwm").mkdir(parents=True)
+    pd.DataFrame(
+        [
+            {
+                "trade_date": "2025-01-02",
+                "candidate_variant_id": "qqq_bull",
+                "option_pnl": 100.0,
+                "symbol": "QQQ",
+                "contract_symbol": "QQQ250103C00100000",
+                "option_entry_time": "2025-01-02T15:00:00Z",
+                "option_exit_time": "2025-01-02T20:00:00Z",
+                "quantity": 1,
+            }
+        ]
+    ).to_csv(replay_a / "profile_qqq" / "option_aware_trade_economics.csv", index=False)
+    pd.DataFrame(
+        [
+            {
+                "trade_date": "2025-01-02",
+                "candidate_variant_id": "iwm_bear",
+                "option_pnl": 50.0,
+                "symbol": "IWM",
+                "contract_symbol": "IWM250103P00100000",
+                "option_entry_time": "2025-01-02T15:00:00Z",
+                "option_exit_time": "2025-01-02T20:00:00Z",
+                "quantity": 1,
+            }
+        ]
+    ).to_csv(replay_b / "profile_iwm" / "option_aware_trade_economics.csv", index=False)
+
+    report_a = tmp_path / "report_a.json"
+    report_a.write_text(
+        json.dumps(
+            {
+                "capital_plan": [
+                    {
+                        "candidate_variant_id": "qqq_bull__profile_profile-qqq",
+                        "base_candidate_variant_id": "qqq_bull",
+                        "aggregate_profile": "profile_qqq",
+                        "symbol": "QQQ",
+                        "family": "single_leg_repair",
+                        "intended_regime": "bull",
+                        "research_only_weight": 1.0,
+                        "research_only_dollars": 25_000.0,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    report_b = tmp_path / "report_b.json"
+    report_b.write_text(
+        json.dumps(
+            {
+                "capital_plan": [
+                    {
+                        "candidate_variant_id": "iwm_bear__profile_profile-iwm",
+                        "base_candidate_variant_id": "iwm_bear",
+                        "aggregate_profile": "profile_iwm",
+                        "symbol": "IWM",
+                        "family": "single_leg_repair",
+                        "intended_regime": "bear",
+                        "research_only_weight": 1.0,
+                        "research_only_dollars": 25_000.0,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    packet = build_growth_projection(
+        portfolio_report_json=report_a,
+        replay_root=replay_a,
+        output_dir=tmp_path / "out_combined",
+        initial_cash=25_000.0,
+        target_equity=300_000.0,
+        backtest_allocation_fraction=0.05,
+        annual_trading_days=252,
+        projection_years=1,
+        bootstrap_runs=25,
+        seed=1,
+        additional_portfolio_report_jsons=[report_b],
+        additional_replay_roots=[replay_b],
+        max_symbol_weight=0.60,
+    )
+
+    assert packet["capital_plan_count"] == 2
+    assert packet["matched_trade_count"] == 2
+    assert packet["capital_plan_merge"]["mode"] == "portfolio_level_symbol_cap_reweight"
+    assert packet["capital_plan_merge"]["reweighted_symbol_weights"] == {"IWM": 0.5, "QQQ": 0.5}
+    assert {row["research_only_weight"] for row in packet["capital_plan"]} == {0.5}
