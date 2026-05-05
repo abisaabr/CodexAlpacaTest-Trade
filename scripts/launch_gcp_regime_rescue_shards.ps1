@@ -95,6 +95,11 @@ function Invoke-GcloudCreateInstance {
         return "created"
     }
     $message = ($output | Out-String)
+    if ($message -match "IN_USE_ADDRESSES") {
+        Write-Host "regional_address_capacity_limit_reached=true"
+        Write-Host "regional_address_capacity_pause_reason=$($message.Trim() -replace '\s+', ' ')"
+        return "zone_capacity_limited"
+    }
     if ($message -match "CPUS_ALL_REGIONS" -or $message -match "Quota .* exceeded") {
         Write-Host "capacity_or_quota_limit_reached=true"
         Write-Host "capacity_or_quota_pause_reason=$($message.Trim() -replace '\s+', ' ')"
