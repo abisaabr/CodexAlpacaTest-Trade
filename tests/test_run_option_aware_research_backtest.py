@@ -8,13 +8,16 @@ import pandas as pd
 
 from scripts.run_option_aware_research_backtest import (
     CONTRACT_SELECTION_LIQUIDITY_FIRST,
+    CONTRACT_SELECTION_NEAREST,
     EXIT_LOOKUP_AT_OR_AFTER,
     EXIT_LOOKUP_AT_OR_AFTER_OR_PRIOR,
     STOCK_SESSION_FILTER_OPTION_RTH_SAME_DAY,
     STRATEGY_FILL_COVERAGE_GATE,
+    _build_option_research_index,
     _candidate_window,
     _exit_option_bar,
     _filter_stock_trades_for_option_session,
+    _option_structure_legs,
     _path_matches_symbol_filter,
     _recommendation,
     build_option_aware_backtest,
@@ -218,6 +221,105 @@ def test_recommendation_holds_until_strategy_fill_gate() -> None:
     }
 
     assert _recommendation(summary) == "hold_option_fill_coverage"
+
+
+def test_family_aware_option_structure_builds_vertical_and_iron_butterfly_legs() -> None:
+    trade_date = pd.Timestamp("2026-04-21").date()
+    entry_time = pd.Timestamp("2026-04-21T13:35:00Z")
+    contracts = pd.DataFrame(
+        {
+            "trade_date": [trade_date] * 4,
+            "underlying_symbol": ["QQQ"] * 4,
+            "symbol": [
+                "QQQ260424C00100000",
+                "QQQ260424C00101000",
+                "QQQ260424P00100000",
+                "QQQ260424P00099000",
+            ],
+            "option_type": ["call", "call", "put", "put"],
+            "strike_price": [100.0, 101.0, 100.0, 99.0],
+            "dte": [3, 3, 3, 3],
+            "relative_strike_step": [0, 1, 0, -1],
+        }
+    )
+    option_bars = pd.DataFrame(
+        {
+            "symbol": [
+                "QQQ260424C00100000",
+                "QQQ260424C00101000",
+                "QQQ260424P00100000",
+                "QQQ260424P00099000",
+            ],
+            "timestamp": [entry_time] * 4,
+            "close": [2.0, 1.1, 2.2, 1.0],
+            "volume": [10, 10, 10, 10],
+        }
+    )
+    option_index = _build_option_research_index(
+        contracts=contracts,
+        option_bars=option_bars,
+        option_trades=pd.DataFrame(),
+    )
+
+    vertical_queue = {
+        "candidate_variant_id": "qqq_vertical",
+        "symbol": "QQQ",
+        "directional_option_type": "call",
+        "family": "debit_call_vertical",
+    }
+    vertical_legs, vertical_structure, vertical_status = _option_structure_legs(
+        queue_item=vertical_queue,
+        variant={"parameters": {"family_template": "debit_call_vertical"}},
+        contracts=contracts,
+        option_bars=option_bars,
+        option_trades=pd.DataFrame(),
+        option_index=option_index,
+        symbol="QQQ",
+        trade_date=trade_date,
+        entry_time=entry_time,
+        max_entry_lag=timedelta(minutes=1),
+        entry_lookup_mode="first_bar_at_or_after_entry_within_lag",
+        max_entry_staleness=timedelta(minutes=0),
+        contract_selection_method=CONTRACT_SELECTION_NEAREST,
+    )
+
+    assert vertical_status == "selected"
+    assert vertical_structure == "debit_call_vertical"
+    assert [(leg["role"], leg["side"]) for leg in vertical_legs] == [
+        ("long_call", 1),
+        ("short_call_wing", -1),
+    ]
+
+    iron_queue = {
+        "candidate_variant_id": "qqq_iron",
+        "symbol": "QQQ",
+        "directional_option_type": "call",
+        "family": "iron_butterfly",
+    }
+    iron_legs, iron_structure, iron_status = _option_structure_legs(
+        queue_item=iron_queue,
+        variant={"parameters": {"family_template": "iron_butterfly"}},
+        contracts=contracts,
+        option_bars=option_bars,
+        option_trades=pd.DataFrame(),
+        option_index=option_index,
+        symbol="QQQ",
+        trade_date=trade_date,
+        entry_time=entry_time,
+        max_entry_lag=timedelta(minutes=1),
+        entry_lookup_mode="first_bar_at_or_after_entry_within_lag",
+        max_entry_staleness=timedelta(minutes=0),
+        contract_selection_method=CONTRACT_SELECTION_NEAREST,
+    )
+
+    assert iron_status == "selected"
+    assert iron_structure == "iron_butterfly"
+    assert [(leg["role"], leg["side"]) for leg in iron_legs] == [
+        ("short_call_body", -1),
+        ("short_put_body", -1),
+        ("long_call_wing", 1),
+        ("long_put_wing", 1),
+    ]
 
 
 def test_exit_lookup_defaults_to_strict_at_or_after() -> None:

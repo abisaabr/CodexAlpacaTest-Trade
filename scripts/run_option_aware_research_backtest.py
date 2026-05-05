@@ -481,6 +481,383 @@ def _choose_entry_liquidity_first_contract(
     return contract, entry_bar, "selected"
 
 
+def _variant_parameters(queue_item: dict[str, Any], variant: dict[str, Any]) -> dict[str, Any]:
+    value = queue_item.get("parameter_set") or variant.get("parameters") or {}
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return value if isinstance(value, dict) else {}
+
+
+def _option_structure_family(queue_item: dict[str, Any], variant: dict[str, Any]) -> str:
+    parameters = _variant_parameters(queue_item, variant)
+    raw = (
+        parameters.get("family_template")
+        or queue_item.get("family")
+        or variant.get("family")
+        or queue_item.get("source_strategy_id")
+        or variant.get("source_strategy_id")
+        or ""
+    )
+    return re.sub(r"[^a-z0-9]+", "_", str(raw).lower()).strip("_")
+
+
+def _contract_frame_for_type(
+    *,
+    contracts: pd.DataFrame,
+    option_index: OptionResearchIndex | None,
+    symbol: str,
+    option_type: str,
+    trade_date: Any,
+) -> pd.DataFrame:
+    return (
+        _candidate_contracts_from_index(
+            option_index=option_index,
+            symbol=symbol,
+            option_type=option_type,
+            trade_date=trade_date,
+        )
+        if option_index
+        else _candidate_contracts(
+            contracts=contracts,
+            symbol=symbol,
+            option_type=option_type,
+            trade_date=trade_date,
+        )
+    ).copy()
+
+
+def _contract_strike(contract: dict[str, Any]) -> float:
+    value = contract.get("strike_price", contract.get("strike"))
+    return float(value)
+
+
+def _contract_entry_bar(
+    *,
+    contract: dict[str, Any],
+    option_bars: pd.DataFrame,
+    option_index: OptionResearchIndex | None,
+    entry_time: pd.Timestamp,
+    max_lag: timedelta,
+    entry_lookup_mode: str,
+    max_entry_staleness: timedelta,
+) -> dict[str, Any] | None:
+    return _entry_option_bar(
+        option_bars=option_bars,
+        option_index=option_index,
+        contract_symbol=str(contract["symbol"]),
+        timestamp=entry_time,
+        max_lag=max_lag,
+        lookup_mode=entry_lookup_mode,
+        max_staleness=max_entry_staleness,
+    )
+
+
+def _select_contract_with_entry(
+    *,
+    contracts: pd.DataFrame,
+    option_bars: pd.DataFrame,
+    option_trades: pd.DataFrame,
+    option_index: OptionResearchIndex | None,
+    symbol: str,
+    option_type: str,
+    trade_date: Any,
+    entry_time: pd.Timestamp,
+    max_lag: timedelta,
+    entry_lookup_mode: str,
+    max_entry_staleness: timedelta,
+    contract_selection_method: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str]:
+    if contract_selection_method == CONTRACT_SELECTION_LIQUIDITY_FIRST:
+        return _choose_entry_liquidity_first_contract(
+            contracts=contracts,
+            option_bars=option_bars,
+            option_trades=option_trades,
+            option_index=option_index,
+            symbol=symbol,
+            option_type=option_type,
+            trade_date=trade_date,
+            entry_time=entry_time,
+            max_lag=max_lag,
+            entry_lookup_mode=entry_lookup_mode,
+            max_entry_staleness=max_entry_staleness,
+        )
+
+    contract = _choose_contract(
+        contracts=contracts,
+        option_index=option_index,
+        symbol=symbol,
+        option_type=option_type,
+        trade_date=trade_date,
+    )
+    if not contract:
+        return None, None, "no_selected_contract"
+    entry_bar = _contract_entry_bar(
+        contract=contract,
+        option_bars=option_bars,
+        option_index=option_index,
+        entry_time=entry_time,
+        max_lag=max_lag,
+        entry_lookup_mode=entry_lookup_mode,
+        max_entry_staleness=max_entry_staleness,
+    )
+    if not entry_bar:
+        return contract, None, "no_entry_bar"
+    return contract, entry_bar, "selected"
+
+
+def _select_wing_contract_with_entry(
+    *,
+    contracts: pd.DataFrame,
+    option_bars: pd.DataFrame,
+    option_index: OptionResearchIndex | None,
+    symbol: str,
+    option_type: str,
+    trade_date: Any,
+    base_contract: dict[str, Any],
+    higher: bool,
+    width_steps: int,
+    entry_time: pd.Timestamp,
+    max_lag: timedelta,
+    entry_lookup_mode: str,
+    max_entry_staleness: timedelta,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str]:
+    frame = _contract_frame_for_type(
+        contracts=contracts,
+        option_index=option_index,
+        symbol=symbol,
+        option_type=option_type,
+        trade_date=trade_date,
+    )
+    if frame.empty:
+        return None, None, "no_selected_contract"
+
+    base_strike = _contract_strike(base_contract)
+    base_dte = base_contract.get("dte")
+    if base_dte is not None and "dte" in frame.columns:
+        same_dte = frame[pd.to_numeric(frame["dte"], errors="coerce") == float(base_dte)]
+        if not same_dte.empty:
+            frame = same_dte.copy()
+    strikes = pd.to_numeric(frame.get("strike_price", frame.get("strike")), errors="coerce")
+    if higher:
+        candidates = frame[strikes > base_strike].copy()
+        candidates["_strike_sort"] = pd.to_numeric(
+            candidates.get("strike_price", candidates.get("strike")), errors="coerce"
+        )
+        candidates = candidates.sort_values(["_strike_sort", "symbol"])
+    else:
+        candidates = frame[strikes < base_strike].copy()
+        candidates["_strike_sort"] = pd.to_numeric(
+            candidates.get("strike_price", candidates.get("strike")), errors="coerce"
+        )
+        candidates = candidates.sort_values(["_strike_sort", "symbol"], ascending=[False, True])
+    if candidates.empty:
+        return None, None, "no_selected_contract"
+
+    width_steps = max(1, int(width_steps))
+    candidate_rows = candidates.to_dict("records")
+    ordered = candidate_rows[width_steps - 1 :] + candidate_rows[: width_steps - 1]
+    saw_candidate = False
+    for contract in ordered:
+        saw_candidate = True
+        entry_bar = _contract_entry_bar(
+            contract=contract,
+            option_bars=option_bars,
+            option_index=option_index,
+            entry_time=entry_time,
+            max_lag=max_lag,
+            entry_lookup_mode=entry_lookup_mode,
+            max_entry_staleness=max_entry_staleness,
+        )
+        if entry_bar:
+            return contract, entry_bar, "selected"
+    return (candidate_rows[0], None, "no_entry_bar") if saw_candidate else (None, None, "no_selected_contract")
+
+
+def _leg(
+    *,
+    role: str,
+    side: int,
+    ratio: int,
+    contract: dict[str, Any],
+    entry_bar: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "role": role,
+        "side": int(side),
+        "ratio": int(ratio),
+        "contract": contract,
+        "entry_bar": entry_bar,
+    }
+
+
+def _option_structure_legs(
+    *,
+    queue_item: dict[str, Any],
+    variant: dict[str, Any],
+    contracts: pd.DataFrame,
+    option_bars: pd.DataFrame,
+    option_trades: pd.DataFrame,
+    option_index: OptionResearchIndex | None,
+    symbol: str,
+    trade_date: Any,
+    entry_time: pd.Timestamp,
+    max_entry_lag: timedelta,
+    entry_lookup_mode: str,
+    max_entry_staleness: timedelta,
+    contract_selection_method: str,
+) -> tuple[list[dict[str, Any]], str, str]:
+    family = _option_structure_family(queue_item, variant)
+    parameters = _variant_parameters(queue_item, variant)
+    option_type = str(queue_item.get("directional_option_type") or "").lower()
+    vertical_width = int(parameters.get("vertical_width_steps") or parameters.get("wing_width_steps") or 1)
+    far_width = int(parameters.get("far_wing_width_steps") or max(vertical_width + 1, 2))
+
+    def base(option_type_value: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str]:
+        return _select_contract_with_entry(
+            contracts=contracts,
+            option_bars=option_bars,
+            option_trades=option_trades,
+            option_index=option_index,
+            symbol=symbol,
+            option_type=option_type_value,
+            trade_date=trade_date,
+            entry_time=entry_time,
+            max_lag=max_entry_lag,
+            entry_lookup_mode=entry_lookup_mode,
+            max_entry_staleness=max_entry_staleness,
+            contract_selection_method=contract_selection_method,
+        )
+
+    def wing(
+        option_type_value: str,
+        base_contract: dict[str, Any],
+        *,
+        higher: bool,
+        width_steps: int,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str]:
+        return _select_wing_contract_with_entry(
+            contracts=contracts,
+            option_bars=option_bars,
+            option_index=option_index,
+            symbol=symbol,
+            option_type=option_type_value,
+            trade_date=trade_date,
+            base_contract=base_contract,
+            higher=higher,
+            width_steps=width_steps,
+            entry_time=entry_time,
+            max_lag=max_entry_lag,
+            entry_lookup_mode=entry_lookup_mode,
+            max_entry_staleness=max_entry_staleness,
+        )
+
+    if "iron_butterfly" in family:
+        call_contract, call_entry, status = base("call")
+        if status != "selected" or not call_contract or not call_entry:
+            return [], "iron_butterfly", status
+        put_contract, put_entry, status = base("put")
+        if status != "selected" or not put_contract or not put_entry:
+            return [], "iron_butterfly", status
+        call_wing, call_wing_entry, status = wing(
+            "call", call_contract, higher=True, width_steps=vertical_width
+        )
+        if status != "selected" or not call_wing or not call_wing_entry:
+            return [], "iron_butterfly", status
+        put_wing, put_wing_entry, status = wing(
+            "put", put_contract, higher=False, width_steps=vertical_width
+        )
+        if status != "selected" or not put_wing or not put_wing_entry:
+            return [], "iron_butterfly", status
+        return (
+            [
+                _leg(role="short_call_body", side=-1, ratio=1, contract=call_contract, entry_bar=call_entry),
+                _leg(role="short_put_body", side=-1, ratio=1, contract=put_contract, entry_bar=put_entry),
+                _leg(role="long_call_wing", side=1, ratio=1, contract=call_wing, entry_bar=call_wing_entry),
+                _leg(role="long_put_wing", side=1, ratio=1, contract=put_wing, entry_bar=put_wing_entry),
+            ],
+            "iron_butterfly",
+            "selected",
+        )
+
+    if "debit_call_vertical" in family or "debit_put_vertical" in family:
+        option_type = "put" if "put" in family else "call"
+        long_contract, long_entry, status = base(option_type)
+        if status != "selected" or not long_contract or not long_entry:
+            return [], f"debit_{option_type}_vertical", status
+        short_contract, short_entry, status = wing(
+            option_type,
+            long_contract,
+            higher=option_type == "call",
+            width_steps=vertical_width,
+        )
+        if status != "selected" or not short_contract or not short_entry:
+            return [], f"debit_{option_type}_vertical", status
+        return (
+            [
+                _leg(role=f"long_{option_type}", side=1, ratio=1, contract=long_contract, entry_bar=long_entry),
+                _leg(role=f"short_{option_type}_wing", side=-1, ratio=1, contract=short_contract, entry_bar=short_entry),
+            ],
+            f"debit_{option_type}_vertical",
+            "selected",
+        )
+
+    if "broken_wing_call_butterfly" in family or "broken_wing_put_butterfly" in family:
+        option_type = "put" if "put" in family else "call"
+        long_body, long_body_entry, status = base(option_type)
+        if status != "selected" or not long_body or not long_body_entry:
+            return [], f"broken_wing_{option_type}_butterfly", status
+        short_mid, short_mid_entry, status = wing(
+            option_type,
+            long_body,
+            higher=option_type == "call",
+            width_steps=vertical_width,
+        )
+        if status != "selected" or not short_mid or not short_mid_entry:
+            return [], f"broken_wing_{option_type}_butterfly", status
+        long_far, long_far_entry, status = wing(
+            option_type,
+            long_body,
+            higher=option_type == "call",
+            width_steps=far_width,
+        )
+        if status != "selected" or not long_far or not long_far_entry:
+            return [], f"broken_wing_{option_type}_butterfly", status
+        return (
+            [
+                _leg(role=f"long_{option_type}_body", side=1, ratio=1, contract=long_body, entry_bar=long_body_entry),
+                _leg(role=f"short_{option_type}_middle", side=-1, ratio=2, contract=short_mid, entry_bar=short_mid_entry),
+                _leg(role=f"long_{option_type}_far_wing", side=1, ratio=1, contract=long_far, entry_bar=long_far_entry),
+            ],
+            f"broken_wing_{option_type}_butterfly",
+            "selected",
+        )
+
+    if not option_type:
+        return [], "unsupported", "unsupported_option_structure"
+    contract, entry_bar, status = base(option_type)
+    if status != "selected" or not contract or not entry_bar:
+        return [], "single_leg", status
+    return (
+        [_leg(role=f"long_{option_type}", side=1, ratio=1, contract=contract, entry_bar=entry_bar)],
+        "single_leg",
+        "selected",
+    )
+
+
+def _structure_risk_per_unit(legs: list[dict[str, Any]], entry_debit_per_unit: float) -> float:
+    if entry_debit_per_unit > 0:
+        return entry_debit_per_unit
+    strikes = [_contract_strike(leg["contract"]) for leg in legs]
+    max_width = max(strikes) - min(strikes) if strikes else 0.0
+    credit = abs(entry_debit_per_unit)
+    defined_risk = max_width * 100.0 - credit
+    return max(defined_risk, 0.01)
+
+
 def _first_option_bar(
     *,
     option_bars: pd.DataFrame,
@@ -914,6 +1291,7 @@ def _option_rows_for_candidate(
         "no_entry_bar": 0,
         "no_exit_bar": 0,
         "too_expensive": 0,
+        "unsupported_option_structure": 0,
     }
     option_type = str(queue_item.get("directional_option_type") or "").lower()
     symbol = str(queue_item.get("symbol") or "").upper()
@@ -968,111 +1346,126 @@ def _option_rows_for_candidate(
         entry_time = pd.Timestamp(trade["entry_time"])
         exit_time = pd.Timestamp(trade["exit_time"])
         trade_date = entry_time.date()
-        if contract_selection_method == CONTRACT_SELECTION_LIQUIDITY_FIRST:
-            contract, entry_bar, status = _choose_entry_liquidity_first_contract(
-                contracts=contracts,
-                option_bars=option_bars,
-                option_trades=option_trades,
-                option_index=option_index,
-                symbol=symbol,
-                option_type=option_type,
-                trade_date=trade_date,
-                entry_time=entry_time,
-                max_lag=max_entry_lag,
-                entry_lookup_mode=entry_lookup_mode,
-                max_entry_staleness=max_entry_staleness,
-            )
-            if status != "selected" or not contract or not entry_bar:
-                missing_counts[status] = missing_counts.get(status, 0) + 1
-                failure_rows.append(
-                    failure_row(
-                        reason=status,
-                        trade=trade,
-                        lookup_time=entry_time,
-                    )
+        legs, option_structure, status = _option_structure_legs(
+            queue_item=queue_item,
+            variant=variant,
+            contracts=contracts,
+            option_bars=option_bars,
+            option_trades=option_trades,
+            option_index=option_index,
+            symbol=symbol,
+            trade_date=trade_date,
+            entry_time=entry_time,
+            max_entry_lag=max_entry_lag,
+            entry_lookup_mode=entry_lookup_mode,
+            max_entry_staleness=max_entry_staleness,
+            contract_selection_method=contract_selection_method,
+        )
+        if status != "selected" or not legs:
+            missing_counts[status] = missing_counts.get(status, 0) + 1
+            failure_rows.append(
+                failure_row(
+                    reason=status,
+                    trade=trade,
+                    lookup_time=entry_time,
+                    extra={"option_structure": option_structure},
                 )
-                continue
-        else:
-            contract = _choose_contract(
-                contracts=contracts,
-                option_index=option_index,
-                symbol=symbol,
-                option_type=option_type,
-                trade_date=trade_date,
             )
-            if not contract:
-                missing_counts["no_selected_contract"] += 1
-                failure_rows.append(
-                    failure_row(
-                        reason="no_selected_contract",
-                        trade=trade,
-                        lookup_time=entry_time,
-                    )
-                )
-                continue
-            contract_symbol = str(contract["symbol"])
-            entry_bar = _entry_option_bar(
+            continue
+
+        exit_bars: list[dict[str, Any]] = []
+        missing_exit_symbol = ""
+        for leg_item in legs:
+            contract_symbol = str(leg_item["contract"]["symbol"])
+            exit_bar = _exit_option_bar(
                 option_bars=option_bars,
                 option_index=option_index,
                 contract_symbol=contract_symbol,
-                timestamp=entry_time,
-                max_lag=max_entry_lag,
-                lookup_mode=entry_lookup_mode,
-                max_staleness=max_entry_staleness,
+                timestamp=exit_time,
+                max_lag=max_exit_lag,
+                lookup_mode=exit_lookup_mode,
             )
-            if not entry_bar:
-                missing_counts["no_entry_bar"] += 1
-                failure_rows.append(
-                    failure_row(
-                        reason="no_entry_bar",
-                        trade=trade,
-                        contract_symbol=contract_symbol,
-                        lookup_time=entry_time,
-                    )
-                )
-                continue
-
-        contract_symbol = str(contract["symbol"])
-        exit_bar = _exit_option_bar(
-            option_bars=option_bars,
-            option_index=option_index,
-            contract_symbol=contract_symbol,
-            timestamp=exit_time,
-            max_lag=max_exit_lag,
-            lookup_mode=exit_lookup_mode,
-        )
-        if not exit_bar:
+            if not exit_bar:
+                missing_exit_symbol = contract_symbol
+                break
+            exit_bars.append(exit_bar)
+        if len(exit_bars) != len(legs):
             missing_counts["no_exit_bar"] += 1
+            first_entry = legs[0]["entry_bar"] if legs else {}
             failure_rows.append(
                 failure_row(
                     reason="no_exit_bar",
                     trade=trade,
-                    contract_symbol=contract_symbol,
+                    contract_symbol=missing_exit_symbol,
                     lookup_time=exit_time,
-                    extra={"option_entry_time": str(entry_bar["timestamp"])},
+                    extra={
+                        "option_entry_time": str(first_entry.get("timestamp", "")),
+                        "option_structure": option_structure,
+                    },
                 )
             )
             continue
-        raw_entry = float(entry_bar["close"])
-        raw_exit = float(exit_bar["close"])
-        entry_price = raw_entry * (1.0 + slippage_bps / 10000.0)
-        exit_price = raw_exit * (1.0 - slippage_bps / 10000.0)
+
+        leg_details: list[dict[str, Any]] = []
+        entry_debit_per_unit = 0.0
+        exit_value_per_unit = 0.0
+        total_contract_units = 0
+        for leg_item, exit_bar in zip(legs, exit_bars, strict=True):
+            side = int(leg_item["side"])
+            ratio = int(leg_item["ratio"])
+            raw_entry = float(leg_item["entry_bar"]["close"])
+            raw_exit = float(exit_bar["close"])
+            entry_price = raw_entry * (
+                1.0 + side * slippage_bps / 10000.0
+                if side > 0
+                else 1.0 - slippage_bps / 10000.0
+            )
+            exit_price = raw_exit * (
+                1.0 - side * slippage_bps / 10000.0
+                if side > 0
+                else 1.0 + slippage_bps / 10000.0
+            )
+            entry_debit_per_unit += side * entry_price * ratio * 100.0
+            exit_value_per_unit += side * exit_price * ratio * 100.0
+            total_contract_units += abs(ratio)
+            leg_details.append(
+                {
+                    "role": leg_item["role"],
+                    "side": side,
+                    "ratio": ratio,
+                    "contract_symbol": str(leg_item["contract"]["symbol"]),
+                    "strike": _contract_strike(leg_item["contract"]),
+                    "entry_price_after_slippage": round(entry_price, 4),
+                    "exit_price_after_slippage": round(exit_price, 4),
+                    "entry_time": str(leg_item["entry_bar"]["timestamp"]),
+                    "exit_time": str(exit_bar["timestamp"]),
+                    "relative_strike_step": leg_item["contract"].get("relative_strike_step"),
+                    "dte": leg_item["contract"].get("dte"),
+                }
+            )
+        risk_per_unit = _structure_risk_per_unit(legs, entry_debit_per_unit)
         budget = initial_cash * allocation_fraction
-        quantity = math.floor(budget / (entry_price * 100.0))
+        quantity = math.floor(budget / risk_per_unit)
         if quantity < 1:
             missing_counts["too_expensive"] += 1
             failure_rows.append(
                 failure_row(
                     reason="too_expensive",
                     trade=trade,
-                    contract_symbol=contract_symbol,
+                    contract_symbol=";".join(item["contract_symbol"] for item in leg_details),
                     lookup_time=entry_time,
-                    extra={"raw_entry": raw_entry, "budget": budget},
+                    extra={
+                        "entry_debit_per_unit": round(entry_debit_per_unit, 4),
+                        "risk_per_unit": round(risk_per_unit, 4),
+                        "budget": budget,
+                        "option_structure": option_structure,
+                    },
                 )
             )
             continue
-        fees = fee_per_contract * quantity * 2.0
-        pnl = (exit_price - entry_price) * quantity * 100.0 - fees
+        fees = fee_per_contract * quantity * 2.0 * total_contract_units
+        pnl = (exit_value_per_unit - entry_debit_per_unit) * quantity - fees
+        primary_leg = leg_details[0]
         option_rows.append(
             {
                 "candidate_variant_id": queue_item.get("candidate_variant_id"),
@@ -1080,38 +1473,52 @@ def _option_rows_for_candidate(
                 "source_strategy_id": queue_item.get("source_strategy_id"),
                 "symbol": symbol,
                 "option_type": option_type,
-                "contract_symbol": contract_symbol,
+                "option_structure": option_structure,
+                "option_leg_count": len(legs),
+                "contract_symbol": ";".join(item["contract_symbol"] for item in leg_details),
+                "leg_details_json": json.dumps(leg_details, sort_keys=True, separators=(",", ":")),
                 "trade_date": str(trade_date),
                 "stock_entry_time": str(entry_time),
                 "stock_exit_time": str(exit_time),
-                "option_entry_time": str(entry_bar["timestamp"]),
-                "option_exit_time": str(exit_bar["timestamp"]),
+                "option_entry_time": primary_leg["entry_time"],
+                "option_exit_time": primary_leg["exit_time"],
                 "stock_pnl_proxy": round(float(trade.get("pnl") or 0.0), 4),
-                "entry_option_close": round(raw_entry, 4),
-                "exit_option_close": round(raw_exit, 4),
-                "entry_price_after_slippage": round(entry_price, 4),
-                "exit_price_after_slippage": round(exit_price, 4),
+                "entry_option_close": round(entry_debit_per_unit / 100.0, 4),
+                "exit_option_close": round(exit_value_per_unit / 100.0, 4),
+                "entry_price_after_slippage": round(entry_debit_per_unit / 100.0, 4),
+                "exit_price_after_slippage": round(exit_value_per_unit / 100.0, 4),
+                "risk_per_unit": round(risk_per_unit, 4),
+                "entry_debit_per_unit": round(entry_debit_per_unit, 4),
+                "exit_value_per_unit": round(exit_value_per_unit, 4),
                 "quantity": quantity,
                 "fees": round(fees, 4),
                 "option_pnl": round(pnl, 4),
-                "option_return_pct": round(pnl / (entry_price * quantity * 100.0), 6),
+                "option_return_pct": round(pnl / (risk_per_unit * quantity), 6),
                 "stock_exit_reason": trade.get("exit_reason"),
                 "contract_selection_method": contract_selection_method,
-                "contract_dte": contract.get("dte"),
-                "contract_relative_strike_step": contract.get("relative_strike_step"),
-                "entry_selection_trade_print_count": _trade_print_count(
-                    option_trades=option_trades,
-                    option_index=option_index,
-                    contract_symbol=contract_symbol,
-                    start=entry_time,
-                    end=entry_time + max_entry_lag,
+                "contract_dte": ";".join(str(item["dte"]) for item in leg_details),
+                "contract_relative_strike_step": ";".join(
+                    str(item["relative_strike_step"]) for item in leg_details
                 ),
-                "option_trade_print_count": _trade_print_count(
-                    option_trades=option_trades,
-                    option_index=option_index,
-                    contract_symbol=contract_symbol,
-                    start=entry_time,
-                    end=exit_time,
+                "entry_selection_trade_print_count": sum(
+                    _trade_print_count(
+                        option_trades=option_trades,
+                        option_index=option_index,
+                        contract_symbol=item["contract_symbol"],
+                        start=entry_time,
+                        end=entry_time + max_entry_lag,
+                    )
+                    for item in leg_details
+                ),
+                "option_trade_print_count": sum(
+                    _trade_print_count(
+                        option_trades=option_trades,
+                        option_index=option_index,
+                        contract_symbol=item["contract_symbol"],
+                        start=entry_time,
+                        end=exit_time,
+                    )
+                    for item in leg_details
                 ),
             }
         )
@@ -1331,6 +1738,9 @@ def build_option_aware_backtest(
             "missing_no_entry_bar": int(missing_counts.get("no_entry_bar", 0)),
             "missing_no_exit_bar": int(missing_counts.get("no_exit_bar", 0)),
             "missing_too_expensive": int(missing_counts.get("too_expensive", 0)),
+            "missing_unsupported_option_structure": int(
+                missing_counts.get("unsupported_option_structure", 0)
+            ),
             "intended_order_count": source_trade_count,
             "filled_order_count": filled_order_count,
             "skipped_order_count": missing_price_count,
@@ -1341,11 +1751,11 @@ def build_option_aware_backtest(
             "exit_bar_coverage": exit_bar_coverage,
             "fill_coverage_numerator": filled_order_count,
             "fill_coverage_denominator": source_trade_count,
-            "fill_coverage_unit": "filled_single_contract_option_orders_per_source_stock_trade",
+            "fill_coverage_unit": "filled_option_structures_per_source_stock_trade",
             "strategy_fill_coverage_gate": STRATEGY_FILL_COVERAGE_GATE,
             "fill_coverage_semantics": (
                 "Strategy-level fill coverage, not raw option data coverage. "
-                "Current engine models one directional option contract per source stock trade."
+                "Family-aware structures require every leg to have entry and exit bars."
             ),
             "entry_lookup_mode": entry_lookup_mode,
             "max_entry_lag_minutes": round(max_entry_lag.total_seconds() / 60.0, 4),
