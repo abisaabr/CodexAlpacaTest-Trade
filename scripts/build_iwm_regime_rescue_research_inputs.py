@@ -39,13 +39,19 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--choppy-profile-set",
-        choices=("rescue", "timewindow_refine", "timewindow_micro_exit"),
+        choices=(
+            "rescue",
+            "timewindow_refine",
+            "timewindow_micro_exit",
+            "timewindow_quality_filter",
+        ),
         default="rescue",
         help=(
             "Choppy grid to build. 'rescue' preserves the broad missing-regime search; "
             "'timewindow_refine' focuses on the high-fill IWM lower-band call sleeve "
             "identified from prior 365d trade economics; 'timewindow_micro_exit' keeps "
-            "that sleeve but tests tighter option exits for full-period economics."
+            "that sleeve but tests tighter option exits for full-period economics; "
+            "'timewindow_quality_filter' adds stricter choppy-state filters."
         ),
     )
     return parser.parse_args()
@@ -450,6 +456,95 @@ def _choppy_timewindow_micro_exit_rows(
     return rows
 
 
+def _choppy_timewindow_quality_filter_rows(
+    *,
+    symbol: str,
+    wave_id: str,
+    family_filter: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    family = "single_leg_repair"
+    if family_filter and family not in family_filter:
+        return rows
+
+    time_windows = [
+        ("iwm_choppy_quality_105_150", 105, 150, 35),
+        ("iwm_choppy_quality_105_165", 105, 165, 35),
+        ("iwm_choppy_quality_120_150", 120, 150, 35),
+        ("iwm_choppy_quality_120_165", 120, 165, 35),
+    ]
+    exit_profiles = [
+        ("micro20_stop07_hold1", 0.20, 0.07, 1),
+        ("micro20_stop08_hold2", 0.20, 0.08, 2),
+        ("micro25_stop09_hold2", 0.25, 0.09, 2),
+        ("target35_stop14_hold2", 0.35, 0.14, 2),
+    ]
+    quality_filters = [
+        {
+            "quality_profile": "narrow_low_trend",
+            "max_range_pct": 0.0050,
+            "max_trend_gap_pct": 0.0010,
+            "max_midpoint_distance_pct": 0.0035,
+            "min_range_pct": 0.0015,
+        },
+        {
+            "quality_profile": "ultra_narrow_low_trend",
+            "max_range_pct": 0.0040,
+            "max_trend_gap_pct": 0.0008,
+            "max_midpoint_distance_pct": 0.0030,
+            "min_range_pct": 0.0015,
+        },
+        {
+            "quality_profile": "defined_range_low_trend",
+            "max_range_pct": 0.0060,
+            "max_trend_gap_pct": 0.0010,
+            "max_midpoint_distance_pct": 0.0035,
+            "min_range_pct": 0.0020,
+        },
+    ]
+    for timing_profile, min_minute, max_minute, hard_exit in time_windows:
+        for exit_name, target_pct, stop_pct, min_hold in exit_profiles:
+            for quality_filter in quality_filters:
+                for range_edge_pct in (0.0010, 0.0012):
+                    parameters = {
+                        **quality_filter,
+                        "cooldown_bars": 60,
+                        "dte_mode": "next_expiry",
+                        "entry_signal_mode": "rising_edge",
+                        "family_template": family,
+                        "hard_exit_minute": hard_exit,
+                        "liquidity_gate": "tight",
+                        "max_minutes_since_open": max_minute,
+                        "max_signals_per_day": 1,
+                        "min_minutes_since_open": min_minute,
+                        "min_option_hold_minutes": min_hold,
+                        "option_exit_mode": "premium_target_stop",
+                        "option_exit_profile": exit_name,
+                        "option_profit_target_pct": target_pct,
+                        "option_stop_loss_pct": stop_pct,
+                        "profit_target_multiple": target_pct,
+                        "range_edge_pct": range_edge_pct,
+                        "range_entry_side": "lower_band",
+                        "short_width_steps": 1,
+                        "stock_proxy_mode": "range_bound",
+                        "stop_loss_multiple": stop_pct,
+                        "timeout_only_stock_proxy": True,
+                        "wing_width_steps": 1,
+                    }
+                    rows.append(
+                        _variant(
+                            symbol=symbol,
+                            regime="choppy",
+                            direction="call",
+                            family=family,
+                            parameters=parameters,
+                            priority=1,
+                            wave_id=wave_id,
+                        )
+                    )
+    return rows
+
+
 def build_iwm_regime_rescue_rows(
     *,
     symbol: str,
@@ -475,6 +570,14 @@ def build_iwm_regime_rescue_rows(
         elif choppy_profile_set == "timewindow_micro_exit":
             rows.extend(
                 _choppy_timewindow_micro_exit_rows(
+                    symbol=symbol,
+                    wave_id=wave_id,
+                    family_filter=choppy_families,
+                )
+            )
+        elif choppy_profile_set == "timewindow_quality_filter":
+            rows.extend(
+                _choppy_timewindow_quality_filter_rows(
                     symbol=symbol,
                     wave_id=wave_id,
                     family_filter=choppy_families,
