@@ -95,10 +95,15 @@ function Invoke-GcloudCreateInstance {
         return "created"
     }
     $message = ($output | Out-String)
-    if ($message -match "CPUS_ALL_REGIONS" -or $message -match "Quota .* exceeded" -or $message -match "ZONE_RESOURCE_POOL_EXHAUSTED" -or $message -match "RESOURCE_POOL_EXHAUSTED") {
+    if ($message -match "CPUS_ALL_REGIONS" -or $message -match "Quota .* exceeded") {
         Write-Host "capacity_or_quota_limit_reached=true"
         Write-Host "capacity_or_quota_pause_reason=$($message.Trim() -replace '\s+', ' ')"
-        return "capacity_limited"
+        return "quota_limited"
+    }
+    if ($message -match "ZONE_RESOURCE_POOL_EXHAUSTED" -or $message -match "RESOURCE_POOL_EXHAUSTED") {
+        Write-Host "zone_capacity_limit_reached=true"
+        Write-Host "zone_capacity_pause_reason=$($message.Trim() -replace '\s+', ' ')"
+        return "zone_capacity_limited"
     }
     throw "gcloud failed: $($Arguments -join ' ')"
 }
@@ -276,8 +281,11 @@ foreach ($row in $launchRows) {
         "--metadata-from-file", "startup-script=$StartupScript",
         "--quiet"
     )
-    if ($createStatus -eq "capacity_limited") {
+    if ($createStatus -eq "quota_limited") {
         break
+    }
+    if ($createStatus -eq "zone_capacity_limited") {
+        continue
     }
     $launched += 1
     Write-Output "launched_instance=$($row.instance_name) candidate_start=$($row.candidate_start_index) candidate_count=$($row.candidate_count) zone=$($row.zone)"
