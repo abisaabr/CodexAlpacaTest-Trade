@@ -136,3 +136,27 @@ Controller repair:
 - Focused validation: `python -m pytest -q tests\test_gcp_autonomous_paper_readiness_controller.py` returned `3 passed`.
 
 Next institutional step: run a QQQ economics redesign wave using the strict fill profile (`strict-e0x60`, `entry_liquidity_first_research_only`) and keep the `fill_coverage >= 0.90`, positive full-period PnL, positive test PnL, and minimum trade-count gates intact.
+
+## 2026-05-05 Family-Aware Economics Smoke
+
+After aggregate completion, the next measurement gap was option-family economics. The backtester has been patched so option families are no longer all priced as single long directional contracts:
+
+- Commit: `99c7912` `Model option strategy family economics`
+- `debit_call_vertical`, `debit_put_vertical`, `iron_butterfly`, and broken-wing butterfly families now construct multi-leg option structures.
+- Fill coverage now means `filled_option_structures_per_source_stock_trade`; every intended leg must fill.
+- Validation: `python -m pytest -q` returned `214 passed, 1 warning`.
+
+A bounded QQQ family-aware economics smoke is running:
+
+- Wave ID: `ticker365_qqq_family_econ_smoke_20260505T0045Z`
+- GCS prefix: `gs://codexalpaca-control-us/research_results/ticker365_qqq_family_econ_smoke_20260505T0045Z`
+- VM: `qqqfam-econ-smoke-20260505a`
+- Worker ID: `qqqfamilyecon_qqq_e0x60_top020`
+- Scope: top `20` QQQ candidates only
+- Profile: strict `e0x60`
+- Selector: `entry_liquidity_first_research_only`
+- Paper orders: `false`
+- Live manifest effect: `none`
+- Risk policy effect: `none`
+
+If this smoke completes cleanly, the next GCP action is a full `126` QQQ family-aware expansion. If it fails structurally, patch the family-aware replay first and rerun the top-20 smoke.

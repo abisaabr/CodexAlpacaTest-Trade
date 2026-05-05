@@ -349,3 +349,48 @@ Next safest handoff action:
 - Do not relax gates.
 - Design the next QQQ wave around economics, not fill. Keep `strict-e0x60`, `entry_liquidity_first_research_only`, `fill_coverage >= 0.90`, positive full-period PnL, positive test PnL, and minimum trade-count gates.
 - Candidate redesign should prioritize bull, bear, and choppy coverage separately, then only build a capital plan if all three regimes have eligible governed-validation candidates.
+
+## 2026-05-05 Family-Aware Economics Patch And Smoke
+
+The next blocker after the fill repair was a measurement mismatch: the option-aware replay priced every queued strategy family as one directional long option. That meant `debit_call_vertical`, `debit_put_vertical`, `iron_butterfly`, and broken-wing butterfly labels were not being economically measured as their intended option structures.
+
+Patch now on branch `codex/phase2-fill-semantics-20260430`:
+
+- Commit: `99c7912` `Model option strategy family economics`
+- `single_leg_repair` remains a one-leg long call/put structure.
+- `debit_call_vertical` now models long call plus short higher-strike call.
+- `debit_put_vertical` now models long put plus short lower-strike put.
+- `iron_butterfly` now models short ATM call, short ATM put, long call wing, and long put wing.
+- `broken_wing_call_butterfly` and `broken_wing_put_butterfly` now model three-leg 1/-2/1 structures.
+- Strategy fill coverage semantics are now `filled_option_structures_per_source_stock_trade`; every leg must have entry and exit bars.
+- Validation: `python -m pytest -q` returned `214 passed, 1 warning`.
+
+Bounded GCP smoke launched:
+
+- Wave ID: `ticker365_qqq_family_econ_smoke_20260505T0045Z`
+- GCS prefix: `gs://codexalpaca-control-us/research_results/ticker365_qqq_family_econ_smoke_20260505T0045Z`
+- VM: `qqqfam-econ-smoke-20260505a`
+- Zone: `us-east1-b`
+- Machine type: `e2-standard-4`
+- Worker ID: `qqqfamilyecon_qqq_e0x60_top020`
+- Scope: QQQ top `20` candidates only
+- Lag profile: `0:60`
+- Selector: `entry_liquidity_first_research_only`
+- Stock session filter: `option_rth_same_day`
+- Data: QQQ dense 365-day stock bars, selected contracts, and option bars
+- Paper orders: `false`
+- Broker facing: `false`
+- Live manifest effect: `none`
+- Risk policy effect: `none`
+
+Smoke status paths:
+
+- Worker status: `gs://codexalpaca-control-us/research_results/ticker365_qqq_family_econ_smoke_20260505T0045Z/workers/qqqfamilyecon_qqq_e0x60_top020/ticker_365d_status.json`
+- Startup log: `gs://codexalpaca-control-us/research_results/ticker365_qqq_family_econ_smoke_20260505T0045Z/workers/qqqfamilyecon_qqq_e0x60_top020/startup.log`
+- Runtime monitor: `gs://codexalpaca-control-us/research_results/ticker365_qqq_family_econ_smoke_20260505T0045Z/workers/qqqfamilyecon_qqq_e0x60_top020/runtime_monitor.log`
+
+Decision rule:
+
+- If the smoke fails structurally, patch locally first and rerun the top-20 smoke.
+- If the smoke completes with sane leg details and no schema errors, expand to a full `126` QQQ family-aware wave.
+- Do not promote anything from the smoke unless a generated promotion-review packet says `eligible_for_promotion_review`; this smoke is primarily a model-validity check before spending on full GCP expansion.
