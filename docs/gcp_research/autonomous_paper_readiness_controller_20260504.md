@@ -159,4 +159,13 @@ A bounded QQQ family-aware economics smoke is running:
 - Live manifest effect: `none`
 - Risk policy effect: `none`
 
+A second parallel smoke shard is also running:
+
+- VM: `qqqfam-econ-c009-020-20260505a`
+- Worker ID: `qqqfamilyecon_qqq_e0x60_c009_020`
+- Scope: candidates `9-20`
+- Purpose: faster evidence for bull debit vertical, bear debit vertical, and choppy iron-butterfly candidates.
+
+Early first-shard evidence: the first broken-wing call butterfly finished at `fill_coverage=0.8968`, just under gate, and the next broken-wing call candidates that cleared fill were blocked by deeply negative option economics. This confirms the family-aware replay is stricter and is measuring different economics than the prior single-leg proxy.
+
 If this smoke completes cleanly, the next GCP action is a full `126` QQQ family-aware expansion. If it fails structurally, patch the family-aware replay first and rerun the top-20 smoke.

@@ -383,11 +383,27 @@ Bounded GCP smoke launched:
 - Live manifest effect: `none`
 - Risk policy effect: `none`
 
+Parallel fast-signal shard launched after the first shard confirmed structural progress:
+
+- VM: `qqqfam-econ-c009-020-20260505a`
+- Zone: `us-central1-a`
+- Machine type: `e2-standard-4`
+- Worker ID: `qqqfamilyecon_qqq_e0x60_c009_020`
+- Scope: QQQ candidates `9-20` inside the same top-20 queue
+- Purpose: reach bull debit vertical, bear debit vertical, and choppy iron-butterfly candidates sooner while the first shard continues through broken-wing candidates.
+
 Smoke status paths:
 
 - Worker status: `gs://codexalpaca-control-us/research_results/ticker365_qqq_family_econ_smoke_20260505T0045Z/workers/qqqfamilyecon_qqq_e0x60_top020/ticker_365d_status.json`
 - Startup log: `gs://codexalpaca-control-us/research_results/ticker365_qqq_family_econ_smoke_20260505T0045Z/workers/qqqfamilyecon_qqq_e0x60_top020/startup.log`
 - Runtime monitor: `gs://codexalpaca-control-us/research_results/ticker365_qqq_family_econ_smoke_20260505T0045Z/workers/qqqfamilyecon_qqq_e0x60_top020/runtime_monitor.log`
+- Fast-signal worker status: `gs://codexalpaca-control-us/research_results/ticker365_qqq_family_econ_smoke_20260505T0045Z/workers/qqqfamilyecon_qqq_e0x60_c009_020/ticker_365d_status.json`
+
+Early result from the first family-aware shard:
+
+- First broken-wing call butterfly: `fill_coverage=0.8968`, just below gate, with selected-contract universe gaps.
+- Next three broken-wing call butterflies cleared or nearly cleared fill but were deeply negative on option economics.
+- Interpretation: family-aware replay is working and stricter; broken-wing call butterflies are not currently promotion candidates.
 
 Decision rule:
 
