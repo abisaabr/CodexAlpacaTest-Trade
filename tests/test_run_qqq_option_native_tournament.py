@@ -117,7 +117,7 @@ def test_option_native_tournament_emits_multileg_strategy_fill(tmp_path: Path) -
     )
 
     assert packet["broker_facing"] is False
-    assert packet["template_count"] == 12
+    assert packet["template_count"] == 18
     summaries = {row["source_strategy_id"]: row for row in packet["candidate_summaries"]}
     assert summaries["qqq_bull_long_call_atm"]["strategy_fill_coverage"] == 1.0
     assert summaries["qqq_bull_long_call_atm"]["candidate_variant_id"].startswith(

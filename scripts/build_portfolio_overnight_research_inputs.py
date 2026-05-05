@@ -79,8 +79,35 @@ def _text_slug(value: str) -> str:
     return slug or "unknown"
 
 
+def _first_explicit_text(
+    row: dict[str, Any],
+    *,
+    row_keys: tuple[str, ...],
+    parameter_keys: tuple[str, ...],
+) -> str:
+    parameters = row.get("parameters") if isinstance(row.get("parameters"), dict) else {}
+    for key in row_keys:
+        value = row.get(key)
+        if value not in (None, ""):
+            return str(value).strip()
+    for key in parameter_keys:
+        value = parameters.get(key)
+        if value not in (None, ""):
+            return str(value).strip()
+    return ""
+
+
 def _direction(row: dict[str, Any]) -> str:
     parameters = row.get("parameters") if isinstance(row.get("parameters"), dict) else {}
+    explicit = _first_explicit_text(
+        row,
+        row_keys=("directional_option_type", "option_type", "direction"),
+        parameter_keys=("directional_option_type", "option_type", "direction"),
+    ).lower()
+    if explicit in {"call", "calls", "bull", "bullish", "long_call"}:
+        return "call"
+    if explicit in {"put", "puts", "bear", "bearish", "long_put", "short"}:
+        return "put"
     source = " ".join(
         str(value or "")
         for value in [
@@ -97,6 +124,13 @@ def _direction(row: dict[str, Any]) -> str:
 
 def _intended_regime(row: dict[str, Any]) -> str:
     parameters = row.get("parameters") if isinstance(row.get("parameters"), dict) else {}
+    explicit = _first_explicit_text(
+        row,
+        row_keys=("intended_regime", "regime", "market_regime"),
+        parameter_keys=("intended_regime", "regime", "market_regime"),
+    ).lower()
+    if explicit in {"bull", "bear", "choppy"}:
+        return explicit
     source = " ".join(
         str(value or "")
         for value in [
@@ -117,7 +151,12 @@ def _intended_regime(row: dict[str, Any]) -> str:
 
 def _family(row: dict[str, Any]) -> str:
     parameters = row.get("parameters") if isinstance(row.get("parameters"), dict) else {}
-    return str(parameters.get("family_template") or row.get("variant_type") or "unknown")
+    explicit = _first_explicit_text(
+        row,
+        row_keys=("family", "strategy_family"),
+        parameter_keys=("family", "strategy_family", "family_template"),
+    )
+    return explicit or str(row.get("variant_type") or "unknown")
 
 
 def _round_robin_by_symbol(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:

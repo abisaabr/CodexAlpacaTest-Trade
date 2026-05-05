@@ -36,7 +36,7 @@ def test_build_template_registry_writes_research_only_packet(tmp_path: Path) -> 
     assert packet["broker_facing"] is False
     assert packet["live_manifest_effect"] == "none"
     assert packet["risk_policy_effect"] == "none"
-    assert packet["regime_counts"] == {"bear": 5, "bull": 3, "choppy": 4}
-    assert packet["template_count"] == 12
+    assert packet["regime_counts"] == {"bear": 7, "bull": 5, "choppy": 6}
+    assert packet["template_count"] == 18
     assert (tmp_path / "out" / "qqq_option_template_registry.json").exists()
     assert (tmp_path / "out" / "qqq_option_template_registry.md").exists()

@@ -113,6 +113,32 @@ def qqq_option_native_templates() -> tuple[OptionStrategyTemplate, ...]:
             ),
         ),
         OptionStrategyTemplate(
+            template_id="qqq_bull_long_call_same_day_liquidity_first",
+            family="long_call",
+            intended_regime="bull",
+            thesis="Liquidity-first same-day ATM upside exposure for fast RTH breakout validation.",
+            legs=(
+                OptionLegTemplate(
+                    "long_call",
+                    "call",
+                    "buy",
+                    relative_strike_step=0,
+                    min_dte=0,
+                    max_dte=0,
+                ),
+            ),
+        ),
+        OptionStrategyTemplate(
+            template_id="qqq_bull_call_debit_spread_one_step",
+            family="call_debit_spread",
+            intended_regime="bull",
+            thesis="Liquidity-first one-step call debit spread to reduce premium outlay while preserving fill quality.",
+            legs=(
+                OptionLegTemplate("long_call", "call", "buy", relative_strike_step=0),
+                OptionLegTemplate("short_call", "call", "sell", relative_strike_step=1),
+            ),
+        ),
+        OptionStrategyTemplate(
             template_id="qqq_bull_call_backspread",
             family="call_backspread",
             intended_regime="bull",
@@ -152,6 +178,32 @@ def qqq_option_native_templates() -> tuple[OptionStrategyTemplate, ...]:
             legs=(
                 OptionLegTemplate("long_put", "put", "buy", relative_strike_step=0),
                 OptionLegTemplate("short_put", "put", "sell", relative_strike_step=-2),
+            ),
+        ),
+        OptionStrategyTemplate(
+            template_id="qqq_bear_long_put_same_day_liquidity_first",
+            family="long_put",
+            intended_regime="bear",
+            thesis="Liquidity-first same-day ATM downside exposure for fast RTH breakdown validation.",
+            legs=(
+                OptionLegTemplate(
+                    "long_put",
+                    "put",
+                    "buy",
+                    relative_strike_step=0,
+                    min_dte=0,
+                    max_dte=0,
+                ),
+            ),
+        ),
+        OptionStrategyTemplate(
+            template_id="qqq_bear_put_debit_spread_one_step",
+            family="put_debit_spread",
+            intended_regime="bear",
+            thesis="Liquidity-first one-step put debit spread to improve leg availability versus wider structures.",
+            legs=(
+                OptionLegTemplate("long_put", "put", "buy", relative_strike_step=0),
+                OptionLegTemplate("short_put", "put", "sell", relative_strike_step=-1),
             ),
         ),
         OptionStrategyTemplate(
@@ -203,6 +255,18 @@ def qqq_option_native_templates() -> tuple[OptionStrategyTemplate, ...]:
             ),
         ),
         OptionStrategyTemplate(
+            template_id="qqq_choppy_iron_butterfly_one_step",
+            family="iron_butterfly",
+            intended_regime="choppy",
+            thesis="Liquidity-first narrow-wing iron butterfly for range-bound sessions where wider wings reduce fill quality.",
+            legs=(
+                OptionLegTemplate("short_call_body", "call", "sell", relative_strike_step=0),
+                OptionLegTemplate("short_put_body", "put", "sell", relative_strike_step=0),
+                OptionLegTemplate("long_call_wing", "call", "buy", relative_strike_step=1),
+                OptionLegTemplate("long_put_wing", "put", "buy", relative_strike_step=-1),
+            ),
+        ),
+        OptionStrategyTemplate(
             template_id="qqq_choppy_iron_condor",
             family="iron_condor",
             intended_regime="choppy",
@@ -222,6 +286,30 @@ def qqq_option_native_templates() -> tuple[OptionStrategyTemplate, ...]:
             legs=(
                 OptionLegTemplate("long_call", "call", "buy", relative_strike_step=0),
                 OptionLegTemplate("long_put", "put", "buy", relative_strike_step=0),
+            ),
+        ),
+        OptionStrategyTemplate(
+            template_id="qqq_choppy_long_straddle_same_day_liquidity_first",
+            family="long_straddle",
+            intended_regime="choppy",
+            thesis="Liquidity-first same-day ATM long-volatility structure for expansion from choppy starts.",
+            legs=(
+                OptionLegTemplate(
+                    "long_call",
+                    "call",
+                    "buy",
+                    relative_strike_step=0,
+                    min_dte=0,
+                    max_dte=0,
+                ),
+                OptionLegTemplate(
+                    "long_put",
+                    "put",
+                    "buy",
+                    relative_strike_step=0,
+                    min_dte=0,
+                    max_dte=0,
+                ),
             ),
         ),
         OptionStrategyTemplate(
