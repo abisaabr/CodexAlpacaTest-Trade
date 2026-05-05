@@ -100,11 +100,41 @@ As of the first post-launch check, all 16 IWM workers were `RUNNING` and status 
 
 No worker had reported a failed phase at the first check.
 
+The first tranche, covering bull `1-8`, bear `1-8`, and choppy `1-8`, completed and was cleaned up after GCS status said `completed`.
+
+First-tranche result:
+
+- Bull produced one governed-validation-review eligible candidate:
+  - Candidate: `portfolio12h__iwm__bull__call__single_leg_repair__3dc6b95db3d9a6`
+  - Net PnL: `617.845`
+  - Test Net PnL: `829.028`
+  - Fill coverage: `0.994`
+  - Option trades: `166`
+- Bear `1-8` was blocked by economics, not raw data.
+- Choppy `1-8` was blocked by economics, not raw data.
+- Fill behavior was materially repaired versus the original low-fill problem; single-leg IWM candidates commonly cleared or nearly cleared the `0.90` fill gate.
+
+Extension `9-16` result:
+
+- Bear `9-16` completed with no eligible candidate.
+- Choppy `9-16` completed with no eligible candidate.
+- Best choppy candidates had positive test-period PnL but negative full-period PnL, so they remained blocked by `min_net_pnl_not_positive`.
+- Best bear candidates either had positive full-period PnL with negative test PnL or positive test PnL with negative full-period PnL.
+
+Additional extension launched:
+
+- Bear candidates `17-32`
+- Choppy candidates `17-32`
+- Launch rows: `gs://codexalpaca-control-us/research_results/ticker365_iwm_launch_20260505T1035Z/ops/iwm_extension_17_32_launch_rows.json`
+- Launch log: `gs://codexalpaca-control-us/research_results/ticker365_iwm_launch_20260505T1035Z/ops/iwm_extension_17_32_launch_log.txt`
+
 ## Next Steps
 
 1. Continue monitoring worker status JSON under each wave's `workers/` prefix.
 2. Delete only completed terminated research workers after their GCS `status.json` says `phase=completed`.
-3. Aggregate all completed IWM worker promotion packets into a combined IWM regime packet.
-4. If one bull, one bear, and one choppy strategy are eligible, create an IWM governed-validation runner manifest.
-5. If IWM reaches all-regime review, build a QQQ+SPY+IWM controlled validation portfolio.
-6. Do not start broker-facing paper or submit paper orders without explicit operator approval.
+3. Evaluate bear/choppy `17-32` before launching more breadth.
+4. If bear/choppy `17-32` fails economics, switch to an IWM-specific redesign wave rather than continuing blind breadth.
+5. Aggregate all completed IWM worker promotion packets into a combined IWM regime packet only after an eligible bear/choppy candidate appears.
+6. If one bull, one bear, and one choppy strategy are eligible, create an IWM governed-validation runner manifest.
+7. If IWM reaches all-regime review, build a QQQ+SPY+IWM controlled validation portfolio.
+8. Do not start broker-facing paper or submit paper orders without explicit operator approval.
