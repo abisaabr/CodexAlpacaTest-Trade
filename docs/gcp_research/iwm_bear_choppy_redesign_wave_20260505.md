@@ -2,9 +2,9 @@
 
 ## Decision
 
-`research_wave_running`
+`research_only_blocked`
 
-The IWM bear/choppy redesign wave is running in Google Cloud while the QQQ/SPY paper trader continues separately. This is research-only work and does not alter the active paper trader, live manifests, broker state, or risk policy.
+The IWM bear/choppy redesign wave completed in Google Cloud. It produced zero candidates eligible for governed promotion review, so IWM remains excluded from the active paper trader. This was research-only work and did not alter the active paper trader, live manifests, broker state, or risk policy.
 
 ## Scope
 
@@ -78,7 +78,7 @@ Prior data foundation:
 
 First launch attempt started two workers, then `us-east4-a` returned `ZONE_RESOURCE_POOL_EXHAUSTED`. The wave was relaunched using `us-central1-a` and `us-west1-a`.
 
-Running workers:
+Completed workers:
 
 - `iwm-bc-red-c001-006-20260505a`
 - `iwm-bc-red-c007-012-20260505a`
@@ -93,11 +93,49 @@ Running workers:
 - `iwm-bc-red-c061-066-20260505a`
 - `iwm-bc-red-c067-072-20260505a`
 
-As of the first post-launch check, all 12 workers had uploaded `ticker_365d_status.json` with:
+All 12 workers uploaded promotion packets under:
 
-- `phase`: `running_selectors`
-- `selectors`: `entry_liquidity_first_research_only`
-- `lag_profiles`: `0:60`
+- `gs://codexalpaca-control-us/research_results/ticker365_iwm_bear_choppy_redesign_20260505T1505Z/workers/*/promotion_packet/*/research_promotion_review_packet.json`
+
+## Final Results
+
+Promotion packet summary:
+
+- Promotion packets: `12`
+- Candidate rows tested: `72`
+- Bear candidates: `24`
+- Choppy candidates: `48`
+- Review-eligible candidates: `0`
+- Worker decisions: `research_only_blocked`
+- Fill coverage gate: `0.90`
+- Fill coverage unit: `filled_option_structures_per_source_stock_trade`
+
+Blocker counts:
+
+- `min_net_pnl_not_positive`: `71`
+- `test_net_pnl_not_above_0`: `59`
+- `fill_coverage_below_0.90`: `33`
+
+Best near-miss by full-period and test net PnL:
+
+- Candidate: `portfolio12h__iwm__choppy__put__debit_put_vertical__981bf7626eaa9e__profile_iwm-bc-red-c067-072-iwm-e0-x60-entry-liquidity-first-research-only`
+- Strategy: `iwm__choppy__put__debit_put_vertical`
+- Intended regime: `choppy`
+- Full-period net PnL: `15732.003`
+- Test net PnL: `47262.66`
+- Fill coverage: `0.7587`
+- Data foundation coverage: `0.8986`
+- Entry bar coverage: `0.8444`
+- Exit bar coverage: `1.0`
+- Option trade count: `217`
+- Promotion blockers: `fill_coverage_below_0.90`
+
+Interpretation:
+
+- IWM bear/choppy economics are still not promotion-grade as a portfolio set.
+- The best IWM choppy candidate has promising PnL but fails the institutional fill gate, mostly at entry/data-foundation coverage.
+- IWM should not be added to the paper trader until a generated promotion-review packet says `eligible_for_promotion_review`.
+- The next IWM pass should focus on entry-timing/contract-availability alignment for the choppy put vertical near-miss, plus separate bear economics redesign. A broader blind sweep is lower value than diagnosing why this profitable choppy candidate only fills `75.87%`.
 
 ## Concurrent Paper Session
 
@@ -110,7 +148,7 @@ The active QQQ/SPY RTH paper session remains separate and healthy.
 
 ## Next Steps
 
-1. Monitor each worker status under `gs://codexalpaca-control-us/research_results/ticker365_iwm_bear_choppy_redesign_20260505T1505Z/workers/*/ticker_365d_status.json`.
-2. When workers complete, aggregate promotion packets and identify whether any bear or choppy candidate is `eligible_for_promotion_review`.
-3. If no bear/choppy candidate clears, do not add IWM to the paper trader.
-4. If one bear and one choppy candidate clear, build an IWM governed-validation manifest and run broker-free preflight before any paper-trader expansion.
+1. Keep IWM out of the active QQQ/SPY paper trader.
+2. Build an IWM choppy fill-diagnostic micro-wave around the profitable debit-put-vertical near-miss.
+3. Test whether entry timestamp shifts, narrower option universe rules, or same-day selected-contract availability can raise fill coverage above `0.90` without weakening the gate.
+4. Build a separate IWM bear economics redesign; current bear candidates did not produce a promotion-grade result.
