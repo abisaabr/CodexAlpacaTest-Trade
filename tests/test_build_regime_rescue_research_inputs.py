@@ -69,10 +69,15 @@ def test_symbol_generic_bear_signal_window_refine_builds_strict_bear_grid(
         for line in variants_path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    assert len(rows) == 54
+    assert len(rows) == 216
     assert {row["symbol"] for row in rows} == {"QQQ"}
     assert {row["source_strategy_id"].split("__")[1] for row in rows} == {"bear"}
-    assert {row["parameters"]["family_template"] for row in rows} == {"single_leg_repair"}
+    assert {row["parameters"]["family_template"] for row in rows} == {
+        "bear_call_credit_spread",
+        "broken_wing_put_butterfly",
+        "debit_put_vertical",
+        "single_leg_repair",
+    }
     assert {row["parameters"]["breakout_window"] for row in rows} == {26, 34, 45}
     assert min(row["parameters"]["min_trend_gap_pct"] for row in rows) == 0.0009
     assert max(row["parameters"]["min_trend_gap_pct"] for row in rows) == 0.002
@@ -155,11 +160,13 @@ def test_symbol_generic_bull_momentum_refine_builds_bull_grid(
 
     assert manifest["target_regimes"] == ["bull"]
     assert manifest["bull_profile_set"] == "momentum_refine"
-    assert manifest["template_count"] == 162
-    assert len(rows) == 162
+    assert manifest["template_count"] == 324
+    assert len(rows) == 324
     assert {row["symbol"] for row in rows} == {"ORCL"}
     assert {row["source_strategy_id"].split("__")[1] for row in rows} == {"bull"}
     assert {row["parameters"]["family_template"] for row in rows} == {
+        "broken_wing_call_butterfly",
+        "bull_put_credit_spread",
         "debit_call_vertical",
         "single_leg_repair",
     }

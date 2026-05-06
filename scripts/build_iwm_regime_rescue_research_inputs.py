@@ -463,9 +463,17 @@ def _choppy_timewindow_quality_filter_rows(
     family_filter: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    family = "single_leg_repair"
-    if family_filter and family not in family_filter:
-        return rows
+    family_specs = (
+        ("call", "single_leg_repair"),
+        ("call", "debit_call_vertical"),
+        ("call", "broken_wing_call_butterfly"),
+    )
+    if family_filter:
+        family_specs = tuple(
+            (direction, family) for direction, family in family_specs if family in family_filter
+        )
+        if not family_specs:
+            return rows
 
     time_windows = [
         ("iwm_choppy_quality_105_150", 105, 150, 35),
@@ -506,42 +514,43 @@ def _choppy_timewindow_quality_filter_rows(
         for exit_name, target_pct, stop_pct, min_hold in exit_profiles:
             for quality_filter in quality_filters:
                 for range_edge_pct in (0.0010, 0.0012):
-                    parameters = {
-                        **quality_filter,
-                        "cooldown_bars": 60,
-                        "dte_mode": "next_expiry",
-                        "entry_signal_mode": "rising_edge",
-                        "family_template": family,
-                        "hard_exit_minute": hard_exit,
-                        "liquidity_gate": "tight",
-                        "max_minutes_since_open": max_minute,
-                        "max_signals_per_day": 1,
-                        "min_minutes_since_open": min_minute,
-                        "min_option_hold_minutes": min_hold,
-                        "option_exit_mode": "premium_target_stop",
-                        "option_exit_profile": exit_name,
-                        "option_profit_target_pct": target_pct,
-                        "option_stop_loss_pct": stop_pct,
-                        "profit_target_multiple": target_pct,
-                        "range_edge_pct": range_edge_pct,
-                        "range_entry_side": "lower_band",
-                        "short_width_steps": 1,
-                        "stock_proxy_mode": "range_bound",
-                        "stop_loss_multiple": stop_pct,
-                        "timeout_only_stock_proxy": True,
-                        "wing_width_steps": 1,
-                    }
-                    rows.append(
-                        _variant(
-                            symbol=symbol,
-                            regime="choppy",
-                            direction="call",
-                            family=family,
-                            parameters=parameters,
-                            priority=1,
-                            wave_id=wave_id,
+                    for direction, family in family_specs:
+                        parameters = {
+                            **quality_filter,
+                            "cooldown_bars": 60,
+                            "dte_mode": "next_expiry",
+                            "entry_signal_mode": "rising_edge",
+                            "family_template": family,
+                            "hard_exit_minute": hard_exit,
+                            "liquidity_gate": "tight",
+                            "max_minutes_since_open": max_minute,
+                            "max_signals_per_day": 1,
+                            "min_minutes_since_open": min_minute,
+                            "min_option_hold_minutes": min_hold,
+                            "option_exit_mode": "premium_target_stop",
+                            "option_exit_profile": exit_name,
+                            "option_profit_target_pct": target_pct,
+                            "option_stop_loss_pct": stop_pct,
+                            "profit_target_multiple": target_pct,
+                            "range_edge_pct": range_edge_pct,
+                            "range_entry_side": "lower_band",
+                            "short_width_steps": 1,
+                            "stock_proxy_mode": "range_bound",
+                            "stop_loss_multiple": stop_pct,
+                            "timeout_only_stock_proxy": True,
+                            "wing_width_steps": 1,
+                        }
+                        rows.append(
+                            _variant(
+                                symbol=symbol,
+                                regime="choppy",
+                                direction=direction,
+                                family=family,
+                                parameters=parameters,
+                                priority=1,
+                                wave_id=wave_id,
+                            )
                         )
-                    )
     return rows
 
 

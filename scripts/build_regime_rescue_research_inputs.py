@@ -156,7 +156,13 @@ def _bull_momentum_refine_rows(*, symbol: str, wave_id: str) -> list[dict]:
         for signal_window in signal_windows:
             for min_trend_gap_pct in (0.0007, 0.0012, 0.0018):
                 for exit_profile in exit_profiles:
-                    for family in ("single_leg_repair", "debit_call_vertical"):
+                    family_specs = (
+                        ("call", "single_leg_repair"),
+                        ("call", "debit_call_vertical"),
+                        ("put", "bull_put_credit_spread"),
+                        ("call", "broken_wing_call_butterfly"),
+                    )
+                    for direction, family in family_specs:
                         parameters = {
                             **timing_profile,
                             **signal_window,
@@ -173,7 +179,7 @@ def _bull_momentum_refine_rows(*, symbol: str, wave_id: str) -> list[dict]:
                             _variant(
                                 symbol=symbol,
                                 regime="bull",
-                                direction="call",
+                                direction=direction,
                                 family=family,
                                 parameters=parameters,
                                 priority=1,
@@ -243,29 +249,36 @@ def _bear_signal_window_refine_rows(*, symbol: str, wave_id: str) -> list[dict]:
         for signal_window in signal_windows:
             for min_trend_gap_pct in (0.0009, 0.0014, 0.0020):
                 for exit_profile in exit_profiles:
-                    parameters = {
-                        **timing_profile,
-                        **signal_window,
-                        **exit_profile,
-                        "dte_mode": "next_expiry",
-                        "family_template": "single_leg_repair",
-                        "liquidity_gate": "tight",
-                        "min_trend_gap_pct": min_trend_gap_pct,
-                        "short_width_steps": 1,
-                        "stock_proxy_mode": "breakout",
-                        "wing_width_steps": 1,
-                    }
-                    rows.append(
-                        _variant(
-                            symbol=symbol,
-                            regime="bear",
-                            direction="put",
-                            family="single_leg_repair",
-                            parameters=parameters,
-                            priority=1,
-                            wave_id=wave_id,
-                        )
+                    family_specs = (
+                        ("put", "single_leg_repair"),
+                        ("put", "debit_put_vertical"),
+                        ("call", "bear_call_credit_spread"),
+                        ("put", "broken_wing_put_butterfly"),
                     )
+                    for direction, family in family_specs:
+                        parameters = {
+                            **timing_profile,
+                            **signal_window,
+                            **exit_profile,
+                            "dte_mode": "next_expiry",
+                            "family_template": family,
+                            "liquidity_gate": "tight",
+                            "min_trend_gap_pct": min_trend_gap_pct,
+                            "short_width_steps": 1,
+                            "stock_proxy_mode": "breakout",
+                            "wing_width_steps": 1,
+                        }
+                        rows.append(
+                            _variant(
+                                symbol=symbol,
+                                regime="bear",
+                                direction=direction,
+                                family=family,
+                                parameters=parameters,
+                                priority=1,
+                                wave_id=wave_id,
+                            )
+                        )
     return rows
 
 

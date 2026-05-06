@@ -103,8 +103,12 @@ def test_iwm_choppy_timewindow_quality_filter_builds_stricter_choppy_grid() -> N
         choppy_profile_set="timewindow_quality_filter",
     )
 
-    assert len(rows) == 96
-    assert {row["parameters"]["family_template"] for row in rows} == {"single_leg_repair"}
+    assert len(rows) == 288
+    assert {row["parameters"]["family_template"] for row in rows} == {
+        "broken_wing_call_butterfly",
+        "debit_call_vertical",
+        "single_leg_repair",
+    }
     assert {row["parameters"]["range_entry_side"] for row in rows} == {"lower_band"}
     assert max(row["parameters"]["max_range_pct"] for row in rows) == 0.006
     assert min(row["parameters"]["max_range_pct"] for row in rows) == 0.004
