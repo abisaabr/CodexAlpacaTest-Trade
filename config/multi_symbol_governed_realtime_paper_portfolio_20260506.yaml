@@ -29,6 +29,7 @@ execution:
   market_exit_fallback_minute: 385
   startup_lead_minutes: 10
   midday_report_minute: 180
+  eod_flatten_minutes_before_close: [10, 2]
   auto_flatten_unexpected_positions: true
   unexpected_position_cleanup_timeout_seconds: 45
 

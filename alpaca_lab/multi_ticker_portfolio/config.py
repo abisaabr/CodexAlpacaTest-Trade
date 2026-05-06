@@ -248,6 +248,7 @@ class ExecutionConfig(BaseModel):
     market_exit_fallback_minute: int = 385
     startup_lead_minutes: int = 10
     midday_report_minute: int = 180
+    eod_flatten_minutes_before_close: tuple[int, ...] = (10, 2)
     auto_flatten_unexpected_positions: bool = True
     unexpected_position_cleanup_timeout_seconds: int = 45
 
@@ -265,6 +266,27 @@ class ExecutionConfig(BaseModel):
     @classmethod
     def normalize_path(cls, value: object) -> Path:
         return Path(str(value))
+
+    @field_validator("eod_flatten_minutes_before_close", mode="before")
+    @classmethod
+    def normalize_eod_flatten_minutes_before_close(cls, value: object) -> tuple[int, ...]:
+        if value in (None, "", []):
+            return ()
+        if isinstance(value, str):
+            items = [item.strip() for item in value.split(",") if item.strip()]
+            return tuple(int(item) for item in items)
+        if isinstance(value, (list, tuple, set)):
+            return tuple(int(item) for item in value)
+        raise TypeError("eod_flatten_minutes_before_close must be a comma-separated string or sequence")
+
+    @field_validator("eod_flatten_minutes_before_close")
+    @classmethod
+    def validate_eod_flatten_minutes_before_close(cls, value: tuple[int, ...]) -> tuple[int, ...]:
+        normalized = tuple(sorted({int(item) for item in value}, reverse=True))
+        for minutes_before_close in normalized:
+            if minutes_before_close <= 0 or minutes_before_close >= 390:
+                raise ValueError("eod_flatten_minutes_before_close values must be between 1 and 389")
+        return normalized
 
 
 class OwnershipConfig(BaseModel):

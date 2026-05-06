@@ -2655,6 +2655,159 @@ def test_reconcile_and_trade_sweeps_unexpected_intraday_positions(monkeypatch) -
     assert current_equity == 25_000.0
 
 
+def test_scheduled_eod_flatten_runs_10_and_2_minute_checkpoints() -> None:
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={
+                    "underlying_symbols": ("QQQ",),
+                    "eod_flatten_minutes_before_close": (10, 2),
+                }
+            ),
+            "strategies": tuple(),
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+
+    alerts: list[tuple[str, str]] = []
+    events: list[dict[str, object]] = []
+    cleanup_calls: list[dict[str, object]] = []
+    trader._alert = lambda _session, level, message: alerts.append((level, message))
+    trader._append_trade_event = lambda _trade_date, event: events.append(event)
+
+    def _cleanup(**kwargs) -> dict[str, object]:
+        cleanup_calls.append(kwargs)
+        return {
+            "shutdown_reconciled": True,
+            "known_trade_cleanup_count": 1,
+            "unexpected_position_cleanup_count": 2,
+        }
+
+    trader._run_end_of_day_cleanup_safeguard = _cleanup
+    session = SessionState(
+        trade_date="2026-05-06",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+    trade_date = datetime(2026, 5, 6).date()
+
+    first_summary = trader._maybe_run_scheduled_eod_flatten(
+        session=session,
+        trade_date=trade_date,
+        stock_frames={},
+        current_minute=380,
+    )
+    duplicate_summary = trader._maybe_run_scheduled_eod_flatten(
+        session=session,
+        trade_date=trade_date,
+        stock_frames={},
+        current_minute=381,
+    )
+    second_summary = trader._maybe_run_scheduled_eod_flatten(
+        session=session,
+        trade_date=trade_date,
+        stock_frames={},
+        current_minute=388,
+    )
+
+    assert first_summary is not None
+    assert duplicate_summary is None
+    assert second_summary is not None
+    assert [call["trade_date"] for call in cleanup_calls] == [trade_date, trade_date]
+    assert session.blocked_new_entries is True
+    assert session.block_reason == "scheduled_end_of_day_flatten_2m_before_close"
+    assert session.eod_flatten_checkpoints_completed == [10, 2]
+    assert [event["minutes_before_close_due"] for event in events] == [[10], [2]]
+    assert alerts[0] == ("warning", "scheduled_end_of_day_flatten_10m_before_close")
+
+
+def test_reconcile_and_trade_triggers_scheduled_eod_flatten_before_entries(monkeypatch) -> None:
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={
+                    "underlying_symbols": ("QQQ",),
+                    "eod_flatten_minutes_before_close": (10, 2),
+                }
+            ),
+            "strategies": tuple(
+                strategy
+                for strategy in default_portfolio_config().strategies
+                if strategy.underlying_symbol == "QQQ"
+            ),
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.underlyings = ("QQQ",)
+    trader._close_unexpected_broker_positions = lambda **_kwargs: []
+    trader._maybe_send_midday_notification = lambda **_kwargs: None
+    trader._apply_entry_execution_circuit_breaker = lambda _session: None
+    trader._append_trade_event = lambda *_args, **_kwargs: None
+    trader._alert = lambda *_args, **_kwargs: None
+    trader._evaluate_entry = lambda **_kwargs: (_ for _ in ()).throw(AssertionError("entries must be blocked"))
+    monkeypatch.setattr(
+        "alpaca_lab.multi_ticker_portfolio.trader.infer_symbol_regime",
+        lambda _frame: "bull",
+    )
+
+    cleanup_calls: list[int] = []
+    trader._run_end_of_day_cleanup_safeguard = lambda **kwargs: cleanup_calls.append(
+        kwargs["stock_frames"]["QQQ"].iloc[-1]["minute_index"]
+    ) or {"shutdown_reconciled": True}
+    trader._build_symbol_snapshot = lambda **_kwargs: SymbolSnapshot(
+        underlying_symbol="QQQ",
+        trade_date=datetime(2026, 5, 6).date(),
+        stock_frame=pd.DataFrame(
+            [
+                {
+                    "timestamp_et": datetime(2026, 5, 6, 15, 50),
+                    "minute_index": 380,
+                    "close": 500.0,
+                }
+            ]
+        ),
+        option_chain=pd.DataFrame([{"symbol": "QQQ260508C00500000"}]),
+        mark_map={},
+        latest_close=500.0,
+        current_minute=380,
+        latest_timestamp_et=datetime(2026, 5, 6, 15, 50, tzinfo=ZoneInfo("America/New_York")),
+    )
+    session = SessionState(
+        trade_date="2026-05-06",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+    ledger = PortfolioLedger(realized_equity=25_000.0, high_watermark=25_000.0)
+    monkeypatch.setattr(
+        "alpaca_lab.multi_ticker_portfolio.trader._current_equity",
+        lambda *_args, **_kwargs: 25_000.0,
+    )
+
+    _snapshots, current_equity = trader._reconcile_and_trade(
+        session=session,
+        ledger=ledger,
+        stock_frames={
+            "QQQ": pd.DataFrame(
+                [
+                    {
+                        "timestamp_et": datetime(2026, 5, 6, 15, 50),
+                        "minute_index": 380,
+                        "close": 500.0,
+                    }
+                ]
+            )
+        },
+        broker_equity=30_000.0,
+    )
+
+    assert cleanup_calls == [380]
+    assert session.blocked_new_entries is True
+    assert session.block_reason == "scheduled_end_of_day_flatten_10m_before_close"
+    assert current_equity == 25_000.0
+
+
 def test_startup_check_auto_flattens_unexpected_positions(
     tmp_path: Path,
     monkeypatch,

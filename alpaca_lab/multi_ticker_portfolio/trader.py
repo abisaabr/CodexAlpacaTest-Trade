@@ -32,6 +32,7 @@ from alpaca_lab.multi_ticker_portfolio.config import (
     StrategyConfig,
 )
 from alpaca_lab.multi_ticker_portfolio.signals import (
+    MINUTES_PER_RTH_SESSION,
     build_stock_frame,
     governed_research_signal_is_true,
     infer_symbol_regime,
@@ -58,6 +59,7 @@ AUTO_FLATTEN_UNEXPECTED_STARTUP_REASON = "auto_flatten_unexpected_startup_positi
 AUTO_FLATTEN_KNOWN_EOD_REASON = "auto_flatten_known_end_of_day_position"
 AUTO_FLATTEN_UNEXPECTED_EOD_REASON = "auto_flatten_unexpected_end_of_day_position"
 AUTO_FLATTEN_UNEXPECTED_INTRADAY_REASON = "auto_flatten_unexpected_intraday_position"
+SCHEDULED_EOD_FLATTEN_REASON = "scheduled_end_of_day_flatten"
 BROKER_EQUITY_EMERGENCY_STOP_REASON = "broker_equity_emergency_stop"
 SEVERE_LOSS_HALT_REASON = "severe_loss_halt_new_entries"
 SEVERE_LOSS_FLATTEN_REASON = "severe_loss_flatten_all"
@@ -276,6 +278,7 @@ class SessionState:
     notified_morning: bool = False
     notified_midday: bool = False
     notified_end_of_day: bool = False
+    eod_flatten_checkpoints_completed: list[int] = field(default_factory=list)
     last_updated_at: str | None = None
 
 
@@ -573,6 +576,11 @@ class MultiTickerPortfolioPaperTrader:
                 notified_morning=bool(payload.get("notified_morning", False)),
                 notified_midday=bool(payload.get("notified_midday", False)),
                 notified_end_of_day=bool(payload.get("notified_end_of_day", False)),
+                eod_flatten_checkpoints_completed=[
+                    int(value)
+                    for value in payload.get("eod_flatten_checkpoints_completed", [])
+                    if str(value).strip()
+                ],
                 last_updated_at=payload.get("last_updated_at"),
             )
         return SessionState(
@@ -3296,6 +3304,85 @@ class MultiTickerPortfolioPaperTrader:
         else:
             self._record_notification_failure(session, "midday")
 
+    def _current_rth_minute(self, trade_date: date) -> int:
+        now_et = _now_et()
+        rth_open = _rth_open_for(trade_date)
+        elapsed_minutes = int((now_et - rth_open).total_seconds() // 60)
+        return max(0, min(MINUTES_PER_RTH_SESSION, elapsed_minutes))
+
+    def _due_eod_flatten_checkpoints(
+        self,
+        *,
+        session: SessionState,
+        current_minute: int,
+    ) -> list[int]:
+        completed = {int(value) for value in session.eod_flatten_checkpoints_completed}
+        due: list[int] = []
+        for minutes_before_close in self.portfolio_config.execution.eod_flatten_minutes_before_close:
+            trigger_minute = max(0, MINUTES_PER_RTH_SESSION - int(minutes_before_close))
+            if current_minute >= trigger_minute and int(minutes_before_close) not in completed:
+                due.append(int(minutes_before_close))
+        return due
+
+    def _scheduled_eod_flatten_reason(self, due_checkpoints: list[int]) -> str:
+        checkpoint_text = "_".join(f"{minutes}m" for minutes in due_checkpoints)
+        return f"{SCHEDULED_EOD_FLATTEN_REASON}_{checkpoint_text}_before_close"
+
+    def _mark_eod_flatten_checkpoints_completed(
+        self,
+        session: SessionState,
+        due_checkpoints: list[int],
+    ) -> None:
+        completed = {int(value) for value in session.eod_flatten_checkpoints_completed}
+        completed.update(int(value) for value in due_checkpoints)
+        session.eod_flatten_checkpoints_completed = sorted(completed, reverse=True)
+
+    def _maybe_run_scheduled_eod_flatten(
+        self,
+        *,
+        session: SessionState,
+        trade_date: date,
+        stock_frames: dict[str, pd.DataFrame] | None,
+        current_minute: int,
+    ) -> dict[str, Any] | None:
+        due_checkpoints = self._due_eod_flatten_checkpoints(
+            session=session,
+            current_minute=current_minute,
+        )
+        if not due_checkpoints:
+            return None
+        reason = self._scheduled_eod_flatten_reason(due_checkpoints)
+        if not session.blocked_new_entries or str(session.block_reason or "").startswith(
+            SCHEDULED_EOD_FLATTEN_REASON
+        ):
+            self._record_guardrail_block(session, level="warning", reason=reason)
+        else:
+            self._alert(session, "warning", reason)
+        cleanup_summary = self._run_end_of_day_cleanup_safeguard(
+            session=session,
+            trade_date=trade_date,
+            stock_frames=stock_frames,
+        )
+        self._mark_eod_flatten_checkpoints_completed(session, due_checkpoints)
+        event = {
+            "event_type": "scheduled_eod_flatten",
+            "trade_date": session.trade_date,
+            "reason": reason,
+            "current_minute": int(current_minute),
+            "minutes_before_close_due": due_checkpoints,
+            "open_trade_count_after": len(session.open_trades),
+            "shutdown_reconciled": bool(cleanup_summary.get("shutdown_reconciled", False)),
+            "unexpected_position_cleanup_count": int(
+                cleanup_summary.get("unexpected_position_cleanup_count", 0) or 0
+            ),
+            "known_trade_cleanup_count": int(cleanup_summary.get("known_trade_cleanup_count", 0) or 0),
+        }
+        self._append_trade_event(trade_date, event)
+        return {
+            **event,
+            "cleanup_summary": cleanup_summary,
+        }
+
     def _reconcile_and_trade(
         self,
         *,
@@ -3418,6 +3505,16 @@ class MultiTickerPortfolioPaperTrader:
             session=session,
             trade_date=trade_date,
             reason=AUTO_FLATTEN_UNEXPECTED_INTRADAY_REASON,
+        )
+        current_minute = max(
+            (snapshot.current_minute for snapshot in snapshots.values()),
+            default=self._current_rth_minute(trade_date),
+        )
+        self._maybe_run_scheduled_eod_flatten(
+            session=session,
+            trade_date=trade_date,
+            stock_frames=stock_frames,
+            current_minute=current_minute,
         )
 
         combined_mark_map = {
@@ -4772,6 +4869,13 @@ class MultiTickerPortfolioPaperTrader:
                 )
                 self.save_session(session)
             else:
+                self._maybe_run_scheduled_eod_flatten(
+                    session=session,
+                    trade_date=trade_date,
+                    stock_frames=stock_frames,
+                    current_minute=self._current_rth_minute(trade_date),
+                )
+                self.save_session(session)
                 current_equity = _current_equity(session)
             if run_once:
                 return {
