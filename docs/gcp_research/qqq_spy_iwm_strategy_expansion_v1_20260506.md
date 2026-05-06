@@ -181,6 +181,60 @@ Strict partial report:
 This partial packet is not a final promotion packet. It is a checkpoint proving the
 fill-friendly path is working and identifying bull as the next search target.
 
+## Final Aggregate
+
+Final aggregate path:
+
+```text
+gs://codexalpaca-control-us/research_results/qqq_spy_iwm_strategy_expansion_v1_20260506T1945Z/aggregate_final/aggregate_final_20260506T164345/
+```
+
+Local packet path:
+
+```text
+reports/gcp_research/qqq_spy_iwm_strategy_expansion_v1_20260506T1945Z/aggregate_final_20260506T164345/
+```
+
+Strict final report:
+
+- Candidate/profile rows: 1,944.
+- Eligible under strict candidate gates: 147.
+- Packet decision: `ready_for_governed_validation_review`.
+- Regime-complete for promotion review: true.
+- Missing eligible regimes: none.
+- Required regimes represented: bull, bear, choppy.
+- Review candidates in packet: 20.
+- Promotion scope: research/governed-validation review only.
+- Broker-facing effect: none.
+- Live-manifest effect: none.
+- Risk-policy effect: none.
+
+Representative eligible regimes:
+
+- Bull: IWM `bull_put_credit_spread`, min net PnL `3218.285`, min test net PnL `5719.042`, strategy fill `0.9114`.
+- Bear: QQQ `single_leg_repair`, min net PnL `2589.3`, min test net PnL `2045.219`, strategy fill `1.0`.
+- Choppy: SPY `single_leg_repair`, min net PnL `3325.554`, min test net PnL `584.913`, strategy fill `0.9899`.
+
+Capital-plan exposure in the strict aggregate:
+
+- QQQ: 2 strategies, 50.00% research-only weight.
+- SPY: 1 strategy, 32.68% research-only weight.
+- IWM: 2 strategies, 17.32% research-only weight.
+
+Full-population blocker counts remained useful for follow-up repair/redesign:
+
+- `fill_coverage_below_0.90`: 1,096.
+- `min_net_pnl_not_positive`: 1,700.
+- `option_trades_below_20`: 42.
+- `test_net_pnl_not_above_0`: 1,540.
+
+Operational cleanup:
+
+- The six remaining terminated expansion VMs were deleted after artifacts were present in GCS and the final aggregate was built:
+  `qqq/spy/iwm-rescue-c073-144-20260506v1` and `qqq/spy/iwm-rescue-c217-288-20260506v1`.
+- No duplicate broker-facing paper process was observed during the heartbeat check.
+- No live-trading mode was started or changed.
+
 ## Verification
 
 Local tests passed:
