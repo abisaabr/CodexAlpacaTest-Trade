@@ -292,16 +292,15 @@ XLE completed, was aggregated, and was mirrored to GCS. It is not eligible for t
 - Full-population blockers: `fill_coverage_below_0.90=232`, `min_net_pnl_not_positive=464`, `option_trades_below_20=26`, `test_net_pnl_not_above_0=443`
 - Completed workers were deleted after aggregation.
 
-## Active XOM Research Wave
+## XOM Research Wave Result
 
-XOM is now running as the next one-ticker full-regime rescue wave:
+XOM completed, was aggregated, and was mirrored to GCS. It is not eligible for the governed paper manifest because it is regime-incomplete:
 
 - Wave ID: `xom_full_regime_rescue_20260506T0645Z`
 - GCS root: `gs://codexalpaca-control-us/research_results/xom_full_regime_rescue_20260506T0645Z`
 - Symbol: `XOM`
 - Candidate count: `166`
 - Target regimes: `bull,bear,choppy`
-- Workers: `8`
 - Broker-facing: `false`
 - Paper orders: `false`
 - Live manifest effect: `none`
@@ -309,14 +308,32 @@ XOM is now running as the next one-ticker full-regime rescue wave:
 - Stock data: `gs://codexalpaca-data-us/research_stock_data/option_fill_ladder_next10_20260429/XOM/365d_5x5/stock_ref_silver/stock_bars`
 - Selected contracts: `gs://codexalpaca-control-us/research_results/option_fill_ladder_next10_20260429/XOM/365d_5x5/research_wave/dense_universe/selected_option_contracts`
 - Option bars: `gs://codexalpaca-data-us/research_option_data/option_fill_ladder_next10_20260429/XOM/365d_5x5/option_bars_silver/option_bars`
+- Portfolio report: `reports/gcp_research/xom_full_regime_rescue_20260506T0645Z/aggregate/combined_portfolio_report/research_portfolio_report.json`
+- Promotion packet: `reports/gcp_research/xom_full_regime_rescue_20260506T0645Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- Packet decision: `research_only_blocked_regime_incomplete`
+- Eligible candidates: `28`
+- Unique eligible base candidates in packet view: `15`
+- Required regimes: `bull,bear,choppy`
+- Eligible regimes: `bull,bear`
+- Missing eligible regimes: `choppy`
+- Regime complete: `false`
+- Full-population blockers: `fill_coverage_below_0.90=52`, `min_net_pnl_not_positive=454`, `option_trades_below_20=2`, `test_net_pnl_not_above_0=391`
+- Completed workers were deleted after aggregation.
 
 ## Next Research Loop
 
-1. Monitor XOM worker statuses under the wave GCS root.
-2. When all XOM shards self-stop and upload reports, aggregate worker outputs into a strict portfolio report and promotion-review packet.
-3. If XOM is regime-complete, add it to the governed-validation manifest and rerun production-risk projection.
-4. If XOM is blocked, classify blockers by fill coverage, full-period PnL, test PnL, trade count, and sizing.
-5. Then advance to the next available next10 ticker.
+The available next10 dense-data ticker set for this overnight pass has been exhausted:
+
+- Processed as governed-validation additions: `AVGO`, `GOOGL`, `TSM`
+- Processed but blocked as regime-incomplete: `MU`, `NFLX`, `ORCL`, `PLTR`, `XLE`, `XOM`
+- Already covered separately before this loop: `QQQ`
+
+Next safe actions:
+
+1. Keep the 2026-05-06 RTH paper config unchanged until a fresh RTH preflight passes.
+2. Do not add blocked tickers to the governed paper manifest.
+3. If more overnight research is needed, start a new data-download lane for additional liquid symbols before launching more full-regime rescue waves.
+4. During RTH preparation, prioritize startup preflight, no-order run-once validation, broker state checks, and log archival before any explicit PAPER order-submission command.
 
 ## Hard Rules
 
