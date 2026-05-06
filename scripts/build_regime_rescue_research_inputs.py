@@ -36,12 +36,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-prefix", default="")
     parser.add_argument(
         "--bull-profile-set",
-        choices=("baseline",),
+        choices=("baseline", "momentum_refine"),
         default="baseline",
         help=(
             "Bull grid to build when target-regimes includes bull. The baseline grid "
             "uses the compact trend-following call/vertical/credit templates that "
-            "proved useful in the QQQ/SPY fill-friendly tournament."
+            "proved useful in the QQQ/SPY fill-friendly tournament. "
+            "'momentum_refine' tests stricter signal windows and option-level "
+            "premium exits for symbols whose baseline bull sleeve was regime-incomplete."
         ),
     )
     parser.add_argument(
@@ -83,6 +85,102 @@ def _bull_baseline_rows(*, symbol: str, wave_id: str) -> list[dict]:
         for row in build_regime_baseline_rows(symbol=symbol, wave_id=wave_id)
         if "__bull__" in str(row.get("source_strategy_id", ""))
     ]
+
+
+def _bull_momentum_refine_rows(*, symbol: str, wave_id: str) -> list[dict]:
+    rows: list[dict] = []
+    timing_profiles = [
+        {
+            "timing_profile": "bull_opening_drive_20_95_mr",
+            "hard_exit_minute": 45,
+            "min_minutes_since_open": 20,
+            "max_minutes_since_open": 95,
+            "entry_signal_mode": "rising_edge",
+            "cooldown_bars": 180,
+            "max_signals_per_day": 1,
+        },
+        {
+            "timing_profile": "bull_midday_continuation_90_225_mr",
+            "hard_exit_minute": 75,
+            "min_minutes_since_open": 90,
+            "max_minutes_since_open": 225,
+            "entry_signal_mode": "rising_edge",
+            "cooldown_bars": 180,
+            "max_signals_per_day": 1,
+        },
+        {
+            "timing_profile": "bull_late_followthrough_210_340_mr",
+            "hard_exit_minute": 60,
+            "min_minutes_since_open": 210,
+            "max_minutes_since_open": 340,
+            "entry_signal_mode": "daily_first",
+            "cooldown_bars": 240,
+            "max_signals_per_day": 1,
+        },
+    ]
+    signal_windows = [
+        {"fast_window": 5, "slow_window": 21, "breakout_window": 21, "min_volume_ratio": 1.10},
+        {"fast_window": 8, "slow_window": 34, "breakout_window": 34, "min_volume_ratio": 1.20},
+        {"fast_window": 12, "slow_window": 55, "breakout_window": 55, "min_volume_ratio": 1.35},
+    ]
+    exit_profiles = [
+        {
+            "option_exit_mode": "premium_target_stop",
+            "option_exit_profile": "bull_mr_tight_20_07",
+            "option_profit_target_pct": 0.20,
+            "option_stop_loss_pct": 0.07,
+            "min_option_hold_minutes": 1,
+            "profit_target_multiple": 0.22,
+            "stop_loss_multiple": 0.08,
+        },
+        {
+            "option_exit_mode": "premium_target_stop",
+            "option_exit_profile": "bull_mr_balanced_32_10",
+            "option_profit_target_pct": 0.32,
+            "option_stop_loss_pct": 0.10,
+            "min_option_hold_minutes": 2,
+            "profit_target_multiple": 0.35,
+            "stop_loss_multiple": 0.11,
+        },
+        {
+            "option_exit_mode": "premium_target_stop",
+            "option_exit_profile": "bull_mr_runner_45_14",
+            "option_profit_target_pct": 0.45,
+            "option_stop_loss_pct": 0.14,
+            "min_option_hold_minutes": 3,
+            "profit_target_multiple": 0.48,
+            "stop_loss_multiple": 0.15,
+        },
+    ]
+    for timing_profile in timing_profiles:
+        for signal_window in signal_windows:
+            for min_trend_gap_pct in (0.0007, 0.0012, 0.0018):
+                for exit_profile in exit_profiles:
+                    for family in ("single_leg_repair", "debit_call_vertical"):
+                        parameters = {
+                            **timing_profile,
+                            **signal_window,
+                            **exit_profile,
+                            "dte_mode": "next_expiry",
+                            "family_template": family,
+                            "liquidity_gate": "tight",
+                            "min_trend_gap_pct": min_trend_gap_pct,
+                            "short_width_steps": 1,
+                            "stock_proxy_mode": "breakout",
+                            "wing_width_steps": 1,
+                        }
+                        rows.append(
+                            _variant(
+                                symbol=symbol,
+                                regime="bull",
+                                direction="call",
+                                family=family,
+                                parameters=parameters,
+                                priority=1,
+                                wave_id=wave_id,
+                            )
+                        )
+    return rows
 
 
 def _bear_signal_window_refine_rows(*, symbol: str, wave_id: str) -> list[dict]:
@@ -185,7 +283,10 @@ def main() -> None:
     rows = []
     non_bull_regimes = set(target_regimes)
     if "bull" in non_bull_regimes:
-        rows.extend(_bull_baseline_rows(symbol=symbol, wave_id=args.wave_id))
+        if args.bull_profile_set == "momentum_refine":
+            rows.extend(_bull_momentum_refine_rows(symbol=symbol, wave_id=args.wave_id))
+        else:
+            rows.extend(_bull_baseline_rows(symbol=symbol, wave_id=args.wave_id))
         non_bull_regimes.remove("bull")
 
     if args.bear_profile_set == "signal_window_refine":

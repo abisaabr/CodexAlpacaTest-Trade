@@ -21,6 +21,8 @@ param(
     [string]$LagProfiles = "0:60,10:60,30:120",
     [int]$MaxEntryStalenessMinutes = 0,
     [string]$TargetRegimes = "bear,choppy",
+    [ValidateSet("baseline", "momentum_refine")]
+    [string]$BullProfileSet = "baseline",
     [string]$ChoppyFamilies = "",
     [string]$ChoppySignalDelayBars = "0",
     [ValidateSet("rescue", "timewindow_refine", "timewindow_micro_exit", "timewindow_quality_filter")]
@@ -165,6 +167,7 @@ function Remove-TerminatedInstance {
     --output-dir $InputsDir `
     --output-prefix $OutputPrefix `
     --target-regimes $TargetRegimes `
+    --bull-profile-set $BullProfileSet `
     --choppy-families $ChoppyFamilies `
     --choppy-signal-delay-bars $ChoppySignalDelayBars `
     --choppy-profile-set $ChoppyProfileSet `
@@ -246,6 +249,7 @@ foreach ($row in $launchRows) {
     $metadata = @{
         allocation_fraction = "0.05"
         bars_uri = $BarsUri
+        bull_profile_set = $BullProfileSet
         candidate_count = "$($row.candidate_count)"
         candidate_selection_mode = "$($row.candidate_selection_mode)"
         candidate_start_index = "$($row.candidate_start_index)"
