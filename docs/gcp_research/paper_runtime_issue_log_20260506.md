@@ -165,3 +165,28 @@ The paper runner needs explicit aggregation-aware risk accounting for multiple
 strategies sharing the same option contract. Session state should distinguish
 strategy-level intents from broker-level net positions before computing available
 risk, exits, and close-order quantities.
+
+### 5. QQQ hard-exit stale close continued through midday
+
+- Latest checked: approximately `2026-05-06T12:16:25-04:00`.
+- Session state reported `2` open trades and `4` completed trades.
+- Broker reported `2` option positions:
+  - long `1` `GOOGL260508C00397500`
+  - long `1` `QQQ260507P00689000`
+- Broker had `1` open sell-to-close order:
+  - symbol: `QQQ260507P00689000`
+  - side: `sell`
+  - qty: `1`
+  - limit price: `3.55`
+  - filled qty: `0`
+  - status: `new`
+- Broker mark on the QQQ put was approximately `1.65`.
+- Runtime continued to emit `exit did not fill` warnings for the same QQQ hard-exit
+  strategy.
+
+#### Post-session diagnosis target
+
+Prioritize a paper-only close-order refresh patch before relying on this runner
+for unattended intraday exits. The current behavior can hold a losing option
+position far past a hard-exit condition when the stale sell limit is no longer
+marketable.

@@ -120,11 +120,47 @@ the launcher retried and placed all eight workers in available zones.
 
 ## Next Actions
 
-1. Monitor the worker VMs and GCS worker artifacts until all workers terminate or
-   report completion.
-2. Pull worker reports and aggregate into a strict portfolio report.
-3. Build a promotion-review packet without manually overriding decision fields.
-4. If ORCL gains at least one eligible bull candidate, combine it with prior ORCL
-   eligible bear/choppy evidence only through a generated governed-review packet.
-5. Do not add ORCL to paper execution unless a generated packet clears the
+1. Pull worker reports and aggregate into a strict portfolio report. Completed.
+2. Build a promotion-review packet without manually overriding decision fields.
+   Completed.
+3. If ORCL gains at least one eligible bull candidate, combine it with prior ORCL
+   eligible bear/choppy evidence only through generated governed-review artifacts.
+4. Do not add ORCL to paper execution unless a generated packet clears the
    governed-validation path and a separate paper-runner activation step is taken.
+
+## Completion Result
+
+- Worker VMs: all `8` workers reached `TERMINATED`.
+- Downloaded worker artifact volume: `374` objects, approximately `337.8 MiB`.
+- Strict aggregate portfolio report:
+  `reports/gcp_research/orcl_bull_momentum_refine_20260506T1535Z/aggregate/combined_portfolio_report/research_portfolio_report.json`
+- Strict aggregate promotion packet:
+  `reports/gcp_research/orcl_bull_momentum_refine_20260506T1535Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- Aggregate GCS root:
+  `gs://codexalpaca-control-us/research_results/orcl_bull_momentum_refine_20260506T1535Z/aggregate/`
+- Portfolio report status: `research_portfolio_report_complete`.
+- Promotion packet status: `research_promotion_review_packet_complete`.
+- Promotion packet decision: `ready_for_governed_validation_review`.
+- Candidate count: `486`.
+- Eligible governed-review candidates: `6`.
+- Required regimes for this targeted wave: `bull`.
+- Eligible regimes for this targeted wave: `bull`.
+- Missing eligible regimes for this targeted wave: none.
+- Top family: `debit_call_vertical`.
+- Top candidate:
+  `portfolio12h__orcl__bull__call__debit_call_vertical__dd230346b0e623__profile_orcl-regime-rescue-c085-105-orcl-e30-x120-entry-liquidity-first-research-only`
+- Top candidate metrics:
+  - `min_net_pnl`: `3296.651`
+  - `min_test_net_pnl`: `6772.576`
+  - `min_fill_coverage`: `0.92`
+  - `min_option_trade_count`: `138`
+
+## Governance Caveat
+
+This wave creates ORCL bull governed-review candidates, not live activation. ORCL
+still needs a combined generated governed-review artifact that joins these bull
+candidates with the prior ORCL bear/choppy candidates. Also, the current manifest
+builder should be reviewed before runtime activation of `debit_call_vertical`
+candidates, because a StrategyConfig-compatible runtime manifest must preserve
+multi-leg vertical semantics rather than silently reducing a vertical candidate to
+a single long call.
