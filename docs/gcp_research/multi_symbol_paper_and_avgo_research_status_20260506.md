@@ -181,13 +181,38 @@ NFLX completed, was aggregated, and was mirrored to GCS. It is not eligible for 
 - Full-population blockers: `fill_coverage_below_0.90=493`, `min_net_pnl_not_positive=474`, `test_net_pnl_not_above_0=429`
 - Completed workers were deleted after aggregation.
 
-## Active ORCL Research Wave
+## ORCL Research Wave Result
 
-ORCL is now running as the next one-ticker full-regime rescue wave:
+ORCL completed, was aggregated, and was mirrored to GCS. It is not eligible for the governed paper manifest because it is regime-incomplete:
 
 - Wave ID: `orcl_full_regime_rescue_20260506T0430Z`
 - GCS root: `gs://codexalpaca-control-us/research_results/orcl_full_regime_rescue_20260506T0430Z`
 - Symbol: `ORCL`
+- Candidate count: `166`
+- Target regimes: `bull,bear,choppy`
+- Broker-facing: `false`
+- Paper orders: `false`
+- Live manifest effect: `none`
+- Risk policy effect: `none`
+- Portfolio report: `reports/gcp_research/orcl_full_regime_rescue_20260506T0430Z/aggregate/combined_portfolio_report/research_portfolio_report.json`
+- Promotion packet: `reports/gcp_research/orcl_full_regime_rescue_20260506T0430Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- Packet decision: `research_only_blocked_regime_incomplete`
+- Eligible candidates: `70`
+- Unique eligible base candidates in packet view: `27`
+- Required regimes: `bull,bear,choppy`
+- Eligible regimes: `bear,choppy`
+- Missing eligible regimes: `bull`
+- Regime complete: `false`
+- Full-population blockers: `fill_coverage_below_0.90=68`, `min_net_pnl_not_positive=401`, `test_net_pnl_not_above_0=290`
+- Completed workers were deleted after aggregation.
+
+## Active PLTR Research Wave
+
+PLTR is now running as the next one-ticker full-regime rescue wave:
+
+- Wave ID: `pltr_full_regime_rescue_20260506T0500Z`
+- GCS root: `gs://codexalpaca-control-us/research_results/pltr_full_regime_rescue_20260506T0500Z`
+- Symbol: `PLTR`
 - Candidate count: `166`
 - Target regimes: `bull,bear,choppy`
 - Workers: `8`
@@ -198,11 +223,11 @@ ORCL is now running as the next one-ticker full-regime rescue wave:
 
 ## Next Research Loop
 
-1. Monitor ORCL worker statuses under the wave GCS root.
-2. When all ORCL shards self-stop and upload reports, aggregate worker outputs into a strict portfolio report and promotion-review packet.
-3. If ORCL is regime-complete, add it to the governed-validation manifest and rerun production-risk projection.
-4. If ORCL is blocked, classify blockers by fill coverage, full-period PnL, test PnL, trade count, and sizing.
-5. Then advance to the next available next10 ticker, one ticker at a time: `PLTR`, `TSM`, `XLE`, `XOM`.
+1. Monitor PLTR worker statuses under the wave GCS root.
+2. When all PLTR shards self-stop and upload reports, aggregate worker outputs into a strict portfolio report and promotion-review packet.
+3. If PLTR is regime-complete, add it to the governed-validation manifest and rerun production-risk projection.
+4. If PLTR is blocked, classify blockers by fill coverage, full-period PnL, test PnL, trade count, and sizing.
+5. Then advance to the next available next10 ticker, one ticker at a time: `TSM`, `XLE`, `XOM`.
 
 ## Hard Rules
 
