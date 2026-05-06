@@ -1,5 +1,5 @@
 name: multi_symbol_governed_realtime_paper_trader_20260506
-description: PAPER-only governed-validation portfolio for QQQ, SPY, AMD, AMZN, MSFT, and TSLA using generated promotion-review packets.
+description: PAPER-only governed-validation portfolio for QQQ, SPY, AMD, AMZN, MSFT, TSLA, and AVGO using generated promotion-review packets.
 strategy_manifest_paths:
   - promotion_manifests/multi_symbol_governed_validation_20260506.yaml
 
@@ -10,7 +10,7 @@ ownership:
   lease_ttl_seconds: 180
 
 execution:
-  underlying_symbols: [QQQ, SPY, AMD, AMZN, MSFT, TSLA]
+  underlying_symbols: [QQQ, SPY, AMD, AMZN, MSFT, TSLA, AVGO]
   option_feed: opra
   stock_feed: sip
   submit_paper_orders: false
@@ -50,7 +50,7 @@ risk:
       symbols: [QQQ, SPY]
       max_open_risk_fraction: 0.08
     - name: growth_tech
-      symbols: [AMD, AMZN, MSFT, TSLA]
+      symbols: [AMD, AMZN, MSFT, TSLA, AVGO]
       max_open_risk_fraction: 0.09
   min_required_buying_power: 10000
   broker_min_equity_to_trade: 26000

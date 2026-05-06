@@ -619,6 +619,34 @@ def _eligible_regimes(regime_summary: list[dict[str, Any]]) -> list[str]:
     ]
 
 
+def _eligible_regime_representatives(
+    candidate_rows: list[dict[str, Any]],
+    *,
+    required_regimes: list[str],
+) -> list[dict[str, Any]]:
+    representatives: list[dict[str, Any]] = []
+    for regime in required_regimes:
+        eligible = [
+            row
+            for row in candidate_rows
+            if row.get("promotion_status") == "eligible_for_promotion_review"
+            and str(row.get("intended_regime") or "") == regime
+        ]
+        if not eligible:
+            continue
+        representatives.append(
+            max(
+                eligible,
+                key=lambda row: (
+                    _float(row.get("research_score")),
+                    _float(row.get("min_test_net_pnl")),
+                    _float(row.get("min_fill_coverage")),
+                ),
+            )
+        )
+    return representatives
+
+
 def _has_strong_data_foundation(row: dict[str, Any]) -> bool:
     value = row.get("min_data_foundation_coverage")
     if value in (None, "", "nan"):
@@ -789,6 +817,19 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
     lines.append(
         f"- Regime complete for promotion review: `{packet['regime_complete_for_promotion_review']}`"
     )
+    lines.extend(["", "## Eligible Regime Representatives", ""])
+    if not packet.get("eligible_regime_representatives"):
+        lines.append("- No eligible regime representatives were selected.")
+    for row in packet.get("eligible_regime_representatives", []):
+        lines.append(
+            "- "
+            f"`{row['symbol']}` `{row['candidate_variant_id']}` "
+            f"regime `{row.get('intended_regime') or 'unknown'}` "
+            f"score `{row['research_score']}` "
+            f"min_net `{row['min_net_pnl']}` min_test `{row['min_test_net_pnl']}` "
+            f"strategy_fill `{row['min_fill_coverage']}`"
+        )
+    lines.extend(["", "Regime summary:", ""])
     for row in packet["regime_summary"]:
         lines.append(
             "- "
@@ -881,6 +922,10 @@ def build_research_portfolio_report(
     missing_eligible_regimes = [
         regime for regime in normalized_required_regimes if regime not in set(eligible_regimes)
     ]
+    eligible_regime_representatives = _eligible_regime_representatives(
+        candidate_rows,
+        required_regimes=normalized_required_regimes,
+    )
     fill_coverage_unit = next(
         (
             row.get("fill_coverage_unit")
@@ -928,6 +973,7 @@ def build_research_portfolio_report(
         "symbol_regime_summary": symbol_regime_summary,
         "eligible_regimes": eligible_regimes,
         "missing_eligible_regimes": missing_eligible_regimes,
+        "eligible_regime_representatives": eligible_regime_representatives,
         "regime_complete_for_promotion_review": not missing_eligible_regimes,
         "promotion_allowed_regime_complete": eligible_count > 0
         and not missing_eligible_regimes,

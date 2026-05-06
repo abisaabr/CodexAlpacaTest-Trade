@@ -247,7 +247,7 @@ def build_manifest(
         )
         candidate_rows: list[dict[str, Any]] = []
         seen_candidate_ids: set[str] = set()
-        for section_name in ("review_candidates", "capital_plan"):
+        for section_name in ("eligible_regime_representatives", "review_candidates", "capital_plan"):
             for candidate in packet.get(section_name) or []:
                 if not isinstance(candidate, dict):
                     continue

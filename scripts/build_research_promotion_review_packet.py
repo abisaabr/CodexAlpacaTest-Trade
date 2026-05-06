@@ -96,6 +96,17 @@ def _dedupe_review_candidates(rows: list[dict[str, Any]], max_items: int) -> lis
     return review_candidates
 
 
+def _merge_represented_candidates(
+    representatives: list[dict[str, Any]],
+    top_candidates: list[dict[str, Any]],
+    max_items: int,
+) -> list[dict[str, Any]]:
+    # Regime representatives are intentionally first so a lower-scoring but
+    # gate-clearing bull/bear/choppy sleeve cannot disappear from a packet
+    # simply because top-candidate pruning favored another regime.
+    return _dedupe_review_candidates(representatives + top_candidates, max_items)
+
+
 def _blocker_counts(candidates: list[dict[str, Any]]) -> dict[str, int]:
     counts: Counter[str] = Counter()
     for row in candidates:
@@ -217,6 +228,18 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
             f"data_foundation `{row.get('min_data_foundation_coverage')}` "
             f"blockers `{blockers}`"
         )
+    lines.extend(["", "## Eligible Regime Representatives", ""])
+    if not packet.get("eligible_regime_representatives"):
+        lines.append("- No explicit eligible regime representatives were provided.")
+    for row in packet.get("eligible_regime_representatives", []):
+        blockers = ", ".join(row.get("promotion_blockers", [])) or "none"
+        lines.append(
+            "- "
+            f"`{row['symbol']}` `{row['candidate_variant_id']}` "
+            f"regime `{row.get('intended_regime') or 'unknown'}` "
+            f"min_net `{row['min_net_pnl']}` min_test `{row['min_test_net_pnl']}` "
+            f"strategy_fill `{row['min_fill_coverage']}` blockers `{blockers}`"
+        )
     lines.extend(["", "## Symbol Exposure", ""])
     if not packet["symbol_exposure"]:
         lines.append("- No research-only capital exposure is proposed.")
@@ -293,6 +316,11 @@ def build_research_promotion_review_packet(
     top_candidates = [
         item for item in source.get("top_candidates", []) if isinstance(item, dict)
     ]
+    eligible_regime_representatives = [
+        item
+        for item in source.get("eligible_regime_representatives", [])
+        if isinstance(item, dict)
+    ]
     capital_plan = [item for item in source.get("capital_plan", []) if isinstance(item, dict)]
     full_blocker_counts = source.get("blocker_counts")
     if not isinstance(full_blocker_counts, dict):
@@ -309,12 +337,16 @@ def build_research_promotion_review_packet(
         for item in source.get("strategy_redesign_candidates", [])
         if isinstance(item, dict)
     ]
-    review_candidates = _dedupe_review_candidates(top_candidates, max_review_candidates)
+    review_candidates = _merge_represented_candidates(
+        eligible_regime_representatives,
+        top_candidates,
+        max_review_candidates,
+    )
     eligible_count = int(source.get("eligible_for_promotion_review_count") or 0)
     unique_eligible_base_count = len(
         {
             _base_candidate_id(row)
-            for row in top_candidates
+            for row in [*eligible_regime_representatives, *top_candidates]
             if row.get("promotion_status") == "eligible_for_promotion_review"
         }
     )
@@ -384,6 +416,9 @@ def build_research_promotion_review_packet(
             "max_symbol_weight": source.get("max_symbol_weight"),
         },
         "review_candidates": review_candidates,
+        "eligible_regime_representatives": [
+            _candidate_summary(item) for item in eligible_regime_representatives
+        ],
         "capital_plan": capital_plan,
         "symbol_exposure": _symbol_exposure(capital_plan),
         "blocker_counts": full_blocker_counts,

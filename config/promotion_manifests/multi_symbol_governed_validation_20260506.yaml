@@ -1,12 +1,12 @@
 version: 1
-generated_at_utc: '2026-05-06T01:34:12+00:00'
+generated_at_utc: '2026-05-06T02:24:23+00:00'
 scope: research_governed_validation_review_only
 broker_facing: false
 live_manifest_effect: none
 risk_policy_effect: none
 source_packets:
 - path: reports/gcp_research/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
-  gcs_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  gcs_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   decision: ready_for_governed_validation_review
   candidate_level_decision: ready_for_governed_validation_review
   eligible_for_promotion_review_count: 199
@@ -16,7 +16,7 @@ source_packets:
   - choppy
   missing_eligible_regimes: []
 - path: reports/gcp_research/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
-  gcs_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  gcs_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   decision: ready_for_governed_validation_review
   candidate_level_decision: ready_for_governed_validation_review
   eligible_for_promotion_review_count: 169
@@ -35,10 +35,21 @@ source_packets:
   - bear
   - choppy
   missing_eligible_regimes: []
-strategy_count: 60
+- path: reports/gcp_research/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  gcs_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  decision: ready_for_governed_validation_review
+  candidate_level_decision: ready_for_governed_validation_review
+  eligible_for_promotion_review_count: 191
+  eligible_regimes:
+  - bull
+  - bear
+  - choppy
+  missing_eligible_regimes: []
+strategy_count: 80
 symbols:
 - AMD
 - AMZN
+- AVGO
 - MSFT
 - QQQ
 - SPY
@@ -67,7 +78,7 @@ strategies:
   candidate_variant_id: portfolio12h__qqq__bull__call__single_leg_repair__7f37aee10d5fda__profile_qqq-spy-ff-qqq-20260505-qqq-e10-x60-entry-liquidity-first-research-only
   source_strategy_id: qqq__bull__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9891
   min_data_foundation_coverage: 1.0
@@ -111,7 +122,7 @@ strategies:
   candidate_variant_id: portfolio12h__qqq__bear__put__single_leg_repair__4c6be7e0bfb22a__profile_qqq-regime-rescue-c028-036-qqq-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: qqq__bear__put__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 1.0
   min_data_foundation_coverage: 1.0
@@ -156,7 +167,7 @@ strategies:
   candidate_variant_id: portfolio12h__qqq__bear__put__single_leg_repair__06ea81e50c1090__profile_qqq-regime-rescue-c028-036-qqq-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: qqq__bear__put__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 1.0
   min_data_foundation_coverage: 1.0
@@ -201,7 +212,7 @@ strategies:
   candidate_variant_id: portfolio12h__qqq__bear__put__single_leg_repair__4549f09c6fd367__profile_qqq-regime-rescue-c019-027-qqq-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: qqq__bear__put__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 1.0
   min_data_foundation_coverage: 1.0
@@ -246,7 +257,7 @@ strategies:
   candidate_variant_id: portfolio12h__qqq__choppy__call__single_leg_repair__7d707d30b09023__profile_qqq-regime-rescue-c097-108-qqq-e30-x120-entry-liquidity-first-research-only
   source_strategy_id: qqq__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9913
   min_data_foundation_coverage: 1.0
@@ -296,7 +307,7 @@ strategies:
   candidate_variant_id: portfolio12h__qqq__bear__put__single_leg_repair__179a54e9bd4dd1__profile_qqq-regime-rescue-c028-036-qqq-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: qqq__bear__put__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 1.0
   min_data_foundation_coverage: 1.0
@@ -341,7 +352,7 @@ strategies:
   candidate_variant_id: portfolio12h__spy__choppy__call__single_leg_repair__c16ef5836987f2__profile_spy-regime-rescue-c109-120-spy-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: spy__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9858
   min_data_foundation_coverage: 1.0
@@ -391,7 +402,7 @@ strategies:
   candidate_variant_id: portfolio12h__qqq__choppy__call__single_leg_repair__b5719527a598f7__profile_qqq-regime-rescue-c109-120-qqq-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: qqq__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9827
   min_data_foundation_coverage: 1.0
@@ -441,7 +452,7 @@ strategies:
   candidate_variant_id: portfolio12h__qqq__bull__call__single_leg_repair__e59a5796305393__profile_qqq-spy-ff-qqq-20260505-qqq-e10-x60-entry-liquidity-first-research-only
   source_strategy_id: qqq__bull__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9897
   min_data_foundation_coverage: 1.0
@@ -485,7 +496,7 @@ strategies:
   candidate_variant_id: portfolio12h__spy__bear__put__single_leg_repair__aa5af72cedd0e8__profile_spy-regime-rescue-c001-009-spy-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: spy__bear__put__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 1.0
   min_data_foundation_coverage: 1.0
@@ -530,7 +541,7 @@ strategies:
   candidate_variant_id: portfolio12h__spy__bear__put__single_leg_repair__98e1c246765263__profile_spy-regime-rescue-c001-009-spy-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: spy__bear__put__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 1.0
   min_data_foundation_coverage: 1.0
@@ -575,7 +586,7 @@ strategies:
   candidate_variant_id: portfolio12h__qqq__bear__put__single_leg_repair__055209d25ec8fb__profile_qqq-regime-rescue-c010-018-qqq-e10-x60-entry-liquidity-first-research-only
   source_strategy_id: qqq__bear__put__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 1.0
   min_data_foundation_coverage: 1.0
@@ -620,7 +631,7 @@ strategies:
   candidate_variant_id: portfolio12h__spy__bear__put__single_leg_repair__1b25bb90e378ea__profile_spy-regime-rescue-c001-009-spy-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: spy__bear__put__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 1.0
   min_data_foundation_coverage: 1.0
@@ -665,7 +676,7 @@ strategies:
   candidate_variant_id: portfolio12h__qqq__bear__put__single_leg_repair__0b97e891d87486__profile_qqq-regime-rescue-c028-036-qqq-e30-x120-entry-liquidity-first-research-only
   source_strategy_id: qqq__bear__put__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9815
   min_data_foundation_coverage: 1.0
@@ -710,7 +721,7 @@ strategies:
   candidate_variant_id: portfolio12h__spy__bear__put__single_leg_repair__960c985114b405__profile_spy-regime-rescue-c001-009-spy-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: spy__bear__put__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 1.0
   min_data_foundation_coverage: 1.0
@@ -755,7 +766,7 @@ strategies:
   candidate_variant_id: portfolio12h__spy__choppy__call__single_leg_repair__6c6f01b4d34e9a__profile_spy-regime-rescue-c097-108-spy-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: spy__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9858
   min_data_foundation_coverage: 1.0
@@ -805,7 +816,7 @@ strategies:
   candidate_variant_id: portfolio12h__spy__bull__call__single_leg_repair__4f33c5d56206d2__profile_qqq-spy-ff-spy-20260505-spy-e10-x60-entry-liquidity-first-research-only
   source_strategy_id: spy__bull__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9842
   min_data_foundation_coverage: 1.0
@@ -849,7 +860,7 @@ strategies:
   candidate_variant_id: portfolio12h__spy__bull__call__single_leg_repair__cbf97bbd739774__profile_qqq-spy-ff-spy-20260505-spy-e10-x60-entry-liquidity-first-research-only
   source_strategy_id: spy__bull__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9842
   min_data_foundation_coverage: 1.0
@@ -893,7 +904,7 @@ strategies:
   candidate_variant_id: portfolio12h__amzn__bull__call__single_leg_repair__f766ec10ed5724__profile_amzn-regime-rescue-c001-021-amzn-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: amzn__bull__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.981
   min_data_foundation_coverage: 0.9952
@@ -938,7 +949,7 @@ strategies:
   candidate_variant_id: portfolio12h__amzn__bull__call__single_leg_repair__a09e811fc20989__profile_amzn-regime-rescue-c001-021-amzn-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: amzn__bull__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9729
   min_data_foundation_coverage: 0.9955
@@ -983,7 +994,7 @@ strategies:
   candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__00b41e327e528a__profile_amd-regime-rescue-c043-063-amd-e10-x60-entry-liquidity-first-research-only
   source_strategy_id: amd__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9722
   min_data_foundation_coverage: 0.9722
@@ -1033,7 +1044,7 @@ strategies:
   candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__a77568c4a8c4c9__profile_amd-regime-rescue-c127-147-amd-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: amd__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9677
   min_data_foundation_coverage: 0.9677
@@ -1083,7 +1094,7 @@ strategies:
   candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__d1ff613c2a014f__profile_amd-regime-rescue-c043-063-amd-e10-x60-entry-liquidity-first-research-only
   source_strategy_id: amd__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9787
   min_data_foundation_coverage: 0.9787
@@ -1133,7 +1144,7 @@ strategies:
   candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__7a2aa392af9266__profile_amd-regime-rescue-c043-063-amd-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: amd__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9765
   min_data_foundation_coverage: 0.9882
@@ -1183,7 +1194,7 @@ strategies:
   candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__c5769ec1fe9028__profile_amd-regime-rescue-c127-147-amd-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: amd__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9767
   min_data_foundation_coverage: 0.9767
@@ -1233,7 +1244,7 @@ strategies:
   candidate_variant_id: portfolio12h__amzn__bear__put__single_leg_repair__b5ebc5e9758205__profile_amzn-regime-rescue-c085-105-amzn-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: amzn__bear__put__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9623
   min_data_foundation_coverage: 1.0
@@ -1278,7 +1289,7 @@ strategies:
   candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__443e3a943783a5__profile_amd-regime-rescue-c043-063-amd-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: amd__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9792
   min_data_foundation_coverage: 0.9896
@@ -1328,7 +1339,7 @@ strategies:
   candidate_variant_id: portfolio12h__amzn__bear__put__single_leg_repair__983e21cda49b3e__profile_amzn-regime-rescue-c106-126-amzn-e10-x60-entry-liquidity-first-research-only
   source_strategy_id: amzn__bear__put__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9434
   min_data_foundation_coverage: 1.0
@@ -1373,7 +1384,7 @@ strategies:
   candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__d127813808face__profile_amd-regime-rescue-c043-063-amd-e10-x60-entry-liquidity-first-research-only
   source_strategy_id: amd__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9722
   min_data_foundation_coverage: 0.9722
@@ -1423,7 +1434,7 @@ strategies:
   candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__09ae2fc520851c__profile_amd-regime-rescue-c127-147-amd-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: amd__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.975
   min_data_foundation_coverage: 0.9875
@@ -1473,7 +1484,7 @@ strategies:
   candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__426eed87e0827e__profile_amd-regime-rescue-c127-147-amd-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: amd__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9677
   min_data_foundation_coverage: 0.9677
@@ -1523,7 +1534,7 @@ strategies:
   candidate_variant_id: portfolio12h__amzn__bull__call__single_leg_repair__4f7c5ea47a1ba9__profile_amzn-regime-rescue-c001-021-amzn-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: amzn__bull__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9903
   min_data_foundation_coverage: 1.0
@@ -1568,7 +1579,7 @@ strategies:
   candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__f66de52fe0904d__profile_amd-regime-rescue-c127-147-amd-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: amd__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9706
   min_data_foundation_coverage: 0.9853
@@ -1618,7 +1629,7 @@ strategies:
   candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__6c7039478fd188__profile_amd-regime-rescue-c022-042-amd-e10-x60-entry-liquidity-first-research-only
   source_strategy_id: amd__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9722
   min_data_foundation_coverage: 0.9722
@@ -1668,7 +1679,7 @@ strategies:
   candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__e6bcefea1024f1__profile_amd-regime-rescue-c127-147-amd-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: amd__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9677
   min_data_foundation_coverage: 0.9677
@@ -1718,7 +1729,7 @@ strategies:
   candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__ab220bd9a21cd0__profile_amd-regime-rescue-c043-063-amd-e10-x60-entry-liquidity-first-research-only
   source_strategy_id: amd__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9787
   min_data_foundation_coverage: 0.9787
@@ -1768,7 +1779,7 @@ strategies:
   candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__636991066f0288__profile_amd-regime-rescue-c022-042-amd-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: amd__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9787
   min_data_foundation_coverage: 0.9787
@@ -1818,7 +1829,7 @@ strategies:
   candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__263b7aa4837fc5__profile_amd-regime-rescue-c127-147-amd-e0-x60-entry-liquidity-first-research-only
   source_strategy_id: amd__choppy__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9767
   min_data_foundation_coverage: 0.9767
@@ -2851,6 +2862,986 @@ strategies:
   min_net_pnl: 323.088
   min_test_net_pnl: 1067.162
   research_profile: tsla_regime_rescue_c085_105_tsla_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 220
+  max_minutes_since_open: 330
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0009
+- name: avgo__governed__bull__call__single_leg_repair__morning_trend__45037483cb1a7a__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: bull
+  family: Single-leg long call
+  description: AVGO governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 75
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 3
+  profit_target_multiple: 0.26
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__avgo__bull__call__single_leg_repair__45037483cb1a7a__profile_avgo-regime-rescue-c001-021-avgo-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__bull__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9299
+  min_data_foundation_coverage: 0.9953
+  min_option_trade_count: 199
+  min_net_pnl: 6108.405
+  min_test_net_pnl: 183.583
+  research_profile: avgo_regime_rescue_c001_021_avgo_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 15
+  max_minutes_since_open: 105
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target26_stop10
+  option_profit_target_pct: 0.26
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0006
+- name: avgo__governed__bear__put__single_leg_repair__bear_late_continuation_2__e8c8eee646f863__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: bear
+  family: Single-leg long put
+  description: AVGO governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__avgo__bear__put__single_leg_repair__e8c8eee646f863__profile_avgo-regime-rescue-c106-126-avgo-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9262
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 113
+  min_net_pnl: 4366.357
+  min_test_net_pnl: 1286.725
+  research_profile: avgo_regime_rescue_c106_126_avgo_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 220
+  max_minutes_since_open: 330
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0014
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c064__236e16f2bc846f__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__236e16f2bc846f__profile_avgo-regime-rescue-c064-084-avgo-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.913
+  min_data_foundation_coverage: 0.9913
+  min_option_trade_count: 105
+  min_net_pnl: 3782.212
+  min_test_net_pnl: 2869.135
+  research_profile: avgo_regime_rescue_c064_084_avgo_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.002
+  max_range_pct: 0.006
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c043__1acfd89d28d127__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__1acfd89d28d127__profile_avgo-regime-rescue-c043-063-avgo-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9211
+  min_data_foundation_coverage: 0.9912
+  min_option_trade_count: 105
+  min_net_pnl: 3694.311
+  min_test_net_pnl: 2400.475
+  research_profile: avgo_regime_rescue_c043_063_avgo_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.0015
+  max_range_pct: 0.005
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c085__4574c0babb7c22__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__4574c0babb7c22__profile_avgo-regime-rescue-c085-105-avgo-e30-x120-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9167
+  min_data_foundation_coverage: 0.9917
+  min_option_trade_count: 110
+  min_net_pnl: 3585.062
+  min_test_net_pnl: 2437.059
+  research_profile: avgo_regime_rescue_c085_105_avgo_e30_x120_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 165
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.0015
+  max_range_pct: 0.005
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c043__4839a6a39fdcb5__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__4839a6a39fdcb5__profile_avgo-regime-rescue-c043-063-avgo-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9167
+  min_data_foundation_coverage: 0.9924
+  min_option_trade_count: 121
+  min_net_pnl: 4430.381
+  min_test_net_pnl: 2098.755
+  research_profile: avgo_regime_rescue_c043_063_avgo_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.002
+  max_range_pct: 0.006
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c043__4a3b780be189c2__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__4a3b780be189c2__profile_avgo-regime-rescue-c043-063-avgo-e30-x120-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9184
+  min_data_foundation_coverage: 0.9898
+  min_option_trade_count: 90
+  min_net_pnl: 3508.163
+  min_test_net_pnl: 2157.168
+  research_profile: avgo_regime_rescue_c043_063_avgo_e30_x120_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.0015
+  max_range_pct: 0.005
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c085__9c058e98b2dc67__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__9c058e98b2dc67__profile_avgo-regime-rescue-c085-105-avgo-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9237
+  min_data_foundation_coverage: 0.9924
+  min_option_trade_count: 121
+  min_net_pnl: 3002.709
+  min_test_net_pnl: 2422.315
+  research_profile: avgo_regime_rescue_c085_105_avgo_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 165
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.0015
+  max_range_pct: 0.005
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c127__fd37bbc16706c0__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__fd37bbc16706c0__profile_avgo-regime-rescue-c127-147-avgo-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9565
+  min_data_foundation_coverage: 0.9891
+  min_option_trade_count: 88
+  min_net_pnl: 2981.135
+  min_test_net_pnl: 1719.771
+  research_profile: avgo_regime_rescue_c127_147_avgo_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.0015
+  max_range_pct: 0.005
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c022__0d899a371dc8e9__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.25
+  stop_loss_multiple: 0.09
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__0d899a371dc8e9__profile_avgo-regime-rescue-c022-042-avgo-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9211
+  min_data_foundation_coverage: 0.9912
+  min_option_trade_count: 105
+  min_net_pnl: 2653.353
+  min_test_net_pnl: 1701.175
+  research_profile: avgo_regime_rescue_c022_042_avgo_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target25_stop9
+  option_profit_target_pct: 0.25
+  option_stop_loss_pct: 0.09
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.0015
+  max_range_pct: 0.005
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c127__6172979395bcaf__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__6172979395bcaf__profile_avgo-regime-rescue-c127-147-avgo-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9118
+  min_data_foundation_coverage: 0.9902
+  min_option_trade_count: 93
+  min_net_pnl: 2443.722
+  min_test_net_pnl: 1919.273
+  research_profile: avgo_regime_rescue_c127_147_avgo_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.002
+  max_range_pct: 0.006
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c085__b52c34e9c0a0b4__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.25
+  stop_loss_multiple: 0.09
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__b52c34e9c0a0b4__profile_avgo-regime-rescue-c085-105-avgo-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9237
+  min_data_foundation_coverage: 0.9924
+  min_option_trade_count: 121
+  min_net_pnl: 1867.845
+  min_test_net_pnl: 1988.749
+  research_profile: avgo_regime_rescue_c085_105_avgo_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 165
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target25_stop9
+  option_profit_target_pct: 0.25
+  option_stop_loss_pct: 0.09
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.0015
+  max_range_pct: 0.005
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c106__f2296e2cf97fca__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__f2296e2cf97fca__profile_avgo-regime-rescue-c106-126-avgo-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9167
+  min_data_foundation_coverage: 0.9936
+  min_option_trade_count: 143
+  min_net_pnl: 2711.914
+  min_test_net_pnl: 1865.759
+  research_profile: avgo_regime_rescue_c106_126_avgo_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 165
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.002
+  max_range_pct: 0.006
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c106__601cc1a2d0ef16__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__601cc1a2d0ef16__profile_avgo-regime-rescue-c106-126-avgo-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9231
+  min_data_foundation_coverage: 0.993
+  min_option_trade_count: 132
+  min_net_pnl: 3063.762
+  min_test_net_pnl: 1537.93
+  research_profile: avgo_regime_rescue_c106_126_avgo_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 165
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.002
+  max_range_pct: 0.006
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: avgo__governed__bear__put__single_leg_repair__bear_late_continuation_2__4f6d97b21dea63__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: bear
+  family: Single-leg long put
+  description: AVGO governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__avgo__bear__put__single_leg_repair__4f6d97b21dea63__profile_avgo-regime-rescue-c106-126-avgo-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9209
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 128
+  min_net_pnl: 4183.432
+  min_test_net_pnl: 469.487
+  research_profile: avgo_regime_rescue_c106_126_avgo_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 220
+  max_minutes_since_open: 330
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0009
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c085__07debc8bdbe346__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.25
+  stop_loss_multiple: 0.09
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__07debc8bdbe346__profile_avgo-regime-rescue-c085-105-avgo-e30-x120-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9167
+  min_data_foundation_coverage: 0.9917
+  min_option_trade_count: 110
+  min_net_pnl: 1856.792
+  min_test_net_pnl: 1744.752
+  research_profile: avgo_regime_rescue_c085_105_avgo_e30_x120_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 165
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target25_stop9
+  option_profit_target_pct: 0.25
+  option_stop_loss_pct: 0.09
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.0015
+  max_range_pct: 0.005
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c127__94a296495a9b13__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__94a296495a9b13__profile_avgo-regime-rescue-c127-147-avgo-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9333
+  min_data_foundation_coverage: 0.9889
+  min_option_trade_count: 84
+  min_net_pnl: 2065.967
+  min_test_net_pnl: 1693.841
+  research_profile: avgo_regime_rescue_c127_147_avgo_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.002
+  max_range_pct: 0.006
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c148__afc19ccaf7d04f__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__afc19ccaf7d04f__profile_avgo-regime-rescue-c148-166-avgo-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9612
+  min_data_foundation_coverage: 0.9903
+  min_option_trade_count: 99
+  min_net_pnl: 1853.102
+  min_test_net_pnl: 1622.35
+  research_profile: avgo_regime_rescue_c148_166_avgo_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 165
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.0015
+  max_range_pct: 0.005
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c127__b24c8e22133301__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__b24c8e22133301__profile_avgo-regime-rescue-c127-147-avgo-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9494
+  min_data_foundation_coverage: 0.9873
+  min_option_trade_count: 75
+  min_net_pnl: 2058.361
+  min_test_net_pnl: 1443.187
+  research_profile: avgo_regime_rescue_c127_147_avgo_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.0015
+  max_range_pct: 0.005
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: avgo__governed__bear__put__single_leg_repair__bear_late_continuation_2__f5be602520e785__avgo_regime_rescue__20260506
+  underlying_symbol: AVGO
+  regime: bear
+  family: Single-leg long put
+  description: AVGO governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__avgo__bear__put__single_leg_repair__f5be602520e785__profile_avgo-regime-rescue-c085-105-avgo-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9079
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 138
+  min_net_pnl: 4566.009
+  min_test_net_pnl: 260.469
+  research_profile: avgo_regime_rescue_c085_105_avgo_e0_x60_entry_liquidity_first_research_only
   research_entry_timing_mode: daily_first
   runner_semantics_status: packet_translated_to_runtime_single_leg
   stock_proxy_mode: breakout

@@ -11,8 +11,8 @@ Created a generated governed-validation strategy manifest from regime-complete p
 - Manifest builder: `scripts/build_governed_validation_manifest_from_packets.py`
 - Generated manifest: `config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml`
 - Paper config: `config/multi_symbol_governed_realtime_paper_portfolio_20260506.yaml`
-- Strategy count: `60`
-- Symbols: `AMD, AMZN, MSFT, QQQ, SPY, TSLA`
+- Strategy count: `80`
+- Symbols: `AMD, AMZN, AVGO, MSFT, QQQ, SPY, TSLA`
 - Portfolio-level regimes represented: `bull, bear, choppy`
 - Config default: `submit_paper_orders=false`
 
@@ -21,6 +21,7 @@ Source packets used:
 - QQQ/SPY: `reports/gcp_research/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
 - AMD/AMZN: `reports/gcp_research/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
 - MSFT/TSLA: `reports/gcp_research/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- AVGO: `reports/gcp_research/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
 
 Excluded from this May 6 paper config:
 
@@ -44,9 +45,11 @@ Result:
 - Open broker orders: `0`
 - Buying power: `$399,225.72`
 - Broker equity: `$99,806.43`
-- Failure reason: stock data was stale after the 2026-05-05 close for all six symbols.
+- Failure reason: stock data was stale after the 2026-05-05 close for all configured symbols.
 
 Interpretation: this is an expected after-hours failure, not a manifest/schema failure. Re-run the same preflight near the 2026-05-06 RTH launch window.
+
+After AVGO was added, a second no-order startup preflight was run. It also failed only because after-hours stock data was stale; the startup check loaded all seven configured symbols and showed broker state remained clean with `0` broker positions and `0` open orders.
 
 ## RTH Launch Sequence
 
@@ -63,9 +66,9 @@ python scripts\run_multi_ticker_portfolio_paper_trader.py --portfolio-config con
 
 Do not run the final command unless the startup preflight passes with fresh SIP/OPRA data and broker state remains clean.
 
-## AVGO Research Wave Launched
+## AVGO Research Wave Result
 
-Launched the next one-ticker research wave using the next10 365d 5x5 data:
+The AVGO full-regime research wave completed, was aggregated, and was mirrored to GCS:
 
 - Wave ID: `avgo_full_regime_rescue_20260506T0135Z`
 - GCS root: `gs://codexalpaca-control-us/research_results/avgo_full_regime_rescue_20260506T0135Z`
@@ -80,8 +83,19 @@ Launched the next one-ticker research wave using the next10 365d 5x5 data:
 - Paper orders: `false`
 - Live manifest effect: `none`
 - Risk policy effect: `none`
+- Portfolio report: `reports/gcp_research/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_portfolio_report/research_portfolio_report.json`
+- Promotion packet: `reports/gcp_research/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- Packet decision: `ready_for_governed_validation_review`
+- Eligible candidates: `191`
+- Unique eligible base candidates in packet view: `29`
+- Required regimes: `bull,bear,choppy`
+- Eligible regimes: `bull,bear,choppy`
+- Regime complete: `true`
+- Full-population blockers: `fill_coverage_below_0.90=137`, `min_net_pnl_not_positive=232`, `test_net_pnl_not_above_0=184`
 
-Launched workers:
+Promotion-chain reliability note: the first AVGO aggregate exposed a promoter-boundary issue where the gate summary was regime-complete, but the top review/capital candidate slices omitted the lower-scoring eligible bull representative. The report, promotion-packet, and generated-manifest builders were patched so `eligible_regime_representatives` are preserved explicitly and consumed by the manifest builder before top-candidate pruning.
+
+Completed and deleted workers:
 
 - `avgo-rescue-c001-021-20260506a`
 - `avgo-rescue-c022-042-20260506a`
@@ -92,13 +106,28 @@ Launched workers:
 - `avgo-rescue-c127-147-20260506a`
 - `avgo-rescue-c148-166-20260506a`
 
+## Active GOOGL Research Wave
+
+GOOGL is now running as the next one-ticker full-regime rescue wave:
+
+- Wave ID: `googl_full_regime_rescue_20260506T0225Z`
+- GCS root: `gs://codexalpaca-control-us/research_results/googl_full_regime_rescue_20260506T0225Z`
+- Symbol: `GOOGL`
+- Candidate count: `166`
+- Target regimes: `bull,bear,choppy`
+- Workers: `8`
+- Broker-facing: `false`
+- Paper orders: `false`
+- Live manifest effect: `none`
+- Risk policy effect: `none`
+
 ## Next Research Loop
 
-1. Monitor AVGO worker statuses under the wave GCS root.
-2. When all AVGO shards self-stop and upload reports, aggregate worker outputs into a strict portfolio report and promotion-review packet.
-3. If AVGO is regime-complete, add it to the governed-validation manifest and rerun production-risk projection.
-4. If AVGO is blocked, classify blockers by fill coverage, full-period PnL, test PnL, trade count, and sizing.
-5. Then advance to the next available next10 ticker, one ticker at a time, starting with `GOOGL`, then `MU`, `NFLX`, `ORCL`, `PLTR`, `TSM`, `XLE`, `XOM`.
+1. Monitor GOOGL worker statuses under the wave GCS root.
+2. When all GOOGL shards self-stop and upload reports, aggregate worker outputs into a strict portfolio report and promotion-review packet.
+3. If GOOGL is regime-complete, add it to the governed-validation manifest and rerun production-risk projection.
+4. If GOOGL is blocked, classify blockers by fill coverage, full-period PnL, test PnL, trade count, and sizing.
+5. Then advance to the next available next10 ticker, one ticker at a time: `MU`, `NFLX`, `ORCL`, `PLTR`, `TSM`, `XLE`, `XOM`.
 
 ## Hard Rules
 

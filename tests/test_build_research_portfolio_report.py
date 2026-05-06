@@ -168,6 +168,7 @@ def test_research_portfolio_report_allows_review_when_gates_pass(tmp_path: Path)
     assert packet["eligible_regimes"] == ["bull"]
     assert packet["missing_eligible_regimes"] == ["bear", "choppy"]
     assert packet["regime_complete_for_promotion_review"] is False
+    assert packet["eligible_regime_representatives"][0]["candidate_variant_id"] == "amd_candidate"
 
 
 def test_research_portfolio_report_prefers_eligible_candidate_over_blocked_high_score(
@@ -179,6 +180,7 @@ def test_research_portfolio_report_prefers_eligible_candidate_over_blocked_high_
             "candidate_variant_id": "amd_blocked_high_score",
             "symbol": "AMD",
             "source_strategy_id": "amd_strategy",
+            "intended_regime": "bull",
             "directional_option_type": "call",
             "net_pnl": 50_000.0,
             "test_net_pnl": 5_000.0,
@@ -196,6 +198,7 @@ def test_research_portfolio_report_prefers_eligible_candidate_over_blocked_high_
             "candidate_variant_id": "amd_eligible_lower_score",
             "symbol": "AMD",
             "source_strategy_id": "amd_strategy",
+            "intended_regime": "bull",
             "directional_option_type": "call",
             "net_pnl": 20_000.0,
             "test_net_pnl": 2_000.0,
@@ -228,6 +231,10 @@ def test_research_portfolio_report_prefers_eligible_candidate_over_blocked_high_
     assert packet["eligible_for_promotion_review_count"] == 1
     assert packet["capital_plan"][0]["candidate_variant_id"] == "amd_eligible_lower_score"
     assert packet["capital_plan"][0]["promotion_status"] == "eligible_for_promotion_review"
+    assert (
+        packet["eligible_regime_representatives"][0]["candidate_variant_id"]
+        == "amd_eligible_lower_score"
+    )
 
 
 def test_research_portfolio_report_can_isolate_same_variant_across_profiles(
