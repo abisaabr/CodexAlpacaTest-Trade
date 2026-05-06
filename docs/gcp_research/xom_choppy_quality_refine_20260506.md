@@ -79,14 +79,45 @@ powershell -ExecutionPolicy Bypass -File scripts\launch_gcp_regime_rescue_shards
   -LagProfiles "0:60,10:60,30:120"
 ```
 
-## Next Actions
+## Completion Result
 
-1. Monitor workers until they terminate or report failure.
-2. Pull worker artifacts from GCS.
-3. Build a strict portfolio report with `fill_coverage_gate=0.90`,
-   `min_option_trades=20`, `min_test_net_pnl > 0`, and
-   `required_regimes=choppy`.
-4. Build a promotion-review packet without manual overrides.
-5. If XOM gains eligible choppy candidates, combine only through generated
-   governed-review artifacts; do not add XOM to paper execution from this wave
-   alone.
+All `8` workers reached `TERMINATED`. Worker artifacts were pulled from GCS into
+the local research report tree; the pull transferred `370` objects and about
+`147.3 MiB`.
+
+Aggregate artifacts:
+
+- Portfolio report:
+  `reports/gcp_research/xom_choppy_quality_refine_20260506T1650Z/aggregate/combined_portfolio_report/research_portfolio_report.json`
+- Promotion-review packet:
+  `reports/gcp_research/xom_choppy_quality_refine_20260506T1650Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- GCS aggregate mirror:
+  `gs://codexalpaca-control-us/research_results/xom_choppy_quality_refine_20260506T1650Z/aggregate/`
+
+Strict promotion-review packet result:
+
+- Decision: `research_only_blocked`.
+- Eligible choppy candidates: `0`.
+- Candidate count: `288`.
+- Blockers:
+  - `min_net_pnl_not_positive`: `288`.
+  - `test_net_pnl_not_above_0.01`: `288`.
+- Fill result:
+  - `fill_gate_clear`: `288`.
+- Best choppy candidate:
+  `portfolio12h__xom__choppy__call__single_leg_repair__947049e9c5b726__profile_xom-regime-rescue-c049-060-xom-e30-x120-entry-liquidity-first-research-only`
+- Best candidate metrics:
+  - `best_min_net_pnl`: `-1448.346`.
+  - `best_min_test_net_pnl`: `-384.194`.
+  - `best_min_fill_coverage`: `0.9615`.
+
+## Interpretation
+
+XOM remains research-only blocked for choppy. The quality-filtered choppy grid
+cleared the strategy fill gate across the full candidate population, so the
+remaining failure is not data fill. The choppy design is structurally
+unprofitable on this XOM dataset under the tested exits and should be redesigned
+or quarantined rather than repaired with more data.
+
+The active local PAPER trader was not stopped, restarted, duplicated, or modified
+while this research-only wave was aggregated.
