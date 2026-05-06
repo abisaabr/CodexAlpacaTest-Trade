@@ -157,7 +157,7 @@ These projections are research-only, trade-level compounded curves. They do not 
 - Strategy-regime coverage: `bull=3`, `bear=9`, `choppy=7` capital-plan candidates.
 - Evidence grade: `directional_expectation_only`
 
-## Active GCP Wave
+## INTC/META Wave Result
 
 - Wave ID: `intc_meta_full_regime_rescue_20260506T0005Z`
 - GCS root: `gs://codexalpaca-control-us/research_results/intc_meta_full_regime_rescue_20260506T0005Z/`
@@ -170,8 +170,37 @@ These projections are research-only, trade-level compounded curves. They do not 
 - Lag profiles: `0:60,10:60,30:120`
 - Bear profile set: `signal_window_refine`
 - Choppy profile set: `timewindow_quality_filter`
-- Launch state: all 8 INTC shards and all 8 META shards launched.
-- Latest monitor snapshot: `3 / 16` shards completed, `13 / 16` still running, `0` failed.
+- Launch/result state: all 8 INTC shards and all 8 META shards completed and uploaded.
+- Combined packet: `reports/gcp_research/intc_meta_full_regime_rescue_20260506T0005Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- GCS combined packet: `gs://codexalpaca-control-us/research_results/intc_meta_full_regime_rescue_20260506T0005Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- Combined decision: `research_only_blocked_regime_incomplete`
+- Combined candidates: `996`
+- Combined eligible count: `1`
+- Combined unique eligible base candidates: `1`
+- Combined eligible regimes: `bear`
+- Combined missing regimes: `bull,choppy`
+- INTC standalone: `498` candidates, `1` eligible, eligible regimes `bear`, missing regimes `bull,choppy`.
+- META standalone: `498` candidates, `0` eligible, missing regimes `bull,bear,choppy`.
+- Dominant combined blockers: `fill_coverage_below_0.90=529`, `min_net_pnl_not_positive=861`, `test_net_pnl_not_above_0=613`.
+- Dominant combined fill-failure classes: `fill_gate_clear=467`, `position_sizing_too_expensive=462`, `selected_contract_universe_gap=54`, `entry_bar_gap_or_entry_timing_mismatch=13`.
+- Interpretation: do not add INTC/META to the cumulative growth tracker yet. INTC has one bear research lead; META is mainly blocked by option cost/position sizing and fill coverage under the current `$25,000`/`0.05` allocation semantics.
+- Completed INTC/META workers self-terminated. The 16 terminated `regime-rescue` instances were deleted after outputs were uploaded and mirrored.
+
+## Active GCP Wave
+
+- Wave ID: `msft_tsla_full_regime_rescue_20260506T0025Z`
+- GCS root: `gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/`
+- Source commit: `2697eaa`
+- Symbols: `MSFT`, `TSLA`
+- Grid: `bull,bear,choppy`
+- Per-symbol candidates: `166`
+- Candidate shard size: `21`
+- Selector: `entry_liquidity_first_research_only`
+- Lag profiles: `0:60,10:60,30:120`
+- Bear profile set: `signal_window_refine`
+- Choppy profile set: `timewindow_quality_filter`
+- Launch state: all 8 MSFT shards and all 8 TSLA shards launched.
+- Active VM count: `16` research-only `regime-rescue` VMs.
 - Capacity note: some zones were resource constrained, but the launcher rerouted and completed all shard launches.
 
 ## Data Coverage Inventory
@@ -197,9 +226,9 @@ QQQ uses the separate 365d next-trading-day 5x5 prefix:
 
 ## Next Loop
 
-1. Monitor `intc_meta_full_regime_rescue_20260506T0005Z` until all 16 shards complete.
+1. Monitor `msft_tsla_full_regime_rescue_20260506T0025Z` until all 16 shards complete.
 2. Pull worker artifacts locally and build strict portfolio reports plus promotion-review packets per symbol and combined.
-3. If INTC/META are regime-complete, record them as governed-review candidates only and update the cumulative growth tracker.
+3. If MSFT/TSLA are regime-complete, record them as governed-review candidates only and update the cumulative growth tracker.
 4. If a regime is missing, classify the dominant blocker: fill coverage, full-period economics, test PnL, or trade count.
-5. Launch the next available pair from `MSFT,TSLA` using the same full-regime grid, staying within project CPU/instance quotas.
+5. Do not launch additional ticker pairs until MSFT/TSLA aggregate is complete or until capacity is clearly idle.
 6. Do not lower the 0.90 fill gate, do not change live manifests, and do not start broker-facing sessions.
