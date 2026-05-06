@@ -161,17 +161,22 @@ function Remove-TerminatedInstance {
     }
 }
 
-& python scripts\build_regime_rescue_research_inputs.py `
-    --symbol $Symbol `
-    --wave-id $WaveId `
-    --output-dir $InputsDir `
-    --output-prefix $OutputPrefix `
-    --target-regimes $TargetRegimes `
-    --bull-profile-set $BullProfileSet `
-    --choppy-families $ChoppyFamilies `
-    --choppy-signal-delay-bars $ChoppySignalDelayBars `
-    --choppy-profile-set $ChoppyProfileSet `
-    --bear-profile-set $BearProfileSet
+$builderArgs = @(
+    "scripts\build_regime_rescue_research_inputs.py",
+    "--symbol", $Symbol,
+    "--wave-id", $WaveId,
+    "--output-dir", $InputsDir,
+    "--output-prefix", $OutputPrefix,
+    "--target-regimes", $TargetRegimes,
+    "--bull-profile-set", $BullProfileSet,
+    "--choppy-signal-delay-bars", $ChoppySignalDelayBars,
+    "--choppy-profile-set", $ChoppyProfileSet,
+    "--bear-profile-set", $BearProfileSet
+)
+if ($ChoppyFamilies.Trim()) {
+    $builderArgs += @("--choppy-families", $ChoppyFamilies)
+}
+& python @builderArgs
 if ($LASTEXITCODE -ne 0) {
     throw "input builder failed"
 }
