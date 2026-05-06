@@ -51,7 +51,7 @@ At launch verification, exactly one Python broker-facing process was present:
 - Lag profiles: `0:60,10:60,30:120`.
 - Candidate count: `216`.
 - Launched candidates: `1-200`.
-- Tail remaining: `201-216`, to launch after capacity frees.
+- Tail candidates `201-216` were launched after capacity freed.
 
 Input data:
 
@@ -92,6 +92,7 @@ Workers launched:
 - `mu-rescue-c126-150-20260506g`
 - `mu-rescue-c151-175-20260506g`
 - `mu-rescue-c176-200-20260506g`
+- `mu-rescue-c201-216-20260506h`
 
 ## NFLX Wave
 
@@ -154,15 +155,95 @@ Several `e2-standard-2` creates hit zone resource exhaustion in `us-east4-a` and
 The launcher successfully placed active workers in `us-central1-a` and
 `us-west1-a`.
 
+After the initial MU/NFLX workers terminated, the terminated instances were
+deleted and the remaining MU tail worker was launched:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\launch_gcp_regime_rescue_shards.ps1 `
+  -Symbol MU `
+  -WaveId mu_bull_bear_momentum_refine_20260506T1750Z `
+  -StockUri gs://codexalpaca-data-us/research_stock_data/option_fill_ladder_next10_20260429/MU/365d_5x5/stock_ref_silver/stock_bars `
+  -ContractsUri gs://codexalpaca-control-us/research_results/option_fill_ladder_next10_20260429/MU/365d_5x5/research_wave/dense_universe/selected_option_contracts `
+  -BarsUri gs://codexalpaca-data-us/research_option_data/option_fill_ladder_next10_20260429/MU/365d_5x5/option_bars_silver/option_bars `
+  -InstanceSuffix 20260506h `
+  -StartCandidateIndex 201 `
+  -CandidateCountPerWorker 16 `
+  -TotalCandidates 216 `
+  -MaxLaunches 1 `
+  -TargetRegimes bull,bear `
+  -BullProfileSet momentum_refine `
+  -BearProfileSet signal_window_refine `
+  -CandidateSelectionMode regime_balanced `
+  -RegimeBalanceOrder bull,bear,choppy,unclassified `
+  -LagProfiles "0:60,10:60,30:120"
+```
+
+## NFLX Result
+
+The NFLX bear/choppy refinement workers completed and were aggregated.
+
+Local aggregate outputs:
+
+- `reports/gcp_research/nflx_bear_choppy_refine_20260506T1750Z/aggregate/combined_portfolio_report/research_portfolio_report.json`
+- `reports/gcp_research/nflx_bear_choppy_refine_20260506T1750Z/aggregate/combined_portfolio_report/research_portfolio_report.md`
+- `reports/gcp_research/nflx_bear_choppy_refine_20260506T1750Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- `reports/gcp_research/nflx_bear_choppy_refine_20260506T1750Z/aggregate/combined_promotion_packet/research_promotion_review_packet.md`
+
+GCS aggregate root:
+
+- `gs://codexalpaca-control-us/research_results/nflx_bear_choppy_refine_20260506T1750Z/aggregate/`
+
+Strict report command:
+
+```powershell
+python scripts\build_research_portfolio_report.py `
+  --replay-root reports\gcp_research\nflx_bear_choppy_refine_20260506T1750Z\workers `
+  --output-dir reports\gcp_research\nflx_bear_choppy_refine_20260506T1750Z\aggregate\combined_portfolio_report `
+  --fill-coverage-gate 0.90 `
+  --min-option-trades 20 `
+  --min-test-net-pnl 0.01 `
+  --initial-cash 25000 `
+  --required-regimes bear,choppy `
+  --candidate-identity-mode variant_profile
+```
+
+Promotion packet command:
+
+```powershell
+python scripts\build_research_promotion_review_packet.py `
+  --portfolio-report-json reports\gcp_research\nflx_bear_choppy_refine_20260506T1750Z\aggregate\combined_portfolio_report\research_portfolio_report.json `
+  --output-dir reports\gcp_research\nflx_bear_choppy_refine_20260506T1750Z\aggregate\combined_promotion_packet `
+  --max-review-candidates 20
+```
+
+Generated packet result:
+
+- Decision: `research_only_blocked`.
+- Candidate count: `450`.
+- Eligible candidates: `0`.
+- Required regimes: `bear,choppy`.
+- Eligible regimes: none.
+- Missing eligible regimes: `bear,choppy`.
+- Blocker counts:
+  - `fill_coverage_below_0.90`: `450`.
+  - `min_net_pnl_not_positive`: `438`.
+  - `test_net_pnl_not_above_0.01`: `397`.
+
+Interpretation: the NFLX follow-up found profitable-looking bear/choppy leads,
+but every candidate missed the strict `fill_coverage >= 0.90` gate. The dominant
+known blocker is not raw data foundation availability in the top candidates;
+top candidate summaries show `min_data_foundation_coverage=1.0` with
+`position_sizing_too_expensive` as the fill-failure reason. NFLX remains
+research-only blocked for bear/choppy and should not be added to paper execution.
+
 ## Next Actions
 
-1. Monitor all MU/NFLX workers until they terminate or report failure.
-2. Launch MU tail candidates `201-216` after capacity frees.
-3. Pull worker artifacts from GCS.
-4. Build strict portfolio reports with `fill_coverage_gate=0.90`,
+1. Monitor the MU tail worker until it terminates or reports failure.
+2. Pull final MU worker artifacts from GCS.
+3. Build a strict MU portfolio report with `fill_coverage_gate=0.90`,
    `min_option_trades=20`, `min_test_net_pnl > 0`, and the relevant required
    regimes.
-5. Build generated promotion-review packets without manual overrides.
-6. If MU or NFLX becomes regime-complete, combine only through generated
+4. Build the generated MU promotion-review packet without manual overrides.
+5. If MU becomes regime-complete, combine only through generated
    governed-validation artifacts; do not add either ticker to paper execution
    directly from this launch.
