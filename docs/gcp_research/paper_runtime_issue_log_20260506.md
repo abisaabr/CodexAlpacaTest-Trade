@@ -190,3 +190,26 @@ Prioritize a paper-only close-order refresh patch before relying on this runner
 for unattended intraday exits. The current behavior can hold a losing option
 position far past a hard-exit condition when the stale sell limit is no longer
 marketable.
+
+### 6. QQQ close retry loop reuses stale limit after cancel/replace
+
+- Latest checked: approximately `2026-05-06T12:47:00-04:00`.
+- Broker PAPER query at check:
+  - open orders: `0`
+  - positions: `3`
+  - remaining QQQ position: long `1` `QQQ260507P00689000`
+  - QQQ current price: approximately `1.98`
+  - QQQ unrealized PnL: approximately `-156`
+- Runtime order journal showed repeated QQQ sell-to-close attempts at the same
+  stale limit price `3.55`, followed by terminal status `new`, cancel, and a
+  replacement submission at the same stale limit.
+- Runtime reconciliation expected exit fill moved with the market, for example
+  approximately `1.71` and `1.835`, but the submitted broker limit remained
+  `3.55`.
+
+#### Post-session diagnosis target
+
+The close path is refreshing the retry lifecycle but not refreshing the actual
+exit limit from current option quotes. The fix should separate retry scheduling
+from quote-derived close pricing and should make hard exits use a bounded
+marketable limit when the configured order has become stale.

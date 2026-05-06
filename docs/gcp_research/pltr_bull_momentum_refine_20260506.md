@@ -69,13 +69,45 @@ powershell -ExecutionPolicy Bypass -File scripts\launch_gcp_regime_rescue_shards
   -LagProfiles "0:60,10:60,30:120"
 ```
 
-## Next Actions
+## Completion Result
 
-1. Monitor workers until they terminate or report completion.
-2. Pull worker artifacts from GCS.
-3. Build a strict portfolio report with `fill_coverage_gate=0.90`,
-   `min_option_trades=20`, `min_test_net_pnl > 0`, and `required_regimes=bull`.
-4. Build a promotion-review packet without manual overrides.
-5. If PLTR gains eligible bull candidates, combine only through generated
-   governed-review artifacts; do not add PLTR to paper execution from this wave
-   alone.
+All `8` workers reached `TERMINATED`. Worker artifacts were pulled from GCS into
+the local research report tree; the pull transferred `374` objects and about
+`362.7 MiB`.
+
+Aggregate artifacts:
+
+- Portfolio report:
+  `reports/gcp_research/pltr_bull_momentum_refine_20260506T1625Z/aggregate/combined_portfolio_report/research_portfolio_report.json`
+- Promotion-review packet:
+  `reports/gcp_research/pltr_bull_momentum_refine_20260506T1625Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- GCS aggregate mirror:
+  `gs://codexalpaca-control-us/research_results/pltr_bull_momentum_refine_20260506T1625Z/aggregate/`
+
+Strict promotion-review packet result:
+
+- Decision: `research_only_blocked`.
+- Eligible bull candidates: `0`.
+- Candidate count: `486`.
+- Blockers:
+  - `fill_coverage_below_0.90`: `150`.
+  - `min_net_pnl_not_positive`: `485`.
+  - `test_net_pnl_not_above_0.01`: `452`.
+- Best bull candidate:
+  `portfolio12h__pltr__bull__call__single_leg_repair__ab777fccba96a6__profile_pltr-regime-rescue-c148-162-pltr-e30-x120-entry-liquidity-first-research-only`
+- Best candidate metrics:
+  - `best_min_net_pnl`: `-626.948`.
+  - `best_min_test_net_pnl`: `868.675`.
+  - `best_min_fill_coverage`: `0.9843`.
+
+## Interpretation
+
+PLTR bull remains research-only blocked. The best candidate cleared fill
+coverage and had positive test-period PnL, but failed full-period net PnL. This
+is primarily an economics/strategy-design failure, not a broad data-fill
+failure. The correct next action is strategy redesign or quarantine of this
+specific PLTR bull momentum-refine lane, not promotion and not a fill-gate
+override.
+
+The active local paper trader was not stopped, restarted, duplicated, or modified
+while this research-only wave was aggregated.
