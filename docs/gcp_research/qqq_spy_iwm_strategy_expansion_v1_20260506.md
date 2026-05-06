@@ -110,6 +110,32 @@ Only after smoke shards populate valid fill metrics should the remaining tails b
 launched. Full portfolio reports and promotion-review packets must remain the promotion
 source of truth.
 
+## Smoke Launch
+
+Wave ID:
+
+```text
+qqq_spy_iwm_strategy_expansion_v1_20260506T1945Z
+```
+
+GCS root:
+
+```text
+gs://codexalpaca-control-us/research_results/qqq_spy_iwm_strategy_expansion_v1_20260506T1945Z/
+```
+
+Launched workers:
+
+- `qqq-rescue-c001-036-20260506v1`
+- `qqq-rescue-c037-072-20260506v1`
+- `spy-rescue-c001-036-20260506v1`
+- `spy-rescue-c037-072-20260506v1`
+- `iwm-rescue-c001-036-20260506v1`
+- `iwm-rescue-c037-072-20260506v1`
+
+Each worker is research-only, broker-facing false, live-manifest effect none, and
+risk-policy effect none.
+
 ## Verification
 
 Local tests passed:
