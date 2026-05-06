@@ -116,3 +116,52 @@ Determine whether the second SPY call position was closed by broker state but no
 recorded as completed in the session, or whether the broker position query missed
 an expected open position. This needs reconciliation hardening before relying on
 session state alone for open-risk accounting.
+
+### 3. GOOGL hard-exit limit order did not fill repeatedly
+
+- First observed in alerts: approximately `2026-05-06T11:16:25-04:00`.
+- Latest checked: approximately `2026-05-06T11:26:15-04:00`.
+- Strategy:
+  `googl__governed__bull__call__single_leg_repair__strong_trend_patient__50e98a5d4eff13__googl_regime_rescu__20260506`.
+- Position: long `1` `GOOGL260508C00397500`.
+- Entry fill: `4.50`.
+- Broker close order at check:
+  - order id: `8b2a898e-fd54-4fa3-8894-b750d3439e6d`
+  - client order id: `googl__gover-d350d48bef5d784c`
+  - side: `sell`
+  - qty: `1`
+  - order type: `limit`
+  - limit price: `4.30`
+  - filled qty: `0`
+  - status at check: `new`
+- Broker position mark at check: approximately `3.20`.
+- Runtime symptom: repeated alerts: `exit did not fill`.
+
+#### Post-session diagnosis target
+
+This matches the QQQ hard-exit pattern: a non-marketable sell-to-close limit can
+remain above the option market after the exit condition is reached. The close path
+needs quote-aware refresh and bounded marketable-limit handling for hard exits and
+stop losses.
+
+### 4. Runtime open-trade accounting exceeds broker position footprint
+
+- Latest checked: approximately `2026-05-06T11:26:15-04:00`.
+- Session state reported `4` open trades:
+  - `1` QQQ bear put on `QQQ260507P00689000`
+  - `2` QQQ bull call strategies on `QQQ260507C00690000`
+  - `1` GOOGL bull call on `GOOGL260508C00397500`
+- Broker reported `3` option positions:
+  - long `1` `QQQ260507P00689000`
+  - long `2` `QQQ260507C00690000`
+  - long `1` `GOOGL260508C00397500`
+- The numeric broker position footprint is consistent with three contracts but
+  not with four independently risk-accounted open strategy trades.
+- The two QQQ bull strategy entries share the same contract and quantity footprint.
+
+#### Post-session diagnosis target
+
+The paper runner needs explicit aggregation-aware risk accounting for multiple
+strategies sharing the same option contract. Session state should distinguish
+strategy-level intents from broker-level net positions before computing available
+risk, exits, and close-order quantities.
