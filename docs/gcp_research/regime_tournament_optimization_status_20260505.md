@@ -157,6 +157,22 @@ These projections are research-only, trade-level compounded curves. They do not 
 - Strategy-regime coverage: `bull=3`, `bear=9`, `choppy=7` capital-plan candidates.
 - Evidence grade: `directional_expectation_only`
 
+### QQQ/SPY/IWM/AMD/AMZN/MSFT/TSLA
+
+- Projection packet: `reports/gcp_research/qqq_spy_iwm_amd_amzn_msft_tsla_institutional_projection_20260506T0100Z/projection/portfolio_growth_projection.json`
+- GCS packet: `gs://codexalpaca-control-us/research_results/qqq_spy_iwm_amd_amzn_msft_tsla_institutional_projection_20260506T0100Z/projection/portfolio_growth_projection.json`
+- Symbols: `QQQ,SPY,IWM,AMD,AMZN,MSFT,TSLA`
+- Starting cash: `$25,000`
+- Ending equity: `$144,462.65`
+- Total return: `477.8506%`
+- Max drawdown: `-22.9055%`
+- Matched trades: `2192`
+- Active days: `250 / 251`
+- Symbol weights after portfolio-level cap: `AMD=0.125`, `AMZN=0.125`, `IWM=0.25`, `MSFT=0.125`, `QQQ=0.125`, `SPY=0.125`, `TSLA=0.125`
+- Strategy-regime coverage: `bull=3`, `bear=15`, `choppy=7` capital-plan candidates.
+- Evidence grade: `directional_expectation_only`
+- Interpretation: adding MSFT/TSLA increased breadth and improved drawdown, but reduced compounded ending equity because the portfolio-level cap reweighted capital away from the highest-return prior sleeves.
+
 ## INTC/META Wave Result
 
 - Wave ID: `intc_meta_full_regime_rescue_20260506T0005Z`
@@ -186,7 +202,7 @@ These projections are research-only, trade-level compounded curves. They do not 
 - Interpretation: do not add INTC/META to the cumulative growth tracker yet. INTC has one bear research lead; META is mainly blocked by option cost/position sizing and fill coverage under the current `$25,000`/`0.05` allocation semantics.
 - Completed INTC/META workers self-terminated. The 16 terminated `regime-rescue` instances were deleted after outputs were uploaded and mirrored.
 
-## Active GCP Wave
+## MSFT/TSLA Wave Result
 
 - Wave ID: `msft_tsla_full_regime_rescue_20260506T0025Z`
 - GCS root: `gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/`
@@ -199,9 +215,27 @@ These projections are research-only, trade-level compounded curves. They do not 
 - Lag profiles: `0:60,10:60,30:120`
 - Bear profile set: `signal_window_refine`
 - Choppy profile set: `timewindow_quality_filter`
-- Launch state: all 8 MSFT shards and all 8 TSLA shards launched.
-- Active VM count: `16` research-only `regime-rescue` VMs.
+- Launch/result state: all 8 MSFT shards and all 8 TSLA shards completed and uploaded.
+- Combined packet: `reports/gcp_research/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- GCS combined packet: `gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- Combined decision: `ready_for_governed_validation_review`
+- Combined candidates: `996`
+- Combined eligible count: `109`
+- Combined unique eligible base candidates: `21`
+- Combined eligible regimes: `bull,bear,choppy`
+- Combined missing regimes: none
+- MSFT standalone: `498` candidates, `103` eligible, eligible regimes `bull,bear,choppy`, missing regimes none.
+- TSLA standalone: `498` candidates, `6` eligible, eligible regimes `bear`, missing regimes `bull,choppy`.
+- Dominant combined blockers: `fill_coverage_below_0.90=500`, `min_net_pnl_not_positive=680`, `test_net_pnl_not_above_0=488`.
+- Dominant combined fill-failure classes: `fill_gate_clear=496`, `position_sizing_too_expensive=443`, `selected_contract_universe_gap=54`, `entry_bar_gap_or_entry_timing_mismatch=2`.
+- Interpretation: MSFT is a standalone regime-complete governed-review lead. TSLA is useful only in the combined sleeve so far and needs bull/choppy redesign or cost/position-sizing repair before standalone use.
+- Completed MSFT/TSLA workers self-terminated. The 16 terminated `regime-rescue` instances were deleted after outputs were uploaded and mirrored.
 - Capacity note: some zones were resource constrained, but the launcher rerouted and completed all shard launches.
+
+## Active GCP Wave
+
+- No active `regime-rescue` GCP VMs remain from this ticker ladder pass.
+- The known 365d data ticker ladder has now run through `AAPL,NVDA,AMD,AMZN,INTC,META,MSFT,TSLA` plus existing `QQQ,SPY,IWM` packets.
 
 ## Data Coverage Inventory
 
@@ -226,9 +260,8 @@ QQQ uses the separate 365d next-trading-day 5x5 prefix:
 
 ## Next Loop
 
-1. Monitor `msft_tsla_full_regime_rescue_20260506T0025Z` until all 16 shards complete.
-2. Pull worker artifacts locally and build strict portfolio reports plus promotion-review packets per symbol and combined.
-3. If MSFT/TSLA are regime-complete, record them as governed-review candidates only and update the cumulative growth tracker.
-4. If a regime is missing, classify the dominant blocker: fill coverage, full-period economics, test PnL, or trade count.
-5. Do not launch additional ticker pairs until MSFT/TSLA aggregate is complete or until capacity is clearly idle.
-6. Do not lower the 0.90 fill gate, do not change live manifests, and do not start broker-facing sessions.
+1. Do not launch another broad 365d sweep until new ticker data is added or a specific blocker-repair hypothesis is defined.
+2. Prioritize blocker-specific redesign for `AAPL,NVDA,INTC,META,TSLA` where standalone regimes remain incomplete.
+3. Use MSFT as a standalone regime-complete governed-review lead and AMD/AMZN plus MSFT/TSLA as combined-sleeve leads only.
+4. Continue tracking cumulative account growth with the trade-level projection tool whenever a new governed-review sleeve is added.
+5. Do not lower the 0.90 fill gate, do not change live manifests, and do not start broker-facing sessions.
