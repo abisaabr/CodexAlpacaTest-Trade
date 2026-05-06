@@ -124,7 +124,7 @@ GCS root:
 gs://codexalpaca-control-us/research_results/qqq_spy_iwm_strategy_expansion_v1_20260506T1945Z/
 ```
 
-Launched workers:
+Initial smoke workers:
 
 - `qqq-rescue-c001-036-20260506v1`
 - `qqq-rescue-c037-072-20260506v1`
@@ -132,6 +132,19 @@ Launched workers:
 - `spy-rescue-c037-072-20260506v1`
 - `iwm-rescue-c001-036-20260506v1`
 - `iwm-rescue-c037-072-20260506v1`
+
+Early sample outputs showed valid strategy-fill metrics, including 1.0 fill coverage
+for sampled QQQ/SPY candidates and 0.992 fill coverage for a sampled IWM candidate.
+The next larger chunks were launched to reduce duplicated data-staging overhead:
+
+- `qqq-rescue-c073-144-20260506v1`
+- `qqq-rescue-c145-216-20260506v1`
+- `spy-rescue-c073-144-20260506v1`
+- `spy-rescue-c145-216-20260506v1`
+- `iwm-rescue-c073-144-20260506v1`
+- `iwm-rescue-c145-216-20260506v1`
+
+Current launched coverage is candidates 1-216 of 828 per symbol.
 
 Each worker is research-only, broker-facing false, live-manifest effect none, and
 risk-policy effect none.
