@@ -1,0 +1,2877 @@
+version: 1
+generated_at_utc: '2026-05-06T01:34:12+00:00'
+scope: research_governed_validation_review_only
+broker_facing: false
+live_manifest_effect: none
+risk_policy_effect: none
+source_packets:
+- path: reports/gcp_research/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  gcs_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  decision: ready_for_governed_validation_review
+  candidate_level_decision: ready_for_governed_validation_review
+  eligible_for_promotion_review_count: 199
+  eligible_regimes:
+  - bull
+  - bear
+  - choppy
+  missing_eligible_regimes: []
+- path: reports/gcp_research/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  gcs_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  decision: ready_for_governed_validation_review
+  candidate_level_decision: ready_for_governed_validation_review
+  eligible_for_promotion_review_count: 169
+  eligible_regimes:
+  - bull
+  - bear
+  - choppy
+  missing_eligible_regimes: []
+- path: reports/gcp_research/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  gcs_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  decision: ready_for_governed_validation_review
+  candidate_level_decision: ready_for_governed_validation_review
+  eligible_for_promotion_review_count: 109
+  eligible_regimes:
+  - bull
+  - bear
+  - choppy
+  missing_eligible_regimes: []
+strategy_count: 60
+symbols:
+- AMD
+- AMZN
+- MSFT
+- QQQ
+- SPY
+- TSLA
+regimes:
+- bear
+- bull
+- choppy
+skipped_candidates: []
+strategies:
+- name: qqq__governed__bull__call__single_leg_repair__qqq_spy_ff_qqq_20260505__7f37aee10d5fda__qqq_spy_ff_qqq_202__20260506
+  underlying_symbol: QQQ
+  regime: bull
+  family: Single-leg long call
+  description: QQQ governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 300
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.025
+  max_contracts: 4
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.3
+  candidate_variant_id: portfolio12h__qqq__bull__call__single_leg_repair__7f37aee10d5fda__profile_qqq-spy-ff-qqq-20260505-qqq-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: qqq__bull__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9891
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 181
+  min_net_pnl: 4495.259
+  min_test_net_pnl: 4234.781
+  research_profile: qqq_spy_ff_qqq_20260505_qqq_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: null
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 15
+  max_minutes_since_open: 270
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop30
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.3
+  min_option_hold_minutes: 3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: qqq__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__4c6be7e0bfb22a__qqq_regime_rescue__20260506
+  underlying_symbol: QQQ
+  regime: bear
+  family: Single-leg long put
+  description: QQQ governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 55
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 4
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__qqq__bear__put__single_leg_repair__4c6be7e0bfb22a__profile_qqq-regime-rescue-c028-036-qqq-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: qqq__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 1.0
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 34
+  min_net_pnl: 3733.52
+  min_test_net_pnl: 2252.189
+  research_profile: qqq_regime_rescue_c028_036_qqq_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 210
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: qqq__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__06ea81e50c1090__qqq_regime_rescue__20260506
+  underlying_symbol: QQQ
+  regime: bear
+  family: Single-leg long put
+  description: QQQ governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 55
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 4
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__qqq__bear__put__single_leg_repair__06ea81e50c1090__profile_qqq-regime-rescue-c028-036-qqq-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: qqq__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 1.0
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 31
+  min_net_pnl: 2589.3
+  min_test_net_pnl: 2045.219
+  research_profile: qqq_regime_rescue_c028_036_qqq_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 210
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: qqq__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__4549f09c6fd367__qqq_regime_rescue__20260506
+  underlying_symbol: QQQ
+  regime: bear
+  family: Single-leg long put
+  description: QQQ governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 55
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 4
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__qqq__bear__put__single_leg_repair__4549f09c6fd367__profile_qqq-regime-rescue-c019-027-qqq-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: qqq__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 1.0
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 29
+  min_net_pnl: 2159.652
+  min_test_net_pnl: 2297.856
+  research_profile: qqq_regime_rescue_c019_027_qqq_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 210
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: qqq__governed__choppy__call__single_leg_repair__iwm_choppy_midday_bands__7d707d30b09023__qqq_regime_rescue__20260506
+  underlying_symbol: QQQ
+  regime: choppy
+  family: Single-leg long call
+  description: QQQ governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 55
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.025
+  max_contracts: 4
+  profit_target_multiple: 0.24
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__qqq__choppy__call__single_leg_repair__7d707d30b09023__profile_qqq-regime-rescue-c097-108-qqq-e30-x120-entry-liquidity-first-research-only
+  source_strategy_id: qqq__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9913
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 229
+  min_net_pnl: 3738.727
+  min_test_net_pnl: 1948.97
+  research_profile: qqq_regime_rescue_c097_108_qqq_e30_x120_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 270
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target24_stop10
+  option_profit_target_pct: 0.24
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.0024
+  min_range_pct: 0.0012
+  max_range_pct: 0.01
+  max_midpoint_distance_pct: 0.005
+  range_edge_pct: 0.0004
+  range_entry_side: lower_band
+- name: qqq__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__179a54e9bd4dd1__qqq_regime_rescue__20260506
+  underlying_symbol: QQQ
+  regime: bear
+  family: Single-leg long put
+  description: QQQ governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 55
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 4
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.07
+  candidate_variant_id: portfolio12h__qqq__bear__put__single_leg_repair__179a54e9bd4dd1__profile_qqq-regime-rescue-c028-036-qqq-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: qqq__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 1.0
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 34
+  min_net_pnl: 2800.454
+  min_test_net_pnl: 1845.596
+  research_profile: qqq_regime_rescue_c028_036_qqq_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 210
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop7
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.07
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: spy__governed__choppy__call__single_leg_repair__iwm_choppy_midday_bands__c16ef5836987f2__spy_regime_rescue__20260506
+  underlying_symbol: SPY
+  regime: choppy
+  family: Single-leg long call
+  description: SPY governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 55
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.025
+  max_contracts: 4
+  profit_target_multiple: 0.3
+  stop_loss_multiple: 0.13
+  candidate_variant_id: portfolio12h__spy__choppy__call__single_leg_repair__c16ef5836987f2__profile_spy-regime-rescue-c109-120-spy-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: spy__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9858
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 208
+  min_net_pnl: 4096.054
+  min_test_net_pnl: 1297.555
+  research_profile: spy_regime_rescue_c109_120_spy_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 270
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target30_stop13
+  option_profit_target_pct: 0.3
+  option_stop_loss_pct: 0.13
+  min_option_hold_minutes: 3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.0024
+  min_range_pct: 0.0012
+  max_range_pct: 0.01
+  max_midpoint_distance_pct: 0.005
+  range_edge_pct: 0.0004
+  range_entry_side: lower_band
+- name: qqq__governed__choppy__call__single_leg_repair__iwm_choppy_midday_bands__b5719527a598f7__qqq_regime_rescue__20260506
+  underlying_symbol: QQQ
+  regime: choppy
+  family: Single-leg long call
+  description: QQQ governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 55
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.025
+  max_contracts: 4
+  profit_target_multiple: 0.3
+  stop_loss_multiple: 0.13
+  candidate_variant_id: portfolio12h__qqq__choppy__call__single_leg_repair__b5719527a598f7__profile_qqq-regime-rescue-c109-120-qqq-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: qqq__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9827
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 227
+  min_net_pnl: 3994.232
+  min_test_net_pnl: 1675.244
+  research_profile: qqq_regime_rescue_c109_120_qqq_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 270
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target30_stop13
+  option_profit_target_pct: 0.3
+  option_stop_loss_pct: 0.13
+  min_option_hold_minutes: 3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.0024
+  min_range_pct: 0.0012
+  max_range_pct: 0.01
+  max_midpoint_distance_pct: 0.005
+  range_edge_pct: 0.0004
+  range_entry_side: lower_band
+- name: qqq__governed__bull__call__single_leg_repair__qqq_spy_ff_qqq_20260505__e59a5796305393__qqq_spy_ff_qqq_202__20260506
+  underlying_symbol: QQQ
+  regime: bull
+  family: Single-leg long call
+  description: QQQ governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 300
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.025
+  max_contracts: 4
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.3
+  candidate_variant_id: portfolio12h__qqq__bull__call__single_leg_repair__e59a5796305393__profile_qqq-spy-ff-qqq-20260505-qqq-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: qqq__bull__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9897
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 192
+  min_net_pnl: 1522.709
+  min_test_net_pnl: 4454.139
+  research_profile: qqq_spy_ff_qqq_20260505_qqq_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: null
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 15
+  max_minutes_since_open: 270
+  liquidity_gate: loose
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop30
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.3
+  min_option_hold_minutes: 3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: spy__governed__bear__put__single_leg_repair__bear_confirmed_break_35__aa5af72cedd0e8__spy_regime_rescue__20260506
+  underlying_symbol: SPY
+  regime: bear
+  family: Single-leg long put
+  description: SPY governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 4
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.07
+  candidate_variant_id: portfolio12h__spy__bear__put__single_leg_repair__aa5af72cedd0e8__profile_spy-regime-rescue-c001-009-spy-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: spy__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 1.0
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 26
+  min_net_pnl: 2535.879
+  min_test_net_pnl: 1564.911
+  research_profile: spy_regime_rescue_c001_009_spy_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop7
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.07
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: spy__governed__bear__put__single_leg_repair__bear_confirmed_break_35__98e1c246765263__spy_regime_rescue__20260506
+  underlying_symbol: SPY
+  regime: bear
+  family: Single-leg long put
+  description: SPY governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 4
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__spy__bear__put__single_leg_repair__98e1c246765263__profile_spy-regime-rescue-c001-009-spy-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: spy__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 1.0
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 26
+  min_net_pnl: 2303.112
+  min_test_net_pnl: 1699.776
+  research_profile: spy_regime_rescue_c001_009_spy_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: qqq__governed__bear__put__single_leg_repair__bear_confirmed_break_35__055209d25ec8fb__qqq_regime_rescue__20260506
+  underlying_symbol: QQQ
+  regime: bear
+  family: Single-leg long put
+  description: QQQ governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 4
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__qqq__bear__put__single_leg_repair__055209d25ec8fb__profile_qqq-regime-rescue-c010-018-qqq-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: qqq__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 1.0
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 80
+  min_net_pnl: 3675.208
+  min_test_net_pnl: 816.867
+  research_profile: qqq_regime_rescue_c010_018_qqq_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0009
+- name: spy__governed__bear__put__single_leg_repair__bear_confirmed_break_35__1b25bb90e378ea__spy_regime_rescue__20260506
+  underlying_symbol: SPY
+  regime: bear
+  family: Single-leg long put
+  description: SPY governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 4
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.07
+  candidate_variant_id: portfolio12h__spy__bear__put__single_leg_repair__1b25bb90e378ea__profile_spy-regime-rescue-c001-009-spy-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: spy__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 1.0
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 47
+  min_net_pnl: 2078.496
+  min_test_net_pnl: 1336.964
+  research_profile: spy_regime_rescue_c001_009_spy_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop7
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.07
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0014
+- name: qqq__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__0b97e891d87486__qqq_regime_rescue__20260506
+  underlying_symbol: QQQ
+  regime: bear
+  family: Single-leg long put
+  description: QQQ governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 55
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 4
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__qqq__bear__put__single_leg_repair__0b97e891d87486__profile_qqq-regime-rescue-c028-036-qqq-e30-x120-entry-liquidity-first-research-only
+  source_strategy_id: qqq__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9815
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 53
+  min_net_pnl: 2144.382
+  min_test_net_pnl: 1383.963
+  research_profile: qqq_regime_rescue_c028_036_qqq_e30_x120_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 210
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0014
+- name: spy__governed__bear__put__single_leg_repair__bear_confirmed_break_35__960c985114b405__spy_regime_rescue__20260506
+  underlying_symbol: SPY
+  regime: bear
+  family: Single-leg long put
+  description: SPY governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 4
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__spy__bear__put__single_leg_repair__960c985114b405__profile_spy-regime-rescue-c001-009-spy-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: spy__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 1.0
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 72
+  min_net_pnl: 2762.384
+  min_test_net_pnl: 950.882
+  research_profile: spy_regime_rescue_c001_009_spy_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0009
+- name: spy__governed__choppy__call__single_leg_repair__iwm_choppy_midday_bands__6c6f01b4d34e9a__spy_regime_rescue__20260506
+  underlying_symbol: SPY
+  regime: choppy
+  family: Single-leg long call
+  description: SPY governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 55
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.025
+  max_contracts: 4
+  profit_target_multiple: 0.24
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__spy__choppy__call__single_leg_repair__6c6f01b4d34e9a__profile_spy-regime-rescue-c097-108-spy-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: spy__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9858
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 208
+  min_net_pnl: 2403.748
+  min_test_net_pnl: 1319.533
+  research_profile: spy_regime_rescue_c097_108_spy_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 270
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target24_stop10
+  option_profit_target_pct: 0.24
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.0024
+  min_range_pct: 0.0012
+  max_range_pct: 0.01
+  max_midpoint_distance_pct: 0.005
+  range_edge_pct: 0.0004
+  range_entry_side: lower_band
+- name: spy__governed__bull__call__single_leg_repair__qqq_spy_ff_spy_20260505__4f33c5d56206d2__qqq_spy_ff_spy_202__20260506
+  underlying_symbol: SPY
+  regime: bull
+  family: Single-leg long call
+  description: SPY governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 300
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.025
+  max_contracts: 4
+  profit_target_multiple: 0.45
+  stop_loss_multiple: 0.3
+  candidate_variant_id: portfolio12h__spy__bull__call__single_leg_repair__4f33c5d56206d2__profile_qqq-spy-ff-spy-20260505-spy-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: spy__bull__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9842
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 187
+  min_net_pnl: 6076.333
+  min_test_net_pnl: 734.633
+  research_profile: qqq_spy_ff_spy_20260505_spy_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: null
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 15
+  max_minutes_since_open: 270
+  liquidity_gate: loose
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target45_stop30
+  option_profit_target_pct: 0.45
+  option_stop_loss_pct: 0.3
+  min_option_hold_minutes: 3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: spy__governed__bull__call__single_leg_repair__qqq_spy_ff_spy_20260505__cbf97bbd739774__qqq_spy_ff_spy_202__20260506
+  underlying_symbol: SPY
+  regime: bull
+  family: Single-leg long call
+  description: SPY governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 300
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.025
+  max_contracts: 4
+  profit_target_multiple: 0.55
+  stop_loss_multiple: 0.3
+  candidate_variant_id: portfolio12h__spy__bull__call__single_leg_repair__cbf97bbd739774__profile_qqq-spy-ff-spy-20260505-spy-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: spy__bull__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_combined_regime_portfolio_20260505T2240Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9842
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 187
+  min_net_pnl: 6076.333
+  min_test_net_pnl: 734.633
+  research_profile: qqq_spy_ff_spy_20260505_spy_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: null
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 15
+  max_minutes_since_open: 270
+  liquidity_gate: loose
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target55_stop30
+  option_profit_target_pct: 0.55
+  option_stop_loss_pct: 0.3
+  min_option_hold_minutes: 3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+- name: amzn__governed__bull__call__single_leg_repair__strong_trend_patient__f766ec10ed5724__amzn_regime_rescue__20260506
+  underlying_symbol: AMZN
+  regime: bull
+  family: Single-leg long call
+  description: AMZN governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 210
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 2
+  profit_target_multiple: 0.5
+  stop_loss_multiple: 0.16
+  candidate_variant_id: portfolio12h__amzn__bull__call__single_leg_repair__f766ec10ed5724__profile_amzn-regime-rescue-c001-021-amzn-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: amzn__bull__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.981
+  min_data_foundation_coverage: 0.9952
+  min_option_trade_count: 206
+  min_net_pnl: 7488.222
+  min_test_net_pnl: 12040.116
+  research_profile: amzn_regime_rescue_c001_021_amzn_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 30
+  max_minutes_since_open: 270
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target50_stop16
+  option_profit_target_pct: 0.5
+  option_stop_loss_pct: 0.16
+  min_option_hold_minutes: 3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0012
+- name: amzn__governed__bull__call__single_leg_repair__midday_continuation__a09e811fc20989__amzn_regime_rescue__20260506
+  underlying_symbol: AMZN
+  regime: bull
+  family: Single-leg long call
+  description: AMZN governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 135
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 2
+  profit_target_multiple: 0.36
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__amzn__bull__call__single_leg_repair__a09e811fc20989__profile_amzn-regime-rescue-c001-021-amzn-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: amzn__bull__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9729
+  min_data_foundation_coverage: 0.9955
+  min_option_trade_count: 215
+  min_net_pnl: 6586.023
+  min_test_net_pnl: 7815.76
+  research_profile: amzn_regime_rescue_c001_021_amzn_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 90
+  max_minutes_since_open: 240
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target36_stop14
+  option_profit_target_pct: 0.36
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0008
+- name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c043_0__00b41e327e528a__amd_regime_rescue__20260506
+  underlying_symbol: AMD
+  regime: choppy
+  family: Single-leg long call
+  description: AMD governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__00b41e327e528a__profile_amd-regime-rescue-c043-063-amd-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: amd__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9722
+  min_data_foundation_coverage: 0.9722
+  min_option_trade_count: 35
+  min_net_pnl: 3160.28
+  min_test_net_pnl: 2043.181
+  research_profile: amd_regime_rescue_c043_063_amd_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.0008
+  min_range_pct: 0.0015
+  max_range_pct: 0.004
+  max_midpoint_distance_pct: 0.003
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c127_1__a77568c4a8c4c9__amd_regime_rescue__20260506
+  underlying_symbol: AMD
+  regime: choppy
+  family: Single-leg long call
+  description: AMD governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__a77568c4a8c4c9__profile_amd-regime-rescue-c127-147-amd-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: amd__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9677
+  min_data_foundation_coverage: 0.9677
+  min_option_trade_count: 30
+  min_net_pnl: 3030.303
+  min_test_net_pnl: 1839.397
+  research_profile: amd_regime_rescue_c127_147_amd_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.0008
+  min_range_pct: 0.0015
+  max_range_pct: 0.004
+  max_midpoint_distance_pct: 0.003
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c043_0__d1ff613c2a014f__amd_regime_rescue__20260506
+  underlying_symbol: AMD
+  regime: choppy
+  family: Single-leg long call
+  description: AMD governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__d1ff613c2a014f__profile_amd-regime-rescue-c043-063-amd-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: amd__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9787
+  min_data_foundation_coverage: 0.9787
+  min_option_trade_count: 46
+  min_net_pnl: 3386.582
+  min_test_net_pnl: 1334.574
+  research_profile: amd_regime_rescue_c043_063_amd_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.0008
+  min_range_pct: 0.0015
+  max_range_pct: 0.004
+  max_midpoint_distance_pct: 0.003
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+- name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c043_0__7a2aa392af9266__amd_regime_rescue__20260506
+  underlying_symbol: AMD
+  regime: choppy
+  family: Single-leg long call
+  description: AMD governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__7a2aa392af9266__profile_amd-regime-rescue-c043-063-amd-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: amd__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9765
+  min_data_foundation_coverage: 0.9882
+  min_option_trade_count: 83
+  min_net_pnl: 2971.085
+  min_test_net_pnl: 1515.358
+  research_profile: amd_regime_rescue_c043_063_amd_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.0015
+  max_range_pct: 0.005
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c127_1__c5769ec1fe9028__amd_regime_rescue__20260506
+  underlying_symbol: AMD
+  regime: choppy
+  family: Single-leg long call
+  description: AMD governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__c5769ec1fe9028__profile_amd-regime-rescue-c127-147-amd-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: amd__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9767
+  min_data_foundation_coverage: 0.9767
+  min_option_trade_count: 42
+  min_net_pnl: 3215.674
+  min_test_net_pnl: 1215.125
+  research_profile: amd_regime_rescue_c127_147_amd_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.0008
+  min_range_pct: 0.0015
+  max_range_pct: 0.004
+  max_midpoint_distance_pct: 0.003
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+- name: amzn__governed__bear__put__single_leg_repair__bear_late_continuation_2__b5ebc5e9758205__amzn_regime_rescue__20260506
+  underlying_symbol: AMZN
+  regime: bear
+  family: Single-leg long put
+  description: AMZN governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 2
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__amzn__bear__put__single_leg_repair__b5ebc5e9758205__profile_amzn-regime-rescue-c085-105-amzn-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: amzn__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9623
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 51
+  min_net_pnl: 1465.993
+  min_test_net_pnl: 1886.157
+  research_profile: amzn_regime_rescue_c085_105_amzn_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 220
+  max_minutes_since_open: 330
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c043_0__443e3a943783a5__amd_regime_rescue__20260506
+  underlying_symbol: AMD
+  regime: choppy
+  family: Single-leg long call
+  description: AMD governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__443e3a943783a5__profile_amd-regime-rescue-c043-063-amd-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: amd__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9792
+  min_data_foundation_coverage: 0.9896
+  min_option_trade_count: 94
+  min_net_pnl: 2695.745
+  min_test_net_pnl: 1158.668
+  research_profile: amd_regime_rescue_c043_063_amd_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.0015
+  max_range_pct: 0.005
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+- name: amzn__governed__bear__put__single_leg_repair__bear_late_continuation_2__983e21cda49b3e__amzn_regime_rescue__20260506
+  underlying_symbol: AMZN
+  regime: bear
+  family: Single-leg long put
+  description: AMZN governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 2
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__amzn__bear__put__single_leg_repair__983e21cda49b3e__profile_amzn-regime-rescue-c106-126-amzn-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: amzn__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9434
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 50
+  min_net_pnl: 2109.091
+  min_test_net_pnl: 1457.118
+  research_profile: amzn_regime_rescue_c106_126_amzn_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 220
+  max_minutes_since_open: 330
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c043_0__d127813808face__amd_regime_rescue__20260506
+  underlying_symbol: AMD
+  regime: choppy
+  family: Single-leg long call
+  description: AMD governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.25
+  stop_loss_multiple: 0.09
+  candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__d127813808face__profile_amd-regime-rescue-c043-063-amd-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: amd__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9722
+  min_data_foundation_coverage: 0.9722
+  min_option_trade_count: 35
+  min_net_pnl: 1988.453
+  min_test_net_pnl: 1499.725
+  research_profile: amd_regime_rescue_c043_063_amd_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target25_stop9
+  option_profit_target_pct: 0.25
+  option_stop_loss_pct: 0.09
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.0008
+  min_range_pct: 0.0015
+  max_range_pct: 0.004
+  max_midpoint_distance_pct: 0.003
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c127_1__09ae2fc520851c__amd_regime_rescue__20260506
+  underlying_symbol: AMD
+  regime: choppy
+  family: Single-leg long call
+  description: AMD governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__09ae2fc520851c__profile_amd-regime-rescue-c127-147-amd-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: amd__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.975
+  min_data_foundation_coverage: 0.9875
+  min_option_trade_count: 78
+  min_net_pnl: 3682.705
+  min_test_net_pnl: 552.059
+  research_profile: amd_regime_rescue_c127_147_amd_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.0015
+  max_range_pct: 0.005
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+- name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c127_1__426eed87e0827e__amd_regime_rescue__20260506
+  underlying_symbol: AMD
+  regime: choppy
+  family: Single-leg long call
+  description: AMD governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.25
+  stop_loss_multiple: 0.09
+  candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__426eed87e0827e__profile_amd-regime-rescue-c127-147-amd-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: amd__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9677
+  min_data_foundation_coverage: 0.9677
+  min_option_trade_count: 30
+  min_net_pnl: 2097.237
+  min_test_net_pnl: 1489.747
+  research_profile: amd_regime_rescue_c127_147_amd_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target25_stop9
+  option_profit_target_pct: 0.25
+  option_stop_loss_pct: 0.09
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.0008
+  min_range_pct: 0.0015
+  max_range_pct: 0.004
+  max_midpoint_distance_pct: 0.003
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: amzn__governed__bull__call__single_leg_repair__morning_trend__4f7c5ea47a1ba9__amzn_regime_rescue__20260506
+  underlying_symbol: AMZN
+  regime: bull
+  family: Single-leg long call
+  description: AMZN governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 75
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 2
+  profit_target_multiple: 0.26
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__amzn__bull__call__single_leg_repair__4f7c5ea47a1ba9__profile_amzn-regime-rescue-c001-021-amzn-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: amzn__bull__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9903
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 205
+  min_net_pnl: 2395.557
+  min_test_net_pnl: 2440.935
+  research_profile: amzn_regime_rescue_c001_021_amzn_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 15
+  max_minutes_since_open: 105
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target26_stop10
+  option_profit_target_pct: 0.26
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0006
+- name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c127_1__f66de52fe0904d__amd_regime_rescue__20260506
+  underlying_symbol: AMD
+  regime: choppy
+  family: Single-leg long call
+  description: AMD governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__f66de52fe0904d__profile_amd-regime-rescue-c127-147-amd-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: amd__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9706
+  min_data_foundation_coverage: 0.9853
+  min_option_trade_count: 66
+  min_net_pnl: 3441.578
+  min_test_net_pnl: 613.005
+  research_profile: amd_regime_rescue_c127_147_amd_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.0015
+  max_range_pct: 0.005
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c022_0__6c7039478fd188__amd_regime_rescue__20260506
+  underlying_symbol: AMD
+  regime: choppy
+  family: Single-leg long call
+  description: AMD governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.08
+  candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__6c7039478fd188__profile_amd-regime-rescue-c022-042-amd-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: amd__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9722
+  min_data_foundation_coverage: 0.9722
+  min_option_trade_count: 35
+  min_net_pnl: 1791.65
+  min_test_net_pnl: 1408.816
+  research_profile: amd_regime_rescue_c022_042_amd_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop8
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.08
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.0008
+  min_range_pct: 0.0015
+  max_range_pct: 0.004
+  max_midpoint_distance_pct: 0.003
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c127_1__e6bcefea1024f1__amd_regime_rescue__20260506
+  underlying_symbol: AMD
+  regime: choppy
+  family: Single-leg long call
+  description: AMD governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.08
+  candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__e6bcefea1024f1__profile_amd-regime-rescue-c127-147-amd-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: amd__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9677
+  min_data_foundation_coverage: 0.9677
+  min_option_trade_count: 30
+  min_net_pnl: 1909.425
+  min_test_net_pnl: 1398.838
+  research_profile: amd_regime_rescue_c127_147_amd_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop8
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.08
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.0008
+  min_range_pct: 0.0015
+  max_range_pct: 0.004
+  max_midpoint_distance_pct: 0.003
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c043_0__ab220bd9a21cd0__amd_regime_rescue__20260506
+  underlying_symbol: AMD
+  regime: choppy
+  family: Single-leg long call
+  description: AMD governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.25
+  stop_loss_multiple: 0.09
+  candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__ab220bd9a21cd0__profile_amd-regime-rescue-c043-063-amd-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: amd__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9787
+  min_data_foundation_coverage: 0.9787
+  min_option_trade_count: 46
+  min_net_pnl: 2426.543
+  min_test_net_pnl: 950.958
+  research_profile: amd_regime_rescue_c043_063_amd_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target25_stop9
+  option_profit_target_pct: 0.25
+  option_stop_loss_pct: 0.09
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.0008
+  min_range_pct: 0.0015
+  max_range_pct: 0.004
+  max_midpoint_distance_pct: 0.003
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+- name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c022_0__636991066f0288__amd_regime_rescue__20260506
+  underlying_symbol: AMD
+  regime: choppy
+  family: Single-leg long call
+  description: AMD governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.08
+  candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__636991066f0288__profile_amd-regime-rescue-c022-042-amd-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: amd__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9787
+  min_data_foundation_coverage: 0.9787
+  min_option_trade_count: 46
+  min_net_pnl: 2242.842
+  min_test_net_pnl: 986.239
+  research_profile: amd_regime_rescue_c022_042_amd_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop8
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.08
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.0008
+  min_range_pct: 0.0015
+  max_range_pct: 0.004
+  max_midpoint_distance_pct: 0.003
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+- name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c127_1__263b7aa4837fc5__amd_regime_rescue__20260506
+  underlying_symbol: AMD
+  regime: choppy
+  family: Single-leg long call
+  description: AMD governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.25
+  stop_loss_multiple: 0.09
+  candidate_variant_id: portfolio12h__amd__choppy__call__single_leg_repair__263b7aa4837fc5__profile_amd-regime-rescue-c127-147-amd-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: amd__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9767
+  min_data_foundation_coverage: 0.9767
+  min_option_trade_count: 42
+  min_net_pnl: 2394.496
+  min_test_net_pnl: 955.385
+  research_profile: amd_regime_rescue_c127_147_amd_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target25_stop9
+  option_profit_target_pct: 0.25
+  option_stop_loss_pct: 0.09
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.0008
+  min_range_pct: 0.0015
+  max_range_pct: 0.004
+  max_midpoint_distance_pct: 0.003
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+- name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__616f3224c5e4de__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: bear
+  family: Single-leg long put
+  description: MSFT governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__msft__bear__put__single_leg_repair__616f3224c5e4de__profile_msft-regime-rescue-c085-105-msft-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: msft__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9242
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 61
+  min_net_pnl: 1423.395
+  min_test_net_pnl: 2086.824
+  research_profile: msft_regime_rescue_c085_105_msft_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 220
+  max_minutes_since_open: 330
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0014
+- name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__e3fa4bf9f5f1d5__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: bear
+  family: Single-leg long put
+  description: MSFT governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__msft__bear__put__single_leg_repair__e3fa4bf9f5f1d5__profile_msft-regime-rescue-c106-126-msft-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: msft__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9375
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 60
+  min_net_pnl: 1966.4
+  min_test_net_pnl: 1441.985
+  research_profile: msft_regime_rescue_c106_126_msft_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 220
+  max_minutes_since_open: 330
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0014
+- name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__d211dcfeb10414__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: bear
+  family: Single-leg long put
+  description: MSFT governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__msft__bear__put__single_leg_repair__d211dcfeb10414__profile_msft-regime-rescue-c106-126-msft-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: msft__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 1.0
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 28
+  min_net_pnl: 1670.347
+  min_test_net_pnl: 1545.88
+  research_profile: msft_regime_rescue_c106_126_msft_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 220
+  max_minutes_since_open: 330
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__322b803bb266b9__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: bear
+  family: Single-leg long put
+  description: MSFT governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__msft__bear__put__single_leg_repair__322b803bb266b9__profile_msft-regime-rescue-c085-105-msft-e30-x120-entry-liquidity-first-research-only
+  source_strategy_id: msft__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9245
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 98
+  min_net_pnl: 1444.768
+  min_test_net_pnl: 1400.024
+  research_profile: msft_regime_rescue_c085_105_msft_e30_x120_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 220
+  max_minutes_since_open: 330
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0009
+- name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__7fc876d6787792__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: bear
+  family: Single-leg long put
+  description: MSFT governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__msft__bear__put__single_leg_repair__7fc876d6787792__profile_msft-regime-rescue-c106-126-msft-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: msft__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9538
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 62
+  min_net_pnl: 1768.705
+  min_test_net_pnl: 1040.298
+  research_profile: msft_regime_rescue_c106_126_msft_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 220
+  max_minutes_since_open: 330
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0014
+- name: msft__governed__bear__put__single_leg_repair__bear_confirmed_break_35__a0d4e81d115472__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: bear
+  family: Single-leg long put
+  description: MSFT governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.07
+  candidate_variant_id: portfolio12h__msft__bear__put__single_leg_repair__a0d4e81d115472__profile_msft-regime-rescue-c001-021-msft-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: msft__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9672
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 59
+  min_net_pnl: 1974.673
+  min_test_net_pnl: 692.055
+  research_profile: msft_regime_rescue_c001_021_msft_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop7
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.07
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: msft__governed__choppy__call__single_leg_repair__msft_regime_rescue_c148__90e66bc6811249__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: choppy
+  family: Single-leg long call
+  description: MSFT governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.25
+  stop_loss_multiple: 0.09
+  candidate_variant_id: portfolio12h__msft__choppy__call__single_leg_repair__90e66bc6811249__profile_msft-regime-rescue-c148-166-msft-e30-x120-entry-liquidity-first-research-only
+  source_strategy_id: msft__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9583
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 92
+  min_net_pnl: 1712.563
+  min_test_net_pnl: 886.193
+  research_profile: msft_regime_rescue_c148_166_msft_e30_x120_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 165
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target25_stop9
+  option_profit_target_pct: 0.25
+  option_stop_loss_pct: 0.09
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.0015
+  max_range_pct: 0.005
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__cbcadf043dbd10__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: bear
+  family: Single-leg long put
+  description: MSFT governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__msft__bear__put__single_leg_repair__cbcadf043dbd10__profile_msft-regime-rescue-c106-126-msft-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: msft__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9813
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 105
+  min_net_pnl: 1692.022
+  min_test_net_pnl: 1050.127
+  research_profile: msft_regime_rescue_c106_126_msft_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 220
+  max_minutes_since_open: 330
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0009
+- name: msft__governed__choppy__call__single_leg_repair__msft_regime_rescue_c148__d820628c7fca3f__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: choppy
+  family: Single-leg long call
+  description: MSFT governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__msft__choppy__call__single_leg_repair__d820628c7fca3f__profile_msft-regime-rescue-c148-166-msft-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: msft__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9688
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 93
+  min_net_pnl: 1394.221
+  min_test_net_pnl: 1090.063
+  research_profile: msft_regime_rescue_c148_166_msft_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 165
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.0015
+  max_range_pct: 0.005
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: msft__governed__choppy__call__single_leg_repair__msft_regime_rescue_c127__1f7a37b9e3e49b__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: choppy
+  family: Single-leg long call
+  description: MSFT governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__msft__choppy__call__single_leg_repair__1f7a37b9e3e49b__profile_msft-regime-rescue-c127-147-msft-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: msft__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9677
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 90
+  min_net_pnl: 2387.352
+  min_test_net_pnl: 516.566
+  research_profile: msft_regime_rescue_c127_147_msft_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.002
+  max_range_pct: 0.006
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+- name: msft__governed__bull__call__single_leg_repair__midday_continuation__f53c7ddde34dce__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: bull
+  family: Single-leg long call
+  description: MSFT governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 135
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 3
+  profit_target_multiple: 0.36
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__msft__bull__call__single_leg_repair__f53c7ddde34dce__profile_msft-regime-rescue-c001-021-msft-e30-x120-entry-liquidity-first-research-only
+  source_strategy_id: msft__bull__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9672
+  min_data_foundation_coverage: 0.9945
+  min_option_trade_count: 177
+  min_net_pnl: 3753.945
+  min_test_net_pnl: 854.126
+  research_profile: msft_regime_rescue_c001_021_msft_e30_x120_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 90
+  max_minutes_since_open: 240
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target36_stop14
+  option_profit_target_pct: 0.36
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0008
+- name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__99ee7a6372ab46__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: bear
+  family: Single-leg long put
+  description: MSFT governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.07
+  candidate_variant_id: portfolio12h__msft__bear__put__single_leg_repair__99ee7a6372ab46__profile_msft-regime-rescue-c085-105-msft-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: msft__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9242
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 61
+  min_net_pnl: 761.058
+  min_test_net_pnl: 1134.777
+  research_profile: msft_regime_rescue_c085_105_msft_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 220
+  max_minutes_since_open: 330
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop7
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.07
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0014
+- name: msft__governed__choppy__call__single_leg_repair__msft_regime_rescue_c148__56cc9804241e9d__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: choppy
+  family: Single-leg long call
+  description: MSFT governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__msft__choppy__call__single_leg_repair__56cc9804241e9d__profile_msft-regime-rescue-c148-166-msft-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: msft__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9633
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 105
+  min_net_pnl: 1424.513
+  min_test_net_pnl: 898.43
+  research_profile: msft_regime_rescue_c148_166_msft_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 165
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.002
+  max_range_pct: 0.006
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+- name: msft__governed__choppy__call__single_leg_repair__msft_regime_rescue_c127__38effe81b7b199__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: choppy
+  family: Single-leg long call
+  description: MSFT governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__msft__choppy__call__single_leg_repair__38effe81b7b199__profile_msft-regime-rescue-c127-147-msft-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: msft__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.973
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 72
+  min_net_pnl: 2074.079
+  min_test_net_pnl: 396.856
+  research_profile: msft_regime_rescue_c127_147_msft_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.002
+  max_range_pct: 0.006
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__edb31baed6a0ff__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: bear
+  family: Single-leg long put
+  description: MSFT governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.07
+  candidate_variant_id: portfolio12h__msft__bear__put__single_leg_repair__edb31baed6a0ff__profile_msft-regime-rescue-c106-126-msft-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: msft__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9385
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 61
+  min_net_pnl: 1451.855
+  min_test_net_pnl: 608.939
+  research_profile: msft_regime_rescue_c106_126_msft_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 220
+  max_minutes_since_open: 330
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop7
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.07
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0014
+- name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__c47903981bbf0f__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: bear
+  family: Single-leg long put
+  description: MSFT governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.07
+  candidate_variant_id: portfolio12h__msft__bear__put__single_leg_repair__c47903981bbf0f__profile_msft-regime-rescue-c106-126-msft-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: msft__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9643
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 27
+  min_net_pnl: 1027.15
+  min_test_net_pnl: 960.906
+  research_profile: msft_regime_rescue_c106_126_msft_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 220
+  max_minutes_since_open: 330
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop7
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.07
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__a797623f6e3720__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: bear
+  family: Single-leg long put
+  description: MSFT governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.07
+  candidate_variant_id: portfolio12h__msft__bear__put__single_leg_repair__a797623f6e3720__profile_msft-regime-rescue-c085-105-msft-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: msft__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9062
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 58
+  min_net_pnl: 1335.498
+  min_test_net_pnl: 669.501
+  research_profile: msft_regime_rescue_c085_105_msft_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 220
+  max_minutes_since_open: 330
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop7
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.07
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0014
+- name: msft__governed__choppy__call__single_leg_repair__msft_regime_rescue_c148__9f79acd2c5cdb2__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: choppy
+  family: Single-leg long call
+  description: MSFT governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__msft__choppy__call__single_leg_repair__9f79acd2c5cdb2__profile_msft-regime-rescue-c148-166-msft-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: msft__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9674
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 89
+  min_net_pnl: 1531.988
+  min_test_net_pnl: 549.032
+  research_profile: msft_regime_rescue_c148_166_msft_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 120
+  max_minutes_since_open: 165
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.002
+  max_range_pct: 0.006
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: msft__governed__bear__put__single_leg_repair__bear_confirmed_break_35__d2780caf78bcd3__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: bear
+  family: Single-leg long put
+  description: MSFT governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.07
+  candidate_variant_id: portfolio12h__msft__bear__put__single_leg_repair__d2780caf78bcd3__profile_msft-regime-rescue-c043-063-msft-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: msft__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9565
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 44
+  min_net_pnl: 805.241
+  min_test_net_pnl: 744.699
+  research_profile: msft_regime_rescue_c043_063_msft_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop7
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.07
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__4fd345dcc51a26__msft_regime_rescue__20260506
+  underlying_symbol: MSFT
+  regime: bear
+  family: Single-leg long put
+  description: MSFT governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__msft__bear__put__single_leg_repair__4fd345dcc51a26__profile_msft-regime-rescue-c085-105-msft-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: msft__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9643
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 27
+  min_net_pnl: 575.748
+  min_test_net_pnl: 1145.563
+  research_profile: msft_regime_rescue_c085_105_msft_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 220
+  max_minutes_since_open: 330
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: tsla__governed__bear__put__single_leg_repair__bear_late_continuation_2__de76a34198d366__tsla_regime_rescue__20260506
+  underlying_symbol: TSLA
+  regime: bear
+  family: Single-leg long put
+  description: TSLA governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 2
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.07
+  candidate_variant_id: portfolio12h__tsla__bear__put__single_leg_repair__de76a34198d366__profile_tsla-regime-rescue-c085-105-tsla-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsla__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9113
+  min_data_foundation_coverage: 0.9951
+  min_option_trade_count: 185
+  min_net_pnl: 901.509
+  min_test_net_pnl: 1091.138
+  research_profile: tsla_regime_rescue_c085_105_tsla_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 220
+  max_minutes_since_open: 330
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop7
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.07
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0009
+- name: tsla__governed__bear__put__single_leg_repair__bear_late_continuation_2__f975795ca88dd7__tsla_regime_rescue__20260506
+  underlying_symbol: TSLA
+  regime: bear
+  family: Single-leg long put
+  description: TSLA governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 2
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__tsla__bear__put__single_leg_repair__f975795ca88dd7__profile_tsla-regime-rescue-c085-105-tsla-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsla__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9113
+  min_data_foundation_coverage: 0.9951
+  min_option_trade_count: 185
+  min_net_pnl: 323.088
+  min_test_net_pnl: 1067.162
+  research_profile: tsla_regime_rescue_c085_105_tsla_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 220
+  max_minutes_since_open: 330
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0009
+hard_rules:
+- This manifest does not modify the live strategy manifest.
+- This manifest does not lower promotion gates.
+- This manifest does not start trading by itself.
+- Broker-facing paper order submission requires an explicit runtime command with --submit-paper-orders.
