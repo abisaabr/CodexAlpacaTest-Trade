@@ -146,8 +146,40 @@ The next larger chunks were launched to reduce duplicated data-staging overhead:
 
 Current launched coverage is candidates 1-216 of 828 per symbol.
 
+After the first partial aggregation, the wave was extended again to search for missing
+bull coverage while keeping bear/choppy candidates:
+
+- `qqq-rescue-c217-288-20260506v1`
+- `qqq-rescue-c289-360-20260506v1`
+- `spy-rescue-c217-288-20260506v1`
+- `spy-rescue-c289-360-20260506v1`
+- `iwm-rescue-c217-288-20260506v1`
+- `iwm-rescue-c289-360-20260506v1`
+
+Current launched coverage is candidates 1-360 of 828 per symbol.
+
 Each worker is research-only, broker-facing false, live-manifest effect none, and
 risk-policy effect none.
+
+## Partial Aggregate
+
+Partial aggregate path:
+
+```text
+gs://codexalpaca-control-us/research_results/qqq_spy_iwm_strategy_expansion_v1_20260506T1945Z/aggregate_partial/aggregate_partial_20260506T155635/
+```
+
+Strict partial report:
+
+- Candidate/profile rows: 648.
+- Eligible under strict candidate gates: 61.
+- Packet decision: `research_only_blocked_regime_incomplete`.
+- Missing regime: bull.
+- Eligible families found so far: `single_leg_repair`.
+- Eligible symbols/regimes found so far: QQQ bear/choppy, SPY bear/choppy, IWM bear.
+
+This partial packet is not a final promotion packet. It is a checkpoint proving the
+fill-friendly path is working and identifying bull as the next search target.
 
 ## Verification
 
