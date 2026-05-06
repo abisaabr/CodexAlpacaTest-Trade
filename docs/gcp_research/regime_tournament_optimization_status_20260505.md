@@ -5,10 +5,11 @@ This is a research-only status packet. It does not start trading, does not arm p
 ## Current Code State
 
 - Branch target: `codex/phase2-fill-semantics-20260430`
-- Latest pushed source commit for new launches: `72c1174`
+- Latest pushed source commit before INTC/META launch: `6fcea08`
 - Key optimization: `scripts/build_regime_rescue_research_inputs.py` now supports a full-regime symbol-generic grid.
 - Full-regime grid shape: 166 variants per symbol for `bull,bear,choppy` when using `--bear-profile-set signal_window_refine --choppy-profile-set timewindow_quality_filter`.
 - Validation: `21 passed` for `tests/test_build_regime_rescue_research_inputs.py` and `tests/test_run_option_aware_research_backtest.py`.
+- Projection validation: `2 passed` for `tests/test_build_portfolio_growth_projection.py`.
 
 ## Completed Regime-Complete Packets
 
@@ -87,11 +88,11 @@ Result:
 - NVDA blocker counts: `fill_coverage_below_0.90=24`, `min_net_pnl_not_positive=489`, `test_net_pnl_not_above_0=455`.
 - Completed AAPL/NVDA workers self-terminated. The 16 terminated `regime-rescue` instances were deleted after outputs were uploaded and mirrored.
 
-## Active GCP Wave
+## AMD/AMZN Wave Result
 
 - Wave ID: `amd_amzn_full_regime_rescue_20260505T2315Z`
 - GCS root: `gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/`
-- Source commit: `ae7b37a`
+- Source commit lineage: `97c830a/ae7b37a/6fcea08`
 - Symbols: `AMD`, `AMZN`
 - Grid: `bull,bear,choppy`
 - Per-symbol candidates: `166`
@@ -100,7 +101,78 @@ Result:
 - Lag profiles: `0:60,10:60,30:120`
 - Bear profile set: `signal_window_refine`
 - Choppy profile set: `timewindow_quality_filter`
-- Launch state: all 8 AMD shards and all 8 AMZN shards launched.
+- Launch/result state: all 8 AMD shards and all 8 AMZN shards completed and uploaded.
+- Combined packet: `reports/gcp_research/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- GCS combined packet: `gs://codexalpaca-control-us/research_results/amd_amzn_full_regime_rescue_20260505T2315Z/aggregate/combined_promotion_packet/combined_promotion_packet/research_promotion_review_packet.json`
+- Combined decision: `ready_for_governed_validation_review`
+- Combined candidates: `996`
+- Combined eligible count: `169`
+- Combined unique eligible base candidates: `20`
+- Combined eligible regimes: `bull,bear,choppy`
+- Combined missing regimes: none
+- AMD standalone: `498` candidates, `130` eligible, eligible regimes `bear,choppy`, missing regime `bull`.
+- AMZN standalone: `498` candidates, `39` eligible, eligible regimes `bull,bear`, missing regime `choppy`.
+- Dominant blockers across combined packet: `fill_coverage_below_0.90=52`, `min_net_pnl_not_positive=662`, `test_net_pnl_not_above_0=687`.
+- Interpretation: use AMD/AMZN as a combined governed-review sleeve only. Do not treat either symbol as standalone regime-complete yet.
+
+Top combined examples:
+
+| Symbol | Regime | Family | Min Net PnL | Test Net PnL | Fill Coverage | Trades |
+|---|---:|---|---:|---:|---:|---:|
+| AMZN | bull | single_leg_repair | 7488.222 | 12040.116 | 0.9810 | 206 |
+| AMZN | bull | single_leg_repair | 6586.023 | 7815.760 | 0.9729 | 215 |
+| AMD | choppy | single_leg_repair | 3160.280 | 2043.181 | 0.9722 | 35 |
+| AMD | choppy | single_leg_repair | 3030.303 | 1839.397 | 0.9677 | 30 |
+| AMZN | bear | single_leg_repair | 1465.993 | 1886.157 | 0.9623 | 51 |
+
+## Portfolio Growth Tracker
+
+These projections are research-only, trade-level compounded curves. They do not authorize paper orders or live manifest changes.
+
+### QQQ/SPY/IWM
+
+- Projection packet: `reports/gcp_research/qqq_spy_iwm_institutional_projection_20260505T2330Z/projection/portfolio_growth_projection.json`
+- GCS packet: `gs://codexalpaca-control-us/research_results/qqq_spy_iwm_institutional_projection_20260505T2330Z/qqq_spy_iwm_institutional_projection_20260505T2330Z/projection/portfolio_growth_projection.json`
+- Symbols: `QQQ,SPY,IWM`
+- Starting cash: `$25,000`
+- Ending equity: `$158,599.87`
+- Total return: `534.3995%`
+- Max drawdown: `-26.6845%`
+- Matched trades: `859`
+- Active days: `245 / 251`
+- Evidence grade: `directional_expectation_only`
+
+### QQQ/SPY/IWM/AMD/AMZN
+
+- Projection packet: `reports/gcp_research/qqq_spy_iwm_amd_amzn_institutional_projection_20260506T0005Z/projection/portfolio_growth_projection.json`
+- GCS packet: `gs://codexalpaca-control-us/research_results/qqq_spy_iwm_amd_amzn_institutional_projection_20260506T0005Z/qqq_spy_iwm_amd_amzn_institutional_projection_20260506T0005Z/projection/portfolio_growth_projection.json`
+- Symbols: `QQQ,SPY,IWM,AMD,AMZN`
+- Starting cash: `$25,000`
+- Ending equity: `$198,790.49`
+- Total return: `695.1620%`
+- Max drawdown: `-25.5938%`
+- Matched trades: `1575`
+- Active days: `249 / 251`
+- Symbol weights after portfolio-level cap: `AMD=0.1875`, `AMZN=0.1875`, `IWM=0.25`, `QQQ=0.1875`, `SPY=0.1875`
+- Strategy-regime coverage: `bull=3`, `bear=9`, `choppy=7` capital-plan candidates.
+- Evidence grade: `directional_expectation_only`
+
+## Active GCP Wave
+
+- Wave ID: `intc_meta_full_regime_rescue_20260506T0005Z`
+- GCS root: `gs://codexalpaca-control-us/research_results/intc_meta_full_regime_rescue_20260506T0005Z/`
+- Source commit: `6fcea08`
+- Symbols: `INTC`, `META`
+- Grid: `bull,bear,choppy`
+- Per-symbol candidates: `166`
+- Candidate shard size: `21`
+- Selector: `entry_liquidity_first_research_only`
+- Lag profiles: `0:60,10:60,30:120`
+- Bear profile set: `signal_window_refine`
+- Choppy profile set: `timewindow_quality_filter`
+- Launch state: all 8 INTC shards and all 8 META shards launched.
+- Latest monitor snapshot: `3 / 16` shards completed, `13 / 16` still running, `0` failed.
+- Capacity note: some zones were resource constrained, but the launcher rerouted and completed all shard launches.
 
 ## Data Coverage Inventory
 
@@ -125,9 +197,9 @@ QQQ uses the separate 365d next-trading-day 5x5 prefix:
 
 ## Next Loop
 
-1. Monitor `amd_amzn_full_regime_rescue_20260505T2315Z` until all 16 shards complete.
+1. Monitor `intc_meta_full_regime_rescue_20260506T0005Z` until all 16 shards complete.
 2. Pull worker artifacts locally and build strict portfolio reports plus promotion-review packets per symbol and combined.
-3. If AAPL/NVDA are regime-complete, record them as governed-review candidates only.
+3. If INTC/META are regime-complete, record them as governed-review candidates only and update the cumulative growth tracker.
 4. If a regime is missing, classify the dominant blocker: fill coverage, full-period economics, test PnL, or trade count.
-5. Launch the next available pair from `AMD,AMZN,INTC,META,MSFT,TSLA` using the same full-regime grid, staying within project CPU/instance quotas.
+5. Launch the next available pair from `MSFT,TSLA` using the same full-regime grid, staying within project CPU/instance quotas.
 6. Do not lower the 0.90 fill gate, do not change live manifests, and do not start broker-facing sessions.
