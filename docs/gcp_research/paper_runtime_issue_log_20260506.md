@@ -213,3 +213,8 @@ The close path is refreshing the retry lifecycle but not refreshing the actual
 exit limit from current option quotes. The fix should separate retry scheduling
 from quote-derived close pricing and should make hard exits use a bounded
 marketable limit when the configured order has become stale.
+
+Latest follow-up at approximately `2026-05-06T12:54:30-04:00` still showed the
+same pattern: broker PAPER had one open QQQ sell-to-close limit for
+`QQQ260507P00689000`, quantity `1`, limit `3.55`, filled quantity `0`, while the
+position current price was approximately `2.03`.
