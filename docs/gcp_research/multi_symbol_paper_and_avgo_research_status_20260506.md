@@ -11,8 +11,8 @@ Created a generated governed-validation strategy manifest from regime-complete p
 - Manifest builder: `scripts/build_governed_validation_manifest_from_packets.py`
 - Generated manifest: `config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml`
 - Paper config: `config/multi_symbol_governed_realtime_paper_portfolio_20260506.yaml`
-- Strategy count: `100`
-- Symbols: `AMD, AMZN, AVGO, GOOGL, MSFT, QQQ, SPY, TSLA`
+- Strategy count: `120`
+- Symbols: `AMD, AMZN, AVGO, GOOGL, MSFT, QQQ, SPY, TSLA, TSM`
 - Portfolio-level regimes represented: `bull, bear, choppy`
 - Config default: `submit_paper_orders=false`
 
@@ -23,6 +23,7 @@ Source packets used:
 - MSFT/TSLA: `reports/gcp_research/msft_tsla_full_regime_rescue_20260506T0025Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
 - AVGO: `reports/gcp_research/avgo_full_regime_rescue_20260506T0135Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
 - GOOGL: `reports/gcp_research/googl_full_regime_rescue_20260506T0225Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- TSM: `reports/gcp_research/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
 
 Excluded from this May 6 paper config:
 
@@ -51,6 +52,8 @@ Result:
 Interpretation: this is an expected after-hours failure, not a manifest/schema failure. Re-run the same preflight near the 2026-05-06 RTH launch window.
 
 After AVGO and GOOGL were added, no-order startup preflights were run. They failed only because after-hours stock data was stale; the startup checks loaded all configured symbols and showed broker state remained clean with `0` broker positions and `0` open orders.
+
+After TSM was added, another no-order startup preflight was run against `config/multi_symbol_governed_realtime_paper_portfolio_20260506.yaml`. It returned `startup_preflight_pending` because 2026-05-06 RTH stock frames were not ready yet for the configured symbols. Broker state remained clean with `0` broker positions, `0` open orders, `$399,225.72` buying power, and `$99,806.43` broker equity.
 
 ## RTH Launch Sequence
 
@@ -231,13 +234,46 @@ PLTR completed, was aggregated, and was mirrored to GCS. It is not eligible for 
 - Full-population blockers: `fill_coverage_below_0.90=31`, `min_net_pnl_not_positive=469`, `test_net_pnl_not_above_0=380`
 - Completed workers were deleted after aggregation.
 
-## Active TSM Research Wave
+## TSM Research Wave Result
 
-TSM is now running as the next one-ticker full-regime rescue wave:
+TSM completed, was aggregated, and was mirrored to GCS. It is eligible for governed-validation review and was added to the generated governed-validation manifest and paper config:
 
 - Wave ID: `tsm_full_regime_rescue_20260506T0540Z`
 - GCS root: `gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z`
 - Symbol: `TSM`
+- Candidate count: `166`
+- Target regimes: `bull,bear,choppy`
+- Broker-facing: `false`
+- Paper orders: `false`
+- Live manifest effect: `none`
+- Risk policy effect: `none`
+- Portfolio report: `reports/gcp_research/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_portfolio_report/research_portfolio_report.json`
+- Promotion packet: `reports/gcp_research/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- Packet decision: `ready_for_governed_validation_review`
+- Eligible candidates: `49`
+- Unique eligible base candidates in packet view: `35`
+- Required regimes: `bull,bear,choppy`
+- Eligible regimes: `bull,bear,choppy`
+- Regime complete: `true`
+- Full-population blockers: `fill_coverage_below_0.90=228`, `min_net_pnl_not_positive=311`, `test_net_pnl_not_above_0=373`
+- Completed workers were deleted after aggregation.
+
+The generated governed-validation manifest now includes:
+
+- Manifest: `config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml`
+- Strategy count: `120`
+- Symbols: `AMD, AMZN, AVGO, GOOGL, MSFT, QQQ, SPY, TSLA, TSM`
+- Source packet count: `6`
+
+The PAPER config now includes TSM in `execution.underlying_symbols` and the existing `growth_tech` risk bucket without changing risk limits. `submit_paper_orders` remains `false`.
+
+## Active XLE Research Wave
+
+XLE is now running as the next one-ticker full-regime rescue wave:
+
+- Wave ID: `xle_full_regime_rescue_20260506T0620Z`
+- GCS root: `gs://codexalpaca-control-us/research_results/xle_full_regime_rescue_20260506T0620Z`
+- Symbol: `XLE`
 - Candidate count: `166`
 - Target regimes: `bull,bear,choppy`
 - Workers: `8`
@@ -245,14 +281,15 @@ TSM is now running as the next one-ticker full-regime rescue wave:
 - Paper orders: `false`
 - Live manifest effect: `none`
 - Risk policy effect: `none`
+- Launch note: `us-east4-a` was temporarily capacity exhausted for two shards; the launcher retried those shard ranges in `us-central1-a`.
 
 ## Next Research Loop
 
-1. Monitor TSM worker statuses under the wave GCS root.
-2. When all TSM shards self-stop and upload reports, aggregate worker outputs into a strict portfolio report and promotion-review packet.
-3. If TSM is regime-complete, add it to the governed-validation manifest and rerun production-risk projection.
-4. If TSM is blocked, classify blockers by fill coverage, full-period PnL, test PnL, trade count, and sizing.
-5. Then advance to the next available next10 ticker, one ticker at a time: `XLE`, `XOM`.
+1. Monitor XLE worker statuses under the wave GCS root.
+2. When all XLE shards self-stop and upload reports, aggregate worker outputs into a strict portfolio report and promotion-review packet.
+3. If XLE is regime-complete, add it to the governed-validation manifest and rerun production-risk projection.
+4. If XLE is blocked, classify blockers by fill coverage, full-period PnL, test PnL, trade count, and sizing.
+5. Then advance to the next available next10 ticker: `XOM`.
 
 ## Hard Rules
 

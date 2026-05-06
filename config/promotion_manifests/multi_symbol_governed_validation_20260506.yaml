@@ -1,5 +1,5 @@
 version: 1
-generated_at_utc: '2026-05-06T03:00:00+00:00'
+generated_at_utc: '2026-05-06T06:09:11+00:00'
 scope: research_governed_validation_review_only
 broker_facing: false
 live_manifest_effect: none
@@ -55,7 +55,17 @@ source_packets:
   - bear
   - choppy
   missing_eligible_regimes: []
-strategy_count: 100
+- path: reports/gcp_research/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  gcs_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  decision: ready_for_governed_validation_review
+  candidate_level_decision: ready_for_governed_validation_review
+  eligible_for_promotion_review_count: 49
+  eligible_regimes:
+  - bull
+  - bear
+  - choppy
+  missing_eligible_regimes: []
+strategy_count: 120
 symbols:
 - AMD
 - AMZN
@@ -65,6 +75,7 @@ symbols:
 - QQQ
 - SPY
 - TSLA
+- TSM
 regimes:
 - bear
 - bull
@@ -4847,6 +4858,911 @@ strategies:
   max_midpoint_distance_pct: 0.0035
   range_edge_pct: 0.0012
   range_entry_side: lower_band
+- name: tsm__governed__bull__call__debit_call_vertical__morning_trend__1fa3d8a43e2aad__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bull
+  family: debit_call_vertical
+  description: TSM governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 75
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 3
+  profit_target_multiple: 0.26
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__tsm__bull__call__debit_call_vertical__1fa3d8a43e2aad__profile_tsm-regime-rescue-c001-021-tsm-e30-x120-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bull__call__debit_call_vertical
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9175
+  min_data_foundation_coverage: 0.9272
+  min_option_trade_count: 189
+  min_net_pnl: 10423.577
+  min_test_net_pnl: 1271.037
+  research_profile: tsm_regime_rescue_c001_021_tsm_e30_x120_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 15
+  max_minutes_since_open: 105
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target26_stop10
+  option_profit_target_pct: 0.26
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0006
+- name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__0be2cae951c7f6__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bear
+  family: Single-leg long put
+  description: TSM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__tsm__bear__put__single_leg_repair__0be2cae951c7f6__profile_tsm-regime-rescue-c022-042-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9647
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 82
+  min_net_pnl: 3552.56
+  min_test_net_pnl: 1443.277
+  research_profile: tsm_regime_rescue_c022_042_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: tsm__governed__choppy__call__single_leg_repair__tsm_regime_rescue_c085_1__358167277c7300__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: choppy
+  family: Single-leg long call
+  description: TSM governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.14
+  candidate_variant_id: portfolio12h__tsm__choppy__call__single_leg_repair__358167277c7300__profile_tsm-regime-rescue-c085-105-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9014
+  min_data_foundation_coverage: 0.993
+  min_option_trade_count: 128
+  min_net_pnl: 1542.649
+  min_test_net_pnl: 19.614
+  research_profile: tsm_regime_rescue_c085_105_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 165
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop14
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.14
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.0015
+  max_range_pct: 0.005
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: tsm__governed__bull__call__single_leg_repair__strong_trend_patient__d509948d4f1959__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bull
+  family: Single-leg long call
+  description: TSM governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 210
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 3
+  profit_target_multiple: 0.5
+  stop_loss_multiple: 0.16
+  candidate_variant_id: portfolio12h__tsm__bull__call__single_leg_repair__d509948d4f1959__profile_tsm-regime-rescue-c001-021-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bull__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9701
+  min_data_foundation_coverage: 0.9915
+  min_option_trade_count: 227
+  min_net_pnl: 9750.357
+  min_test_net_pnl: 427.615
+  research_profile: tsm_regime_rescue_c001_021_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 30
+  max_minutes_since_open: 270
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target50_stop16
+  option_profit_target_pct: 0.5
+  option_stop_loss_pct: 0.16
+  min_option_hold_minutes: 3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0012
+- name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__32c072062047d6__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bear
+  family: Single-leg long put
+  description: TSM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.07
+  candidate_variant_id: portfolio12h__tsm__bear__put__single_leg_repair__32c072062047d6__profile_tsm-regime-rescue-c022-042-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 1.0
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 99
+  min_net_pnl: 2415.482
+  min_test_net_pnl: 1684.802
+  research_profile: tsm_regime_rescue_c022_042_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop7
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.07
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0014
+- name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__82812e84160b39__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bear
+  family: Single-leg long put
+  description: TSM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.07
+  candidate_variant_id: portfolio12h__tsm__bear__put__single_leg_repair__82812e84160b39__profile_tsm-regime-rescue-c022-042-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9647
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 82
+  min_net_pnl: 2703.41
+  min_test_net_pnl: 1537.183
+  research_profile: tsm_regime_rescue_c022_042_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop7
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.07
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__5d93db6348bcbb__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bear
+  family: Single-leg long put
+  description: TSM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__tsm__bear__put__single_leg_repair__5d93db6348bcbb__profile_tsm-regime-rescue-c022-042-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 1.0
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 99
+  min_net_pnl: 3228.668
+  min_test_net_pnl: 1260.227
+  research_profile: tsm_regime_rescue_c022_042_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0014
+- name: tsm__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__9585c7714dcf36__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bear
+  family: Single-leg long put
+  description: TSM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 55
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__tsm__bear__put__single_leg_repair__9585c7714dcf36__profile_tsm-regime-rescue-c064-084-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.956
+  min_data_foundation_coverage: 0.978
+  min_option_trade_count: 87
+  min_net_pnl: 4085.069
+  min_test_net_pnl: 355.148
+  research_profile: tsm_regime_rescue_c064_084_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 210
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0014
+- name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__46dedb95746592__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bear
+  family: Single-leg long put
+  description: TSM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__tsm__bear__put__single_leg_repair__46dedb95746592__profile_tsm-regime-rescue-c022-042-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9912
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 112
+  min_net_pnl: 2702.578
+  min_test_net_pnl: 1041.65
+  research_profile: tsm_regime_rescue_c022_042_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0009
+- name: tsm__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__c9c9a69dc374d1__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bear
+  family: Single-leg long put
+  description: TSM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 55
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__tsm__bear__put__single_leg_repair__c9c9a69dc374d1__profile_tsm-regime-rescue-c085-105-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9429
+  min_data_foundation_coverage: 0.9857
+  min_option_trade_count: 66
+  min_net_pnl: 3975.252
+  min_test_net_pnl: 299.455
+  research_profile: tsm_regime_rescue_c085_105_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 210
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: tsm__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__3b529701e49a14__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bear
+  family: Single-leg long put
+  description: TSM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 55
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__tsm__bear__put__single_leg_repair__3b529701e49a14__profile_tsm-regime-rescue-c064-084-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9333
+  min_data_foundation_coverage: 0.981
+  min_option_trade_count: 98
+  min_net_pnl: 3438.27
+  min_test_net_pnl: 234.11
+  research_profile: tsm_regime_rescue_c064_084_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 210
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0009
+- name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__5f7d7ebf46202c__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bear
+  family: Single-leg long put
+  description: TSM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.07
+  candidate_variant_id: portfolio12h__tsm__bear__put__single_leg_repair__5f7d7ebf46202c__profile_tsm-regime-rescue-c043-063-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9867
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 74
+  min_net_pnl: 1939.744
+  min_test_net_pnl: 760.168
+  research_profile: tsm_regime_rescue_c043_063_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop7
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.07
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__f1e5e1fce09ed0__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bear
+  family: Single-leg long put
+  description: TSM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__tsm__bear__put__single_leg_repair__f1e5e1fce09ed0__profile_tsm-regime-rescue-c001-021-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9623
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 102
+  min_net_pnl: 2874.811
+  min_test_net_pnl: 363.604
+  research_profile: tsm_regime_rescue_c001_021_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__5b3d471da030ac__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bear
+  family: Single-leg long put
+  description: TSM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.07
+  candidate_variant_id: portfolio12h__tsm__bear__put__single_leg_repair__5b3d471da030ac__profile_tsm-regime-rescue-c001-021-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9623
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 102
+  min_net_pnl: 2402.284
+  min_test_net_pnl: 565.402
+  research_profile: tsm_regime_rescue_c001_021_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop7
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.07
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__20ad9f6315f466__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bear
+  family: Single-leg long put
+  description: TSM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.07
+  candidate_variant_id: portfolio12h__tsm__bear__put__single_leg_repair__20ad9f6315f466__profile_tsm-regime-rescue-c001-021-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9912
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 112
+  min_net_pnl: 1387.894
+  min_test_net_pnl: 1141.55
+  research_profile: tsm_regime_rescue_c001_021_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop7
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.07
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0009
+- name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__17c36dfeba4f5e__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bear
+  family: Single-leg long put
+  description: TSM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__tsm__bear__put__single_leg_repair__17c36dfeba4f5e__profile_tsm-regime-rescue-c001-021-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9837
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 121
+  min_net_pnl: 2555.84
+  min_test_net_pnl: 494.405
+  research_profile: tsm_regime_rescue_c001_021_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0014
+- name: tsm__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__615d1ad8f873ec__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bear
+  family: Single-leg long put
+  description: TSM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 55
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__tsm__bear__put__single_leg_repair__615d1ad8f873ec__profile_tsm-regime-rescue-c043-063-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9083
+  min_data_foundation_coverage: 0.9833
+  min_option_trade_count: 109
+  min_net_pnl: 3027.782
+  min_test_net_pnl: 198.105
+  research_profile: tsm_regime_rescue_c043_063_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 210
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0014
+- name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__25a24501ecc68c__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bear
+  family: Single-leg long put
+  description: TSM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__tsm__bear__put__single_leg_repair__25a24501ecc68c__profile_tsm-regime-rescue-c043-063-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9867
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 74
+  min_net_pnl: 1991.692
+  min_test_net_pnl: 499.429
+  research_profile: tsm_regime_rescue_c043_063_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.002
+- name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__9dfc8e388dda4c__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bear
+  family: Single-leg long put
+  description: TSM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__tsm__bear__put__single_leg_repair__9dfc8e388dda4c__profile_tsm-regime-rescue-c022-042-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9891
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 91
+  min_net_pnl: 1800.517
+  min_test_net_pnl: 495.713
+  research_profile: tsm_regime_rescue_c022_042_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0009
+- name: tsm__governed__bull__call__single_leg_repair__morning_trend__5142edf8dd3bc5__tsm_regime_rescue__20260506
+  underlying_symbol: TSM
+  regime: bull
+  family: Single-leg long call
+  description: TSM governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 75
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 3
+  profit_target_multiple: 0.26
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__tsm__bull__call__single_leg_repair__5142edf8dd3bc5__profile_tsm-regime-rescue-c001-021-tsm-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bull__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9709
+  min_data_foundation_coverage: 0.9903
+  min_option_trade_count: 200
+  min_net_pnl: 2572.232
+  min_test_net_pnl: 577.271
+  research_profile: tsm_regime_rescue_c001_021_tsm_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 15
+  max_minutes_since_open: 105
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target26_stop10
+  option_profit_target_pct: 0.26
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.05
+    max_abs_delta: 0.95
+  min_trend_gap_pct: 0.0006
 hard_rules:
 - This manifest does not modify the live strategy manifest.
 - This manifest does not lower promotion gates.
