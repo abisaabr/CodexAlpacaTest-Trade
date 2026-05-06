@@ -15,6 +15,38 @@ live-manifest changes, or risk-policy changes.
 - Mode: Alpaca PAPER, order submission enabled.
 - Startup preflight: passed.
 
+## Ticker And Strategy Load Check
+
+Checked at approximately `2026-05-06T10:26-04:00`.
+
+- Active process count for paper order submission: `1`.
+- Configured symbols: `QQQ`, `SPY`, `AMD`, `AMZN`, `MSFT`, `TSLA`, `AVGO`, `GOOGL`, `TSM`.
+- Symbols missing strategies: none.
+- Loaded strategy count: `120`.
+- Strategy count by symbol:
+  - `AMD`: `15`
+  - `AMZN`: `5`
+  - `AVGO`: `20`
+  - `GOOGL`: `20`
+  - `MSFT`: `20`
+  - `QQQ`: `10`
+  - `SPY`: `8`
+  - `TSLA`: `2`
+  - `TSM`: `20`
+- Strategy count by regime:
+  - `bull`: `14`
+  - `bear`: `49`
+  - `choppy`: `57`
+- Strategy count by family:
+  - `Single-leg long call`: `70`
+  - `Single-leg long put`: `49`
+  - `debit_call_vertical`: `1`
+- Current runtime symbol regime coverage: all 9 configured symbols have a latest regime in session state.
+
+Conclusion: ticker and strategy loading is correct. The issue observed so far is not
+a missing-symbol or missing-strategy problem; it is an execution close-order handling
+problem for a QQQ hard-exit.
+
 ## Issues
 
 ### 1. QQQ hard-exit limit order did not fill repeatedly
@@ -38,6 +70,11 @@ live-manifest changes, or risk-policy changes.
   - status at check: `new`
 - Broker position mark at check: approximately `3.29`.
 - Runtime symptom: repeated alerts: `exit did not fill`.
+- Follow-up check at approximately `2026-05-06T10:26-04:00`:
+  - new open close order id: `669ca16f-ae49-4f2d-8f3e-76859b93321a`
+  - limit price remained `3.55`
+  - broker position mark had moved to approximately `2.83`
+  - unrealized PnL on the QQQ put was approximately `-$71`
 
 #### Post-session diagnosis target
 
