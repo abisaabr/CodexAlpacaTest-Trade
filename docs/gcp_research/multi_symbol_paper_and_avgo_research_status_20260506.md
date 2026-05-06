@@ -267,13 +267,38 @@ The generated governed-validation manifest now includes:
 
 The PAPER config now includes TSM in `execution.underlying_symbols` and the existing `growth_tech` risk bucket without changing risk limits. `submit_paper_orders` remains `false`.
 
-## Active XLE Research Wave
+## XLE Research Wave Result
 
-XLE is now running as the next one-ticker full-regime rescue wave:
+XLE completed, was aggregated, and was mirrored to GCS. It is not eligible for the governed paper manifest because it is regime-incomplete:
 
 - Wave ID: `xle_full_regime_rescue_20260506T0620Z`
 - GCS root: `gs://codexalpaca-control-us/research_results/xle_full_regime_rescue_20260506T0620Z`
 - Symbol: `XLE`
+- Candidate count: `166`
+- Target regimes: `bull,bear,choppy`
+- Broker-facing: `false`
+- Paper orders: `false`
+- Live manifest effect: `none`
+- Risk policy effect: `none`
+- Portfolio report: `reports/gcp_research/xle_full_regime_rescue_20260506T0620Z/aggregate/combined_portfolio_report/research_portfolio_report.json`
+- Promotion packet: `reports/gcp_research/xle_full_regime_rescue_20260506T0620Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- Packet decision: `research_only_blocked_regime_incomplete`
+- Eligible candidates: `10`
+- Unique eligible base candidates in packet view: `10`
+- Required regimes: `bull,bear,choppy`
+- Eligible regimes: `bear,choppy`
+- Missing eligible regimes: `bull`
+- Regime complete: `false`
+- Full-population blockers: `fill_coverage_below_0.90=232`, `min_net_pnl_not_positive=464`, `option_trades_below_20=26`, `test_net_pnl_not_above_0=443`
+- Completed workers were deleted after aggregation.
+
+## Active XOM Research Wave
+
+XOM is now running as the next one-ticker full-regime rescue wave:
+
+- Wave ID: `xom_full_regime_rescue_20260506T0645Z`
+- GCS root: `gs://codexalpaca-control-us/research_results/xom_full_regime_rescue_20260506T0645Z`
+- Symbol: `XOM`
 - Candidate count: `166`
 - Target regimes: `bull,bear,choppy`
 - Workers: `8`
@@ -281,15 +306,17 @@ XLE is now running as the next one-ticker full-regime rescue wave:
 - Paper orders: `false`
 - Live manifest effect: `none`
 - Risk policy effect: `none`
-- Launch note: `us-east4-a` was temporarily capacity exhausted for two shards; the launcher retried those shard ranges in `us-central1-a`.
+- Stock data: `gs://codexalpaca-data-us/research_stock_data/option_fill_ladder_next10_20260429/XOM/365d_5x5/stock_ref_silver/stock_bars`
+- Selected contracts: `gs://codexalpaca-control-us/research_results/option_fill_ladder_next10_20260429/XOM/365d_5x5/research_wave/dense_universe/selected_option_contracts`
+- Option bars: `gs://codexalpaca-data-us/research_option_data/option_fill_ladder_next10_20260429/XOM/365d_5x5/option_bars_silver/option_bars`
 
 ## Next Research Loop
 
-1. Monitor XLE worker statuses under the wave GCS root.
-2. When all XLE shards self-stop and upload reports, aggregate worker outputs into a strict portfolio report and promotion-review packet.
-3. If XLE is regime-complete, add it to the governed-validation manifest and rerun production-risk projection.
-4. If XLE is blocked, classify blockers by fill coverage, full-period PnL, test PnL, trade count, and sizing.
-5. Then advance to the next available next10 ticker: `XOM`.
+1. Monitor XOM worker statuses under the wave GCS root.
+2. When all XOM shards self-stop and upload reports, aggregate worker outputs into a strict portfolio report and promotion-review packet.
+3. If XOM is regime-complete, add it to the governed-validation manifest and rerun production-risk projection.
+4. If XOM is blocked, classify blockers by fill coverage, full-period PnL, test PnL, trade count, and sizing.
+5. Then advance to the next available next10 ticker.
 
 ## Hard Rules
 
