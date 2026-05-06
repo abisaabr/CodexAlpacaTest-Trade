@@ -75,6 +75,12 @@ problem for a QQQ hard-exit.
   - limit price remained `3.55`
   - broker position mark had moved to approximately `2.83`
   - unrealized PnL on the QQQ put was approximately `-$71`
+- Follow-up check at approximately `2026-05-06T10:57-04:00`:
+  - new open close order id: `ca965ffa-ca0a-4f00-a950-1f9003b56d47`
+  - limit price remained `3.55`
+  - broker position mark had moved to approximately `2.10`
+  - unrealized PnL on the QQQ put was approximately `-$144`
+  - runtime continued to cancel and resubmit sell-to-close limits without crossing the market.
 
 #### Post-session diagnosis target
 
@@ -92,3 +98,21 @@ Do not patch this mid-session without a deliberate paper-only intervention plan.
 - Add runtime telemetry for quote-at-close-order, order age, mark-vs-limit gap, and cancel/replace count.
 - Compare polling close timestamps against realtime-shadow OPRA quote timestamps.
 - Consider moving order-submitting runtime to GCP only after proving single-owner lease and log mirroring.
+
+### 2. Broker/session position reconciliation mismatch
+
+- First observed: approximately `2026-05-06T10:57-04:00`.
+- Session state reported `4` open trades and `1` completed trade.
+- Broker reported only `2` option positions:
+  - long `2` `QQQ260507C00690000`
+  - long `1` `QQQ260507P00689000`
+- Session still listed an open SPY call trade:
+  `spy__governed__bull__call__single_leg_repair__qqq_spy_ff_spy_20260505__cbf97bbd739774__qqq_spy_ff_spy_202__20260506`.
+- Broker had no SPY option position at the same check.
+
+#### Post-session diagnosis target
+
+Determine whether the second SPY call position was closed by broker state but not
+recorded as completed in the session, or whether the broker position query missed
+an expected open position. This needs reconciliation hardening before relying on
+session state alone for open-risk accounting.
