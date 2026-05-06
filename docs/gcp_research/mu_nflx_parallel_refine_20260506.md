@@ -236,14 +236,71 @@ top candidate summaries show `min_data_foundation_coverage=1.0` with
 `position_sizing_too_expensive` as the fill-failure reason. NFLX remains
 research-only blocked for bear/choppy and should not be added to paper execution.
 
+## MU Result
+
+The MU tail worker completed, was pulled from GCS, and was aggregated with the
+earlier MU workers.
+
+Local aggregate outputs:
+
+- `reports/gcp_research/mu_bull_bear_momentum_refine_20260506T1750Z/aggregate/combined_portfolio_report/research_portfolio_report.json`
+- `reports/gcp_research/mu_bull_bear_momentum_refine_20260506T1750Z/aggregate/combined_portfolio_report/research_portfolio_report.md`
+- `reports/gcp_research/mu_bull_bear_momentum_refine_20260506T1750Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- `reports/gcp_research/mu_bull_bear_momentum_refine_20260506T1750Z/aggregate/combined_promotion_packet/research_promotion_review_packet.md`
+
+GCS aggregate root:
+
+- `gs://codexalpaca-control-us/research_results/mu_bull_bear_momentum_refine_20260506T1750Z/aggregate/`
+
+Strict report command:
+
+```powershell
+python scripts\build_research_portfolio_report.py `
+  --replay-root reports\gcp_research\mu_bull_bear_momentum_refine_20260506T1750Z\workers `
+  --output-dir reports\gcp_research\mu_bull_bear_momentum_refine_20260506T1750Z\aggregate\combined_portfolio_report `
+  --fill-coverage-gate 0.90 `
+  --min-option-trades 20 `
+  --min-test-net-pnl 0.01 `
+  --initial-cash 25000 `
+  --required-regimes bull,bear `
+  --candidate-identity-mode variant_profile
+```
+
+Promotion packet command:
+
+```powershell
+python scripts\build_research_promotion_review_packet.py `
+  --portfolio-report-json reports\gcp_research\mu_bull_bear_momentum_refine_20260506T1750Z\aggregate\combined_portfolio_report\research_portfolio_report.json `
+  --output-dir reports\gcp_research\mu_bull_bear_momentum_refine_20260506T1750Z\aggregate\combined_promotion_packet `
+  --max-review-candidates 20
+```
+
+Generated packet result:
+
+- Decision: `research_only_blocked`.
+- Candidate count: `648`.
+- Eligible candidates: `0`.
+- Required regimes: `bull,bear`.
+- Eligible regimes: none.
+- Missing eligible regimes: `bull,bear`.
+- Blocker counts:
+  - `fill_coverage_below_0.90`: `645`.
+  - `min_net_pnl_not_positive`: `453`.
+  - `test_net_pnl_not_above_0.01`: `330`.
+
+Interpretation: the MU follow-up found high-PnL bull/bear leads, especially bull
+`debit_call_vertical` candidates, but they remain research-only because the
+strict strategy-fill gate failed. Top MU candidates were blocked mainly by
+`selected_contract_universe_gap`; several had data foundation coverage near
+`0.87-0.99`, strong entry coverage, and weaker strategy fill. MU remains
+research-only blocked for bull/bear and should not be added to paper execution.
+
 ## Next Actions
 
-1. Monitor the MU tail worker until it terminates or reports failure.
-2. Pull final MU worker artifacts from GCS.
-3. Build a strict MU portfolio report with `fill_coverage_gate=0.90`,
-   `min_option_trades=20`, `min_test_net_pnl > 0`, and the relevant required
-   regimes.
-4. Build the generated MU promotion-review packet without manual overrides.
-5. If MU becomes regime-complete, combine only through generated
-   governed-validation artifacts; do not add either ticker to paper execution
-   directly from this launch.
+1. Do not add MU or NFLX to paper execution from these packets.
+2. Treat NFLX as a sizing/fill-semantics redesign target, not a raw data repair
+   target.
+3. Treat MU as a selected-contract-universe/data-foundation repair target before
+   rerunning its strongest bull/bear candidates.
+4. Continue parallel research with the next regime-incomplete symbols using the
+   same strict generated-packet path.
