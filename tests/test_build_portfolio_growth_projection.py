@@ -191,3 +191,190 @@ def test_combined_reports_reweight_by_symbol_cap(tmp_path: Path) -> None:
     assert packet["capital_plan_merge"]["mode"] == "portfolio_level_symbol_cap_reweight"
     assert packet["capital_plan_merge"]["reweighted_symbol_weights"] == {"IWM": 0.5, "QQQ": 0.5}
     assert {row["research_only_weight"] for row in packet["capital_plan"]} == {0.5}
+
+
+def test_production_runtime_sizes_by_risk_fraction(tmp_path: Path) -> None:
+    replay_root = tmp_path / "replay"
+    profile_dir = replay_root / "profile_a"
+    profile_dir.mkdir(parents=True)
+    pd.DataFrame(
+        [
+            {
+                "trade_date": "2025-01-02",
+                "candidate_variant_id": "qqq_bull",
+                "option_pnl": 50.0,
+                "symbol": "QQQ",
+                "contract_symbol": "QQQ250103C00100000",
+                "option_entry_time": "2025-01-02T15:00:00Z",
+                "option_exit_time": "2025-01-02T16:00:00Z",
+                "entry_debit_per_unit": 500.0,
+                "risk_per_unit": 500.0,
+                "quantity": 1,
+            }
+        ]
+    ).to_csv(profile_dir / "option_aware_trade_economics.csv", index=False)
+    portfolio_path = tmp_path / "portfolio_report.json"
+    portfolio_path.write_text(
+        json.dumps(
+            {
+                "capital_plan": [
+                    {
+                        "candidate_variant_id": "qqq_bull__profile_profile-a",
+                        "base_candidate_variant_id": "qqq_bull",
+                        "aggregate_profile": "profile_a",
+                        "symbol": "QQQ",
+                        "family": "single_leg_repair",
+                        "intended_regime": "bull",
+                        "research_only_weight": 1.0,
+                        "research_only_dollars": 25_000.0,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    risk_path = tmp_path / "risk.yaml"
+    risk_path.write_text(
+        "\n".join(
+            [
+                "risk:",
+                "  max_open_risk_fraction: 0.15",
+                "  max_open_positions: 10",
+                "  max_positions_per_regime: 10",
+                "  max_positions_per_symbol: 3",
+                "  max_open_risk_fraction_per_symbol: 0.10",
+                "  bucket_caps: []",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    packet = build_growth_projection(
+        portfolio_report_json=portfolio_path,
+        replay_root=replay_root,
+        output_dir=tmp_path / "out_production",
+        initial_cash=25_000.0,
+        target_equity=300_000.0,
+        backtest_allocation_fraction=0.05,
+        annual_trading_days=252,
+        projection_years=1,
+        bootstrap_runs=25,
+        seed=1,
+        risk_simulation_mode="production_runtime",
+        production_risk_config_yaml=risk_path,
+        production_default_risk_fraction=0.05,
+        production_default_max_contracts=6,
+    )
+
+    assert packet["risk_simulation_mode"] == "production_runtime"
+    assert packet["accepted_trade_count"] == 1
+    assert packet["production_risk_simulation"]["accepted_trade_count"] == 1
+    assert packet["production_risk_simulation"]["rejected_trade_count"] == 0
+    scaled_trades = pd.read_csv(tmp_path / "out_production" / "portfolio_growth_scaled_trades.csv")
+    assert scaled_trades["production_quantity"].iloc[0] == 2
+    assert scaled_trades["scaled_option_pnl"].iloc[0] == 100.0
+    assert (tmp_path / "out_production" / "portfolio_growth_risk_events.csv").exists()
+
+
+def test_production_runtime_enforces_per_symbol_open_position_cap(tmp_path: Path) -> None:
+    replay_root = tmp_path / "replay"
+    profile_dir = replay_root / "profile_a"
+    profile_dir.mkdir(parents=True)
+    pd.DataFrame(
+        [
+            {
+                "trade_date": "2025-01-02",
+                "candidate_variant_id": "qqq_bull_a",
+                "option_pnl": 50.0,
+                "symbol": "QQQ",
+                "contract_symbol": "QQQ250103C00100000",
+                "option_entry_time": "2025-01-02T15:00:00Z",
+                "option_exit_time": "2025-01-02T16:00:00Z",
+                "entry_debit_per_unit": 500.0,
+                "risk_per_unit": 500.0,
+                "quantity": 1,
+            },
+            {
+                "trade_date": "2025-01-02",
+                "candidate_variant_id": "qqq_bull_b",
+                "option_pnl": 25.0,
+                "symbol": "QQQ",
+                "contract_symbol": "QQQ250103C00101000",
+                "option_entry_time": "2025-01-02T15:05:00Z",
+                "option_exit_time": "2025-01-02T16:05:00Z",
+                "entry_debit_per_unit": 500.0,
+                "risk_per_unit": 500.0,
+                "quantity": 1,
+            },
+        ]
+    ).to_csv(profile_dir / "option_aware_trade_economics.csv", index=False)
+    portfolio_path = tmp_path / "portfolio_report.json"
+    portfolio_path.write_text(
+        json.dumps(
+            {
+                "capital_plan": [
+                    {
+                        "candidate_variant_id": "qqq_bull_a__profile_profile-a",
+                        "base_candidate_variant_id": "qqq_bull_a",
+                        "aggregate_profile": "profile_a",
+                        "symbol": "QQQ",
+                        "family": "single_leg_repair",
+                        "intended_regime": "bull",
+                        "research_only_weight": 0.5,
+                        "research_only_dollars": 12_500.0,
+                    },
+                    {
+                        "candidate_variant_id": "qqq_bull_b__profile_profile-a",
+                        "base_candidate_variant_id": "qqq_bull_b",
+                        "aggregate_profile": "profile_a",
+                        "symbol": "QQQ",
+                        "family": "single_leg_repair",
+                        "intended_regime": "bull",
+                        "research_only_weight": 0.5,
+                        "research_only_dollars": 12_500.0,
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    risk_path = tmp_path / "risk.yaml"
+    risk_path.write_text(
+        "\n".join(
+            [
+                "risk:",
+                "  max_open_risk_fraction: 0.15",
+                "  max_open_positions: 10",
+                "  max_positions_per_regime: 10",
+                "  max_positions_per_symbol: 1",
+                "  max_positions_per_regime_window: null",
+                "  max_positions_per_bucket_regime_window: null",
+                "  max_open_risk_fraction_per_symbol: 0.10",
+                "  bucket_caps: []",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    packet = build_growth_projection(
+        portfolio_report_json=portfolio_path,
+        replay_root=replay_root,
+        output_dir=tmp_path / "out_symbol_cap",
+        initial_cash=25_000.0,
+        target_equity=300_000.0,
+        backtest_allocation_fraction=0.05,
+        annual_trading_days=252,
+        projection_years=1,
+        bootstrap_runs=25,
+        seed=1,
+        risk_simulation_mode="production_runtime",
+        production_risk_config_yaml=risk_path,
+        production_default_risk_fraction=0.05,
+        production_default_max_contracts=6,
+    )
+
+    assert packet["production_risk_simulation"]["accepted_trade_count"] == 1
+    assert packet["production_risk_simulation"]["rejected_trade_count"] == 1
+    assert packet["production_risk_simulation"]["rejection_reason_counts"] == {
+        "max_positions_per_symbol": 1
+    }

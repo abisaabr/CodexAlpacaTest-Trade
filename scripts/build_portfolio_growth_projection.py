@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 import math
 import sys
@@ -10,10 +11,13 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+DEFAULT_PRODUCTION_RISK_CONFIG = REPO_ROOT / "config" / "risk_controls" / "multi_ticker_portfolio.yaml"
 
 
 def parse_args() -> argparse.Namespace:
@@ -56,6 +60,43 @@ def parse_args() -> argparse.Namespace:
             "rescaled within each symbol and research_only_dollars are recomputed."
         ),
     )
+    parser.add_argument(
+        "--risk-simulation-mode",
+        choices=["capital_plan", "production_runtime"],
+        default="capital_plan",
+        help=(
+            "capital_plan preserves the historical projection behavior. production_runtime "
+            "replays option entries/exits through runtime-style risk gates instead of using "
+            "a portfolio-level symbol cap as a proxy."
+        ),
+    )
+    parser.add_argument(
+        "--production-risk-config-yaml",
+        default=str(DEFAULT_PRODUCTION_RISK_CONFIG),
+        help=(
+            "Risk-control YAML used when --risk-simulation-mode production_runtime is active. "
+            "The file may be a standalone risk config or a paper portfolio config with a risk section."
+        ),
+    )
+    parser.add_argument(
+        "--production-strategy-manifest-yaml",
+        action="append",
+        default=[],
+        help=(
+            "Optional strategy or promotion manifest YAML carrying risk_fraction and max_contracts. "
+            "May be repeated. When absent or unmatched, production defaults are used."
+        ),
+    )
+    parser.add_argument("--production-default-risk-fraction", type=float, default=0.05)
+    parser.add_argument("--production-default-max-contracts", type=int, default=6)
+    parser.add_argument(
+        "--production-enforce-broker-equity-floor",
+        action="store_true",
+        help=(
+            "When set, enforce broker_min_equity_to_trade using the simulated sleeve equity. "
+            "Keep disabled for sleeve-only projections where broker account equity is external."
+        ),
+    )
     parser.add_argument("--annual-trading-days", type=int, default=252)
     parser.add_argument("--projection-years", type=int, default=5)
     parser.add_argument("--bootstrap-runs", type=int, default=2000)
@@ -93,6 +134,14 @@ def _float(value: object, default: float = 0.0) -> float:
     return parsed
 
 
+def _int(value: object, default: int = 0) -> int:
+    try:
+        parsed = int(float(value))
+    except (TypeError, ValueError):
+        return default
+    return parsed
+
+
 def _profile_name(path: Path) -> str:
     return path.parent.name
 
@@ -113,6 +162,8 @@ def _load_trade_economics(replay_root: Path) -> pd.DataFrame:
         "option_pnl",
         "entry_price_after_slippage",
         "exit_price_after_slippage",
+        "entry_debit_per_unit",
+        "risk_per_unit",
         "quantity",
         "fees",
     ]:
@@ -222,6 +273,175 @@ def _capital_plan(
             normalized["source_portfolio_report_json"] = str(source_path)
         rows.append(normalized)
     return rows
+
+
+def _load_yaml_object(path: Path) -> dict[str, Any]:
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if payload is None:
+        return {}
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected YAML object at {path}")
+    return payload
+
+
+def _production_risk_defaults() -> dict[str, Any]:
+    return {
+        "sleeve_starting_equity": 25_000.0,
+        "max_open_risk_fraction": 0.15,
+        "daily_loss_gate_pct": None,
+        "delever_drawdown_pct": 8.0,
+        "delever_risk_scale": 0.5,
+        "max_open_positions": 10,
+        "max_positions_per_regime": 10,
+        "max_positions_per_symbol": 3,
+        "entry_cluster_window_minutes": 15,
+        "max_positions_per_regime_window": 3,
+        "max_positions_per_bucket_regime_window": 2,
+        "max_open_risk_fraction_per_symbol": 0.05,
+        "bucket_caps": [
+            {
+                "name": "index_beta",
+                "symbols": ["QQQ", "SPY", "IWM"],
+                "max_open_risk_fraction": 0.08,
+            },
+            {
+                "name": "growth_tech",
+                "symbols": ["NVDA", "TSLA", "MSFT", "AMZN", "ORCL", "SHOP", "CRM", "PLTR", "ARKK"],
+                "max_open_risk_fraction": 0.09,
+            },
+            {
+                "name": "metals_energy",
+                "symbols": ["GLD", "GDX", "SLV", "XLE", "XOM"],
+                "max_open_risk_fraction": 0.08,
+            },
+            {
+                "name": "financials",
+                "symbols": ["BAC", "JPM", "SCHW"],
+                "max_open_risk_fraction": 0.06,
+            },
+        ],
+        "min_required_buying_power": 7_500.0,
+        "broker_min_equity_to_trade": 26_000.0,
+        "broker_equity_emergency_stop": 25_500.0,
+    }
+
+
+def _normalize_bucket_caps(items: object) -> list[dict[str, Any]]:
+    buckets: list[dict[str, Any]] = []
+    if not isinstance(items, list):
+        return buckets
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        symbols = item.get("symbols") or []
+        if isinstance(symbols, str):
+            symbols = [symbol.strip() for symbol in symbols.split(",") if symbol.strip()]
+        buckets.append(
+            {
+                "name": str(item.get("name") or "unnamed_bucket"),
+                "symbols": [str(symbol).upper() for symbol in symbols],
+                "max_open_risk_fraction": _float(item.get("max_open_risk_fraction")),
+            }
+        )
+    return buckets
+
+
+def _load_production_risk_config(path: Path | None) -> dict[str, Any]:
+    config = _production_risk_defaults()
+    source = "built_in_defaults"
+    if path is not None and path.exists():
+        payload = _load_yaml_object(path)
+        risk = payload.get("risk") if isinstance(payload.get("risk"), dict) else payload
+        config.update({key: value for key, value in risk.items() if key in config})
+        source = str(path)
+    config["bucket_caps"] = _normalize_bucket_caps(config.get("bucket_caps"))
+    config["_source"] = source
+    return config
+
+
+def _strategy_identity_keys(row: dict[str, Any]) -> list[str]:
+    keys = []
+    for key in [
+        "candidate_variant_id",
+        "base_candidate_variant_id",
+        "source_strategy_id",
+        "strategy_id",
+        "name",
+    ]:
+        value = row.get(key)
+        if value is None:
+            continue
+        text = str(value)
+        if text and text not in keys:
+            keys.append(text)
+        base_text = text.split("__profile_", 1)[0]
+        if base_text and base_text not in keys:
+            keys.append(base_text)
+    return keys
+
+
+def _load_strategy_sizing(paths: list[Path]) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    sizing_by_key: dict[str, dict[str, Any]] = {}
+    source_counts: dict[str, int] = {}
+    for path in paths:
+        if not path.exists():
+            source_counts[str(path)] = 0
+            continue
+        payload = _load_yaml_object(path)
+        strategies = payload.get("strategies") or []
+        if not isinstance(strategies, list):
+            source_counts[str(path)] = 0
+            continue
+        source_counts[str(path)] = len(strategies)
+        for strategy in strategies:
+            if not isinstance(strategy, dict):
+                continue
+            sizing = {
+                "risk_fraction": _float(strategy.get("risk_fraction")),
+                "max_contracts": _int(strategy.get("max_contracts")),
+                "source_strategy_manifest_yaml": str(path),
+                "source_strategy_name": strategy.get("name"),
+            }
+            if sizing["risk_fraction"] <= 0 or sizing["max_contracts"] <= 0:
+                continue
+            for key in _strategy_identity_keys(strategy):
+                sizing_by_key[key] = sizing
+    return sizing_by_key, {
+        "source_strategy_manifest_counts": source_counts,
+        "sizing_key_count": len(sizing_by_key),
+    }
+
+
+def _resolve_strategy_sizing(
+    *,
+    row: dict[str, Any],
+    sizing_by_key: dict[str, dict[str, Any]],
+    default_risk_fraction: float,
+    default_max_contracts: int,
+) -> dict[str, Any]:
+    for key in _strategy_identity_keys(row):
+        sizing = sizing_by_key.get(key)
+        if sizing:
+            return {
+                "risk_fraction": sizing["risk_fraction"],
+                "max_contracts": sizing["max_contracts"],
+                "strategy_sizing_mode": "strategy_manifest",
+                "source_strategy_manifest_yaml": sizing.get("source_strategy_manifest_yaml"),
+                "source_strategy_name": sizing.get("source_strategy_name"),
+            }
+    risk_fraction = _float(row.get("risk_fraction"), default_risk_fraction)
+    max_contracts = _int(row.get("max_contracts"), default_max_contracts)
+    if risk_fraction <= 0:
+        risk_fraction = default_risk_fraction
+    if max_contracts <= 0:
+        max_contracts = default_max_contracts
+    return {
+        "risk_fraction": risk_fraction,
+        "max_contracts": max_contracts,
+        "strategy_sizing_mode": "projection_default",
+        "source_strategy_manifest_yaml": None,
+        "source_strategy_name": None,
+    }
 
 
 def _cap_weights(raw_weights: dict[str, float], max_weight: float) -> dict[str, float]:
@@ -339,6 +559,9 @@ def _select_capital_plan_trades(
     capital_plan: list[dict[str, Any]],
     initial_cash: float,
     backtest_allocation_fraction: float,
+    strategy_sizing_by_key: dict[str, dict[str, Any]] | None = None,
+    default_risk_fraction: float = 0.05,
+    default_max_contracts: int = 6,
 ) -> pd.DataFrame:
     selected_frames: list[pd.DataFrame] = []
     backtest_budget = initial_cash * backtest_allocation_fraction
@@ -359,6 +582,12 @@ def _select_capital_plan_trades(
         frame = trades.loc[mask].copy()
         if frame.empty:
             continue
+        sizing = _resolve_strategy_sizing(
+            row=row,
+            sizing_by_key=strategy_sizing_by_key or {},
+            default_risk_fraction=default_risk_fraction,
+            default_max_contracts=default_max_contracts,
+        )
         frame["portfolio_candidate_variant_id"] = row.get("candidate_variant_id")
         frame["base_candidate_variant_id"] = base_id
         frame["portfolio_weight"] = weight
@@ -366,6 +595,11 @@ def _select_capital_plan_trades(
         frame["capital_plan_family"] = row.get("family")
         frame["capital_plan_regime"] = row.get("intended_regime")
         frame["capital_plan_research_score"] = row.get("research_score")
+        frame["production_risk_fraction"] = sizing["risk_fraction"]
+        frame["production_max_contracts"] = sizing["max_contracts"]
+        frame["production_strategy_sizing_mode"] = sizing["strategy_sizing_mode"]
+        frame["production_strategy_manifest_yaml"] = sizing["source_strategy_manifest_yaml"]
+        frame["production_strategy_name"] = sizing["source_strategy_name"]
         frame["static_scale_factor"] = dollars / backtest_budget
         selected_frames.append(frame)
     if not selected_frames:
@@ -454,6 +688,506 @@ def _build_daily_equity(
             }
         )
     return pd.DataFrame(daily_rows), pd.DataFrame(trade_rows)
+
+
+def _trade_risk_per_combo(row: pd.Series) -> float:
+    risk = _float(row.get("risk_per_unit"))
+    if risk > 0:
+        return risk
+    debit = abs(_float(row.get("entry_debit_per_unit")))
+    if debit > 0:
+        return debit
+    price = abs(_float(row.get("entry_price_after_slippage"))) * 100.0
+    return price if price > 0 else 0.0
+
+
+def _trade_debit_cash_per_combo(row: pd.Series) -> float:
+    debit = _float(row.get("entry_debit_per_unit"))
+    if debit > 0:
+        return debit
+    price = _float(row.get("entry_price_after_slippage")) * 100.0
+    return max(price, 0.0)
+
+
+def _buckets_for_symbol(symbol: str, risk_config: dict[str, Any]) -> list[dict[str, Any]]:
+    symbol = symbol.upper()
+    return [
+        bucket
+        for bucket in risk_config.get("bucket_caps", [])
+        if symbol in {str(item).upper() for item in bucket.get("symbols", [])}
+    ]
+
+
+def _reserved_risk(open_positions: dict[int, dict[str, Any]]) -> float:
+    return sum(_float(position.get("risk_dollars")) for position in open_positions.values())
+
+
+def _reserved_debit(open_positions: dict[int, dict[str, Any]]) -> float:
+    return sum(_float(position.get("debit_cash")) for position in open_positions.values())
+
+
+def _symbol_reserved_risk(open_positions: dict[int, dict[str, Any]], symbol: str) -> float:
+    return sum(
+        _float(position.get("risk_dollars"))
+        for position in open_positions.values()
+        if str(position.get("symbol") or "").upper() == symbol.upper()
+    )
+
+
+def _bucket_reserved_risk(
+    open_positions: dict[int, dict[str, Any]], bucket: dict[str, Any]
+) -> float:
+    symbols = {str(symbol).upper() for symbol in bucket.get("symbols", [])}
+    return sum(
+        _float(position.get("risk_dollars"))
+        for position in open_positions.values()
+        if str(position.get("symbol") or "").upper() in symbols
+    )
+
+
+def _position_count(
+    open_positions: dict[int, dict[str, Any]],
+    *,
+    symbol: str | None = None,
+    regime: str | None = None,
+) -> int:
+    count = 0
+    for position in open_positions.values():
+        if symbol is not None and str(position.get("symbol") or "").upper() != symbol.upper():
+            continue
+        if regime is not None and str(position.get("regime") or "") != regime:
+            continue
+        count += 1
+    return count
+
+
+def _recent_position_count(
+    open_positions: dict[int, dict[str, Any]],
+    *,
+    current_time: pd.Timestamp,
+    window_minutes: int | None,
+    regime: str | None = None,
+    bucket: dict[str, Any] | None = None,
+) -> int:
+    if window_minutes is None or window_minutes <= 0:
+        return 0
+    symbols = (
+        {str(symbol).upper() for symbol in bucket.get("symbols", [])}
+        if bucket is not None
+        else None
+    )
+    count = 0
+    for position in open_positions.values():
+        if regime is not None and str(position.get("regime") or "") != regime:
+            continue
+        if symbols is not None and str(position.get("symbol") or "").upper() not in symbols:
+            continue
+        entry_time = position.get("entry_time")
+        if not isinstance(entry_time, pd.Timestamp):
+            continue
+        minutes = (current_time - entry_time).total_seconds() / 60.0
+        if 0 <= minutes <= window_minutes:
+            count += 1
+    return count
+
+
+def _production_risk_scale(*, equity: float, peak: float, risk_config: dict[str, Any]) -> float:
+    threshold_pct = _float(risk_config.get("delever_drawdown_pct"))
+    if threshold_pct <= 0 or peak <= 0:
+        return 1.0
+    drawdown_pct = (equity - peak) / peak * 100.0
+    if drawdown_pct <= -threshold_pct:
+        scale = _float(risk_config.get("delever_risk_scale"), 1.0)
+        return scale if scale > 0 else 1.0
+    return 1.0
+
+
+def _build_daily_equity_production_runtime(
+    *,
+    selected_trades: pd.DataFrame,
+    initial_cash: float,
+    risk_config: dict[str, Any],
+    enforce_broker_equity_floor: bool,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, Any]]:
+    if selected_trades.empty:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), {
+            "mode": "production_runtime",
+            "accepted_trade_count": 0,
+            "rejected_trade_count": 0,
+        }
+    trades = selected_trades.copy().reset_index(drop=True)
+    trades["entry_ts"] = pd.to_datetime(
+        trades.get("option_entry_time"), errors="coerce", utc=True
+    )
+    trades["exit_ts"] = pd.to_datetime(
+        trades.get("option_exit_time"), errors="coerce", utc=True
+    )
+    events: list[tuple[pd.Timestamp, int, int]] = []
+    risk_events: list[dict[str, Any]] = []
+    for row_id, row in trades.iterrows():
+        entry_ts = row.get("entry_ts")
+        exit_ts = row.get("exit_ts")
+        if not isinstance(entry_ts, pd.Timestamp) or pd.isna(entry_ts):
+            risk_events.append(
+                {
+                    "row_id": row_id,
+                    "decision": "rejected",
+                    "decision_reason": "missing_option_entry_time",
+                    "symbol": row.get("symbol"),
+                    "candidate_variant_id": row.get("portfolio_candidate_variant_id"),
+                }
+            )
+            continue
+        if not isinstance(exit_ts, pd.Timestamp) or pd.isna(exit_ts) or exit_ts <= entry_ts:
+            risk_events.append(
+                {
+                    "row_id": row_id,
+                    "decision": "rejected",
+                    "decision_reason": "missing_or_invalid_option_exit_time",
+                    "entry_time": str(entry_ts),
+                    "symbol": row.get("symbol"),
+                    "candidate_variant_id": row.get("portfolio_candidate_variant_id"),
+                }
+            )
+            continue
+        if _trade_risk_per_combo(row) <= 0:
+            risk_events.append(
+                {
+                    "row_id": row_id,
+                    "decision": "rejected",
+                    "decision_reason": "missing_risk_per_combo",
+                    "entry_time": str(entry_ts),
+                    "symbol": row.get("symbol"),
+                    "candidate_variant_id": row.get("portfolio_candidate_variant_id"),
+                }
+            )
+            continue
+        events.append((entry_ts, 1, row_id))
+        events.append((exit_ts, 0, row_id))
+    events.sort(key=lambda item: (item[0], item[1], item[2]))
+
+    equity = initial_cash
+    peak = initial_cash
+    open_positions: dict[int, dict[str, Any]] = {}
+    daily_pnl: dict[Any, float] = {}
+    daily_trade_count: Counter[Any] = Counter()
+    daily_rejected_count: Counter[Any] = Counter()
+    daily_regimes: dict[Any, set[str]] = {}
+    daily_symbols: dict[Any, set[str]] = {}
+    daily_families: dict[Any, set[str]] = {}
+    trade_rows: list[dict[str, Any]] = []
+
+    def reject(row: pd.Series, reason: str, *, event_time: pd.Timestamp, details: dict[str, Any] | None = None) -> None:
+        trade_date = pd.to_datetime(row.get("trade_date"), errors="coerce").date()
+        daily_rejected_count[trade_date] += 1
+        event = {
+            "row_id": int(row.name),
+            "event_time": str(event_time),
+            "trade_date": str(trade_date),
+            "decision": "rejected",
+            "decision_reason": reason,
+            "symbol": row.get("symbol"),
+            "regime": row.get("capital_plan_regime"),
+            "candidate_variant_id": row.get("portfolio_candidate_variant_id"),
+            "risk_fraction": _float(row.get("production_risk_fraction")),
+            "max_contracts": _int(row.get("production_max_contracts")),
+            "equity": round(equity, 6),
+            "open_position_count": len(open_positions),
+            "reserved_risk": round(_reserved_risk(open_positions), 6),
+        }
+        if details:
+            event.update(details)
+        risk_events.append(event)
+
+    for event_time, event_type, row_id in events:
+        row = trades.loc[row_id]
+        if event_type == 0:
+            position = open_positions.pop(row_id, None)
+            if position is None:
+                continue
+            source_quantity = max(_int(row.get("quantity"), 1), 1)
+            pnl_per_combo = _float(row.get("option_pnl")) / source_quantity
+            scaled_pnl = pnl_per_combo * _int(position.get("quantity"), 0)
+            trade_date = pd.to_datetime(row.get("trade_date"), errors="coerce").date()
+            daily_pnl[trade_date] = daily_pnl.get(trade_date, 0.0) + scaled_pnl
+            equity = max(equity + scaled_pnl, 0.0)
+            peak = max(peak, equity)
+            trade_rows.append(
+                {
+                    "trade_date": str(trade_date),
+                    "candidate_variant_id": row.get("portfolio_candidate_variant_id"),
+                    "base_candidate_variant_id": row.get("base_candidate_variant_id"),
+                    "aggregate_profile": row.get("aggregate_profile"),
+                    "symbol": row.get("symbol"),
+                    "family": row.get("capital_plan_family") or row.get("family"),
+                    "intended_regime": row.get("capital_plan_regime"),
+                    "portfolio_weight": _float(row.get("portfolio_weight")),
+                    "risk_simulation_mode": "production_runtime",
+                    "production_risk_fraction": _float(row.get("production_risk_fraction")),
+                    "production_max_contracts": _int(row.get("production_max_contracts")),
+                    "source_quantity": source_quantity,
+                    "production_quantity": _int(position.get("quantity"), 0),
+                    "source_risk_per_combo": round(_float(position.get("risk_per_combo")), 6),
+                    "production_risk_dollars": round(_float(position.get("risk_dollars")), 6),
+                    "production_debit_cash": round(_float(position.get("debit_cash")), 6),
+                    "source_option_pnl": round(_float(row.get("option_pnl")), 6),
+                    "source_pnl_per_combo": round(pnl_per_combo, 6),
+                    "dynamic_scale_factor": round(_int(position.get("quantity"), 0) / source_quantity, 8),
+                    "scaled_option_pnl": round(scaled_pnl, 6),
+                    "option_entry_time": str(row.get("entry_ts")),
+                    "option_exit_time": str(row.get("exit_ts")),
+                }
+            )
+            risk_events.append(
+                {
+                    "row_id": int(row_id),
+                    "event_time": str(event_time),
+                    "trade_date": str(trade_date),
+                    "decision": "closed",
+                    "decision_reason": "exit_time",
+                    "symbol": row.get("symbol"),
+                    "regime": row.get("capital_plan_regime"),
+                    "candidate_variant_id": row.get("portfolio_candidate_variant_id"),
+                    "quantity": _int(position.get("quantity"), 0),
+                    "scaled_option_pnl": round(scaled_pnl, 6),
+                    "equity": round(equity, 6),
+                    "open_position_count": len(open_positions),
+                }
+            )
+            continue
+
+        trade_date = pd.to_datetime(row.get("trade_date"), errors="coerce").date()
+        symbol = str(row.get("symbol") or "").upper()
+        regime = str(row.get("capital_plan_regime") or row.get("intended_regime") or "")
+        strategy_key = str(row.get("portfolio_candidate_variant_id") or row.get("base_candidate_variant_id") or "")
+        risk_per_combo = _trade_risk_per_combo(row)
+        debit_cash_per_combo = _trade_debit_cash_per_combo(row)
+        risk_scale = _production_risk_scale(equity=equity, peak=peak, risk_config=risk_config)
+        if enforce_broker_equity_floor:
+            broker_floor = risk_config.get("broker_min_equity_to_trade")
+            if broker_floor is not None and equity < _float(broker_floor):
+                reject(
+                    row,
+                    "broker_equity_below_trade_floor",
+                    event_time=event_time,
+                    details={"broker_min_equity_to_trade": _float(broker_floor)},
+                )
+                continue
+        if len(open_positions) >= _int(risk_config.get("max_open_positions"), 10):
+            reject(row, "max_open_positions", event_time=event_time)
+            continue
+        if _position_count(open_positions, regime=regime) >= _int(risk_config.get("max_positions_per_regime"), 10):
+            reject(row, "max_positions_per_regime", event_time=event_time)
+            continue
+        if _position_count(open_positions, symbol=symbol) >= _int(risk_config.get("max_positions_per_symbol"), 3):
+            reject(row, "max_positions_per_symbol", event_time=event_time)
+            continue
+        if any(position.get("strategy_key") == strategy_key for position in open_positions.values()):
+            reject(row, "strategy_already_open", event_time=event_time)
+            continue
+        cluster_window = risk_config.get("entry_cluster_window_minutes")
+        max_regime_window = risk_config.get("max_positions_per_regime_window")
+        if max_regime_window is not None and _int(max_regime_window) > 0:
+            recent_regime = _recent_position_count(
+                open_positions,
+                current_time=event_time,
+                window_minutes=_int(cluster_window, 0),
+                regime=regime,
+            )
+            if recent_regime >= _int(max_regime_window):
+                reject(
+                    row,
+                    f"regime_entry_cluster:{regime}",
+                    event_time=event_time,
+                    details={"recent_regime_position_count": recent_regime},
+                )
+                continue
+        max_bucket_regime_window = risk_config.get("max_positions_per_bucket_regime_window")
+        if max_bucket_regime_window is not None and _int(max_bucket_regime_window) > 0:
+            blocked_bucket = None
+            blocked_count = 0
+            for bucket in _buckets_for_symbol(symbol, risk_config):
+                recent_bucket = _recent_position_count(
+                    open_positions,
+                    current_time=event_time,
+                    window_minutes=_int(cluster_window, 0),
+                    regime=regime,
+                    bucket=bucket,
+                )
+                if recent_bucket >= _int(max_bucket_regime_window):
+                    blocked_bucket = bucket
+                    blocked_count = recent_bucket
+                    break
+            if blocked_bucket is not None:
+                reject(
+                    row,
+                    f"bucket_regime_entry_cluster:{blocked_bucket['name']}:{regime}",
+                    event_time=event_time,
+                    details={"recent_bucket_regime_position_count": blocked_count},
+                )
+                continue
+        reserved_risk = _reserved_risk(open_positions)
+        remaining_risk = max(
+            0.0,
+            equity * _float(risk_config.get("max_open_risk_fraction"), 0.15) * risk_scale
+            - reserved_risk,
+        )
+        per_trade_budget = equity * _float(row.get("production_risk_fraction"), 0.05) * risk_scale
+        allocatable_risk = min(remaining_risk, per_trade_budget)
+        limiting_reason: str | None = None
+        per_symbol_cap = risk_config.get("max_open_risk_fraction_per_symbol")
+        if per_symbol_cap is not None and _float(per_symbol_cap) > 0:
+            symbol_remaining = max(
+                0.0,
+                equity * _float(per_symbol_cap) * risk_scale
+                - _symbol_reserved_risk(open_positions, symbol),
+            )
+            if symbol_remaining < allocatable_risk:
+                limiting_reason = "per_symbol_risk_cap"
+            allocatable_risk = min(allocatable_risk, symbol_remaining)
+        for bucket in _buckets_for_symbol(symbol, risk_config):
+            bucket_remaining = max(
+                0.0,
+                equity * _float(bucket.get("max_open_risk_fraction")) * risk_scale
+                - _bucket_reserved_risk(open_positions, bucket),
+            )
+            if bucket_remaining < allocatable_risk:
+                limiting_reason = f"bucket_risk_cap:{bucket['name']}"
+            allocatable_risk = min(allocatable_risk, bucket_remaining)
+        quantity_by_risk = math.floor(allocatable_risk / risk_per_combo) if risk_per_combo > 0 else 0
+        available_cash = max(0.0, equity - _reserved_debit(open_positions))
+        quantity_by_cash = (
+            math.floor(available_cash / debit_cash_per_combo)
+            if debit_cash_per_combo > 0
+            else _int(row.get("production_max_contracts"), 6)
+        )
+        quantity = min(
+            _int(row.get("production_max_contracts"), 6),
+            quantity_by_risk,
+            quantity_by_cash,
+        )
+        if quantity < 1:
+            if quantity_by_cash < 1:
+                reason = "insufficient_cash"
+            elif limiting_reason:
+                reason = limiting_reason
+            else:
+                reason = "risk_budget_too_small"
+            reject(
+                row,
+                reason,
+                event_time=event_time,
+                details={
+                    "risk_scale": round(risk_scale, 6),
+                    "remaining_risk": round(remaining_risk, 6),
+                    "per_trade_budget": round(per_trade_budget, 6),
+                    "allocatable_risk": round(allocatable_risk, 6),
+                    "risk_per_combo": round(risk_per_combo, 6),
+                    "quantity_by_risk": quantity_by_risk,
+                    "quantity_by_cash": quantity_by_cash,
+                },
+            )
+            continue
+        risk_dollars = risk_per_combo * quantity
+        debit_cash = debit_cash_per_combo * quantity
+        open_positions[int(row_id)] = {
+            "symbol": symbol,
+            "regime": regime,
+            "family": row.get("capital_plan_family") or row.get("family"),
+            "entry_time": event_time,
+            "strategy_key": strategy_key,
+            "quantity": quantity,
+            "risk_per_combo": risk_per_combo,
+            "risk_dollars": risk_dollars,
+            "debit_cash": debit_cash,
+        }
+        daily_trade_count[trade_date] += 1
+        daily_regimes.setdefault(trade_date, set()).add(regime)
+        daily_symbols.setdefault(trade_date, set()).add(symbol)
+        daily_families.setdefault(trade_date, set()).add(str(row.get("capital_plan_family") or row.get("family") or ""))
+        risk_events.append(
+            {
+                "row_id": int(row_id),
+                "event_time": str(event_time),
+                "trade_date": str(trade_date),
+                "decision": "accepted",
+                "decision_reason": "risk_gates_clear",
+                "symbol": symbol,
+                "regime": regime,
+                "candidate_variant_id": row.get("portfolio_candidate_variant_id"),
+                "risk_fraction": _float(row.get("production_risk_fraction")),
+                "max_contracts": _int(row.get("production_max_contracts")),
+                "quantity": quantity,
+                "risk_per_combo": round(risk_per_combo, 6),
+                "risk_dollars": round(risk_dollars, 6),
+                "debit_cash": round(debit_cash, 6),
+                "risk_scale": round(risk_scale, 6),
+                "equity": round(equity, 6),
+                "open_position_count": len(open_positions),
+                "reserved_risk_after_entry": round(_reserved_risk(open_positions), 6),
+            }
+        )
+
+    active_dates = sorted(set(daily_pnl) | set(daily_trade_count) | set(daily_rejected_count))
+    daily_rows: list[dict[str, Any]] = []
+    curve_equity = initial_cash
+    curve_peak = initial_cash
+    for trade_date in active_dates:
+        start_equity = curve_equity
+        pnl = daily_pnl.get(trade_date, 0.0)
+        curve_equity = max(start_equity + pnl, 0.0)
+        curve_peak = max(curve_peak, curve_equity)
+        drawdown = curve_equity - curve_peak
+        daily_return = pnl / start_equity if start_equity > 0 else -1.0
+        daily_rows.append(
+            {
+                "trade_date": str(trade_date),
+                "starting_equity": round(start_equity, 6),
+                "daily_pnl": round(pnl, 6),
+                "daily_return": round(daily_return, 10),
+                "ending_equity": round(curve_equity, 6),
+                "peak_equity": round(curve_peak, 6),
+                "drawdown": round(drawdown, 6),
+                "drawdown_pct": round(drawdown / curve_peak, 10) if curve_peak > 0 else -1.0,
+                "trade_count": int(daily_trade_count.get(trade_date, 0)),
+                "rejected_trade_count": int(daily_rejected_count.get(trade_date, 0)),
+                "active_trade_day": int(daily_trade_count.get(trade_date, 0)) > 0,
+                "active_regimes": ",".join(sorted(daily_regimes.get(trade_date, set()))),
+                "active_symbols": ",".join(sorted(daily_symbols.get(trade_date, set()))),
+                "active_families": ",".join(sorted(item for item in daily_families.get(trade_date, set()) if item)),
+            }
+        )
+    risk_events_frame = pd.DataFrame(risk_events)
+    accepted_count = int((risk_events_frame.get("decision") == "accepted").sum()) if not risk_events_frame.empty else 0
+    rejected_count = int((risk_events_frame.get("decision") == "rejected").sum()) if not risk_events_frame.empty else 0
+    reason_counts = (
+        risk_events_frame.loc[risk_events_frame["decision"].eq("rejected"), "decision_reason"]
+        .value_counts()
+        .to_dict()
+        if not risk_events_frame.empty and "decision_reason" in risk_events_frame.columns
+        else {}
+    )
+    sizing_counts = (
+        selected_trades.get("production_strategy_sizing_mode", pd.Series(dtype=object))
+        .fillna("unknown")
+        .value_counts()
+        .to_dict()
+    )
+    summary = {
+        "mode": "production_runtime",
+        "risk_config_source": risk_config.get("_source"),
+        "enforce_broker_equity_floor": enforce_broker_equity_floor,
+        "input_trade_count": int(len(selected_trades)),
+        "accepted_trade_count": accepted_count,
+        "closed_trade_count": int((risk_events_frame.get("decision") == "closed").sum()) if not risk_events_frame.empty else 0,
+        "rejected_trade_count": rejected_count,
+        "rejection_reason_counts": {str(key): int(value) for key, value in reason_counts.items()},
+        "strategy_sizing_mode_counts": {str(key): int(value) for key, value in sizing_counts.items()},
+        "risk_config": {
+            key: value for key, value in risk_config.items() if not str(key).startswith("_")
+        },
+    }
+    return pd.DataFrame(daily_rows), pd.DataFrame(trade_rows), risk_events_frame, summary
 
 
 def _build_full_period_equity_curve(
@@ -853,6 +1587,7 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
     projection_calendar = packet.get("projection_calendar", {})
     regime_coverage = packet.get("regime_coverage", {})
     capital_plan_merge = packet.get("capital_plan_merge", {})
+    production_risk = packet.get("production_risk_simulation") or {}
     lines = [
         "# Portfolio Growth Projection",
         "",
@@ -861,6 +1596,7 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         f"- Broker facing: `{str(packet['broker_facing']).lower()}`",
         f"- Live manifest effect: `{packet['live_manifest_effect']}`",
         f"- Risk policy effect: `{packet['risk_policy_effect']}`",
+        f"- Risk simulation mode: `{packet.get('risk_simulation_mode')}`",
         f"- Initial cash: `${packet['initial_cash']}`",
         f"- Target equity: `${packet['target_equity']}`",
         f"- Evidence grade: `{grade['grade']}`",
@@ -874,18 +1610,40 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         f"- Original symbol weights: `{capital_plan_merge.get('original_symbol_weights')}`",
         f"- Reweighted symbol weights: `{capital_plan_merge.get('reweighted_symbol_weights')}`",
         "",
-        "## Full-Year Calendar Coverage",
-        "",
-        f"- Calendar mode: `{projection_calendar.get('mode')}`",
-        f"- Raw dataset trading days: `{projection_calendar.get('raw_dataset_trading_days')}`",
-        f"- Strategy active days: `{projection_calendar.get('strategy_active_days')}`",
-        f"- Inactive cash days: `{projection_calendar.get('inactive_cash_days')}`",
-        f"- Active-day coverage: `{projection_calendar.get('active_day_coverage_pct')}%`",
-        f"- Calendar market-regime labels: `{projection_calendar.get('calendar_regime_label_source')}`",
-        "",
-        "## Historical Compounded Curve",
+        "## Production Risk Simulation",
         "",
     ]
+    if not production_risk:
+        lines.append("- Mode: `capital_plan`; runtime risk gates were not simulated.")
+    else:
+        lines.extend(
+            [
+                f"- Mode: `{production_risk.get('mode')}`",
+                f"- Risk config source: `{production_risk.get('risk_config_source')}`",
+                f"- Enforce broker equity floor: `{production_risk.get('enforce_broker_equity_floor')}`",
+                f"- Input trades: `{production_risk.get('input_trade_count')}`",
+                f"- Accepted entries: `{production_risk.get('accepted_trade_count')}`",
+                f"- Rejected entries: `{production_risk.get('rejected_trade_count')}`",
+                f"- Rejection reasons: `{production_risk.get('rejection_reason_counts')}`",
+                f"- Strategy sizing modes: `{production_risk.get('strategy_sizing_mode_counts')}`",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "## Full-Year Calendar Coverage",
+            "",
+            f"- Calendar mode: `{projection_calendar.get('mode')}`",
+            f"- Raw dataset trading days: `{projection_calendar.get('raw_dataset_trading_days')}`",
+            f"- Strategy active days: `{projection_calendar.get('strategy_active_days')}`",
+            f"- Inactive cash days: `{projection_calendar.get('inactive_cash_days')}`",
+            f"- Active-day coverage: `{projection_calendar.get('active_day_coverage_pct')}%`",
+            f"- Calendar market-regime labels: `{projection_calendar.get('calendar_regime_label_source')}`",
+            "",
+            "## Historical Compounded Curve",
+            "",
+        ]
+    )
     for key in [
         "starting_date",
         "ending_date",
@@ -1004,10 +1762,21 @@ def build_growth_projection(
     additional_portfolio_report_jsons: list[Path] | None = None,
     additional_replay_roots: list[Path] | None = None,
     max_symbol_weight: float | None = None,
+    risk_simulation_mode: str = "capital_plan",
+    production_risk_config_yaml: Path | None = None,
+    production_strategy_manifest_yamls: list[Path] | None = None,
+    production_default_risk_fraction: float = 0.05,
+    production_default_max_contracts: int = 6,
+    production_enforce_broker_equity_floor: bool = False,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
+    if risk_simulation_mode not in {"capital_plan", "production_runtime"}:
+        raise ValueError(f"Unsupported risk_simulation_mode: {risk_simulation_mode}")
     portfolio_report_jsons = [portfolio_report_json] + list(additional_portfolio_report_jsons or [])
     replay_roots = [replay_root] + list(additional_replay_roots or [])
+    strategy_sizing_by_key, strategy_sizing_summary = _load_strategy_sizing(
+        list(production_strategy_manifest_yamls or [])
+    )
     capital_plan, capital_plan_merge = _merge_capital_plans(
         portfolio_report_jsons=portfolio_report_jsons,
         initial_cash=initial_cash,
@@ -1023,12 +1792,33 @@ def build_growth_projection(
         capital_plan=capital_plan,
         initial_cash=initial_cash,
         backtest_allocation_fraction=backtest_allocation_fraction,
+        strategy_sizing_by_key=strategy_sizing_by_key,
+        default_risk_fraction=production_default_risk_fraction,
+        default_max_contracts=production_default_max_contracts,
     )
-    active_daily_curve, scaled_trades = _build_daily_equity(
-        selected_trades=selected_trades,
-        initial_cash=initial_cash,
-        backtest_allocation_fraction=backtest_allocation_fraction,
-    )
+    risk_events = pd.DataFrame()
+    production_risk_summary: dict[str, Any] | None = None
+    if risk_simulation_mode == "production_runtime":
+        production_risk_config = _load_production_risk_config(
+            production_risk_config_yaml or DEFAULT_PRODUCTION_RISK_CONFIG
+        )
+        active_daily_curve, scaled_trades, risk_events, production_risk_summary = (
+            _build_daily_equity_production_runtime(
+                selected_trades=selected_trades,
+                initial_cash=initial_cash,
+                risk_config=production_risk_config,
+                enforce_broker_equity_floor=production_enforce_broker_equity_floor,
+            )
+        )
+        production_risk_summary["strategy_sizing_sources"] = strategy_sizing_summary
+        production_risk_summary["default_risk_fraction"] = production_default_risk_fraction
+        production_risk_summary["default_max_contracts"] = production_default_max_contracts
+    else:
+        active_daily_curve, scaled_trades = _build_daily_equity(
+            selected_trades=selected_trades,
+            initial_cash=initial_cash,
+            backtest_allocation_fraction=backtest_allocation_fraction,
+        )
     daily_curve, projection_calendar = _build_full_period_equity_curve(
         active_daily_curve=active_daily_curve,
         calendar=calendar,
@@ -1083,9 +1873,12 @@ def build_growth_projection(
         "target_equity": target_equity,
         "backtest_allocation_fraction": backtest_allocation_fraction,
         "max_symbol_weight": max_symbol_weight,
+        "risk_simulation_mode": risk_simulation_mode,
+        "production_risk_simulation": production_risk_summary,
         "capital_plan_merge": capital_plan_merge,
         "capital_plan_count": len(capital_plan),
         "matched_trade_count": int(len(selected_trades)),
+        "accepted_trade_count": int(len(scaled_trades)),
         "matched_daily_count": int(len(active_daily_curve)),
         "full_year_daily_count": int(len(daily_curve)),
         "projection_calendar": projection_calendar,
@@ -1108,6 +1901,8 @@ def build_growth_projection(
         )
     if not scaled_trades.empty:
         scaled_trades.to_csv(output_dir / "portfolio_growth_scaled_trades.csv", index=False)
+    if not risk_events.empty:
+        risk_events.to_csv(output_dir / "portfolio_growth_risk_events.csv", index=False)
     _write_markdown(output_dir / "portfolio_growth_projection.md", packet)
     return packet
 
@@ -1132,6 +1927,16 @@ def main() -> None:
         ],
         additional_replay_roots=[Path(path) for path in args.additional_replay_root],
         max_symbol_weight=args.max_symbol_weight,
+        risk_simulation_mode=args.risk_simulation_mode,
+        production_risk_config_yaml=Path(args.production_risk_config_yaml)
+        if args.production_risk_config_yaml
+        else None,
+        production_strategy_manifest_yamls=[
+            Path(path) for path in args.production_strategy_manifest_yaml
+        ],
+        production_default_risk_fraction=args.production_default_risk_fraction,
+        production_default_max_contracts=args.production_default_max_contracts,
+        production_enforce_broker_equity_floor=args.production_enforce_broker_equity_floor,
     )
     print(json.dumps(packet, indent=2, sort_keys=True))
 
