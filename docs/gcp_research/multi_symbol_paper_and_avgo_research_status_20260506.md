@@ -131,13 +131,38 @@ GOOGL completed, was aggregated, and was mirrored to GCS:
 - Full-population blockers: `fill_coverage_below_0.90=26`, `min_net_pnl_not_positive=392`, `test_net_pnl_not_above_0=206`
 - Completed workers were deleted after aggregation.
 
-## Active MU Research Wave
+## MU Research Wave Result
 
-MU is now running as the next one-ticker full-regime rescue wave:
+MU completed, was aggregated, and was mirrored to GCS. It is not eligible for the governed paper manifest because it is regime-incomplete:
 
 - Wave ID: `mu_full_regime_rescue_20260506T0310Z`
 - GCS root: `gs://codexalpaca-control-us/research_results/mu_full_regime_rescue_20260506T0310Z`
 - Symbol: `MU`
+- Candidate count: `166`
+- Target regimes: `bull,bear,choppy`
+- Broker-facing: `false`
+- Paper orders: `false`
+- Live manifest effect: `none`
+- Risk policy effect: `none`
+- Portfolio report: `reports/gcp_research/mu_full_regime_rescue_20260506T0310Z/aggregate/combined_portfolio_report/research_portfolio_report.json`
+- Promotion packet: `reports/gcp_research/mu_full_regime_rescue_20260506T0310Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json`
+- Packet decision: `research_only_blocked_regime_incomplete`
+- Eligible candidates: `14`
+- Unique eligible base candidates in packet view: `14`
+- Required regimes: `bull,bear,choppy`
+- Eligible regimes: `choppy`
+- Missing eligible regimes: `bull,bear`
+- Regime complete: `false`
+- Full-population blockers: `fill_coverage_below_0.90=402`, `min_net_pnl_not_positive=385`, `test_net_pnl_not_above_0=277`
+- Completed workers were deleted after aggregation.
+
+## Active NFLX Research Wave
+
+NFLX is now running as the next one-ticker full-regime rescue wave:
+
+- Wave ID: `nflx_full_regime_rescue_20260506T0350Z`
+- GCS root: `gs://codexalpaca-control-us/research_results/nflx_full_regime_rescue_20260506T0350Z`
+- Symbol: `NFLX`
 - Candidate count: `166`
 - Target regimes: `bull,bear,choppy`
 - Workers: `8`
@@ -148,11 +173,11 @@ MU is now running as the next one-ticker full-regime rescue wave:
 
 ## Next Research Loop
 
-1. Monitor MU worker statuses under the wave GCS root.
-2. When all MU shards self-stop and upload reports, aggregate worker outputs into a strict portfolio report and promotion-review packet.
-3. If MU is regime-complete, add it to the governed-validation manifest and rerun production-risk projection.
-4. If MU is blocked, classify blockers by fill coverage, full-period PnL, test PnL, trade count, and sizing.
-5. Then advance to the next available next10 ticker, one ticker at a time: `NFLX`, `ORCL`, `PLTR`, `TSM`, `XLE`, `XOM`.
+1. Monitor NFLX worker statuses under the wave GCS root.
+2. When all NFLX shards self-stop and upload reports, aggregate worker outputs into a strict portfolio report and promotion-review packet.
+3. If NFLX is regime-complete, add it to the governed-validation manifest and rerun production-risk projection.
+4. If NFLX is blocked, classify blockers by fill coverage, full-period PnL, test PnL, trade count, and sizing.
+5. Then advance to the next available next10 ticker, one ticker at a time: `ORCL`, `PLTR`, `TSM`, `XLE`, `XOM`.
 
 ## Hard Rules
 
