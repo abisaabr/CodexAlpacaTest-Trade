@@ -108,6 +108,11 @@ def _family_label(option_type: str, raw_family: str) -> str:
     return raw_family
 
 
+def _is_runtime_supported_family(raw_family: str) -> bool:
+    normalized = _slug(raw_family, max_len=64)
+    return normalized in {"single_leg", "single_leg_repair"}
+
+
 def _risk_fraction(symbol: str, regime: str, option_type: str) -> float:
     del option_type
     index_symbols = {"QQQ", "SPY", "IWM"}
@@ -146,6 +151,10 @@ def _build_strategy(
     raw_family = str(candidate.get("family") or "")
     if not symbol or regime not in {"bull", "bear", "choppy"} or option_type not in {"call", "put"}:
         raise ValueError(f"unsupported candidate identity: {candidate.get('candidate_variant_id')}")
+    if not _is_runtime_supported_family(raw_family):
+        raise ValueError(
+            f"unsupported_runtime_family_for_paper_manifest:{raw_family or 'unknown'}"
+        )
     signal_name = _signal_name(regime, option_type, params)
     profit_target = _float_or_none(params.get("profit_target_multiple")) or 0.35
     stop_loss = _float_or_none(params.get("stop_loss_multiple")) or 0.18
