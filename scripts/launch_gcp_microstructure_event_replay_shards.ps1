@@ -187,7 +187,7 @@ foreach ($row in $launchRows) {
         grid_start_index = "$($row.grid_start_index)"
         max_contracts = "$MaxContracts"
         source_archive_uri = $SourceArchiveUri
-        underlyings = $Underlyings
+        underlyings = $MetadataUnderlyings
         wave_id = $WaveId
         worker_id = $row.worker_id
     }
