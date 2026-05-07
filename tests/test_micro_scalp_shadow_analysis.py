@@ -4,6 +4,11 @@ from pathlib import Path
 
 from scripts.analyze_micro_scalp_shadow import QuotePoint, load_option_quotes, parse_underlyings, simulate_symbol
 from scripts.analyze_micro_scalp_signal_grid import GridSpec, simulate_contract
+from scripts.run_microstructure_event_replay_shard import (
+    StockQuotePoint,
+    _stock_impulse,
+    simulate_contract as simulate_microstructure_contract,
+)
 
 
 def _quote(ts: float, bid: float, ask: float) -> QuotePoint:
@@ -95,3 +100,79 @@ def test_load_option_quotes_can_filter_underlyings(tmp_path: Path) -> None:
     assert list(quotes) == ["QQQ260508C00690000"]
     assert stats["accepted_quote_count"] == 1
     assert stats["filtered_quote_count"] == 1
+
+
+def test_microstructure_stock_impulse_aligns_puts_and_calls() -> None:
+    stock_points = [
+        StockQuotePoint(ts_epoch=0.0, observed_epoch=0.0, bid=100.0, ask=100.02),
+        StockQuotePoint(ts_epoch=1.0, observed_epoch=1.0, bid=100.2, ask=100.22),
+        StockQuotePoint(ts_epoch=2.0, observed_epoch=2.0, bid=99.8, ask=99.82),
+    ]
+
+    _, call_impulse = _stock_impulse(
+        stock_points,
+        ts_epoch=1.0,
+        lookback_seconds=1.0,
+        option_right="call",
+        hint_index=0,
+    )
+    _, put_impulse = _stock_impulse(
+        stock_points,
+        ts_epoch=2.0,
+        lookback_seconds=1.0,
+        option_right="put",
+        hint_index=0,
+    )
+
+    assert call_impulse is not None and call_impulse > 0
+    assert put_impulse is not None and put_impulse > 0
+
+
+def test_microstructure_replay_supports_fast_target_exit() -> None:
+    option_points = [
+        _quote(0.0, 1.00, 1.02),
+        _quote(1.0, 1.05, 1.06),
+        _quote(2.0, 1.11, 1.12),
+    ]
+    stock_points = [
+        StockQuotePoint(ts_epoch=0.0, observed_epoch=0.0, bid=100.0, ask=100.02),
+        StockQuotePoint(ts_epoch=1.0, observed_epoch=1.0, bid=100.2, ask=100.22),
+        StockQuotePoint(ts_epoch=2.0, observed_epoch=2.0, bid=100.3, ask=100.32),
+    ]
+    spec = {
+        "grid_id": "micro_test",
+        "grid_row_index": 1,
+        "signal_mode": "stock_impulse_option_confirm",
+        "option_right": "both",
+        "lookback_seconds": 1.0,
+        "option_momentum_threshold_pct": 0.02,
+        "stock_impulse_threshold_pct": 0.001,
+        "target_pct": 0.03,
+        "stop_pct": 0.015,
+        "max_hold_seconds": 15.0,
+        "max_entry_quote_age_seconds": 1.0,
+        "max_exit_quote_age_seconds": 1.0,
+        "min_premium": 0.15,
+        "max_premium": 12.0,
+        "max_relative_spread": 0.04,
+        "max_absolute_spread": 0.20,
+        "max_exit_relative_spread": 0.10,
+        "min_quote_size": 1.0,
+        "trail_activation_pct": 0.0,
+        "trail_retrace_pct": 0.0,
+        "spread_compression_factor": 0.75,
+        "cooldown_seconds": 0.0,
+    }
+
+    trades, counters = simulate_microstructure_contract(
+        symbol="QQQ260508C00690000",
+        points=option_points,
+        stock_points=stock_points,
+        spec=spec,
+        fee_per_contract=0.65,
+    )
+
+    assert counters["signal_count"] == 1
+    assert len(trades) == 1
+    assert trades[0]["exit_reason"] == "target"
+    assert trades[0]["net_pnl_per_contract"] > 0
