@@ -120,6 +120,39 @@ Family count:
 - Startup preflight reached the PAPER broker in no-submit mode but remained pending before fresh RTH stock frames were available.
 - Latest pending preflight broker state: buying power 401,644.28; broker equity 100,411.07; broker positions 0; open orders 0.
 
+## PAPER Launch
+
+The 09:31 ET startup preflight remained pending because AMZN did not yet have a stock frame.
+
+The 09:33 ET startup preflight passed:
+
+- Preflight path: `D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260507\startup_preflight_20260507T093335_stdout.json`
+- Status: `startup_preflight_passed`
+- Startup check status: `passed`
+- Would allow trading: `true`
+- Broker equity: 100,411.07
+- Buying power: 401,644.28
+- Broker positions: 0
+- Open orders: 0
+
+Order-submitting PAPER trader was started after the passing preflight:
+
+- PID: 58520
+- Command: `python scripts\run_multi_ticker_portfolio_paper_trader.py --portfolio-config config\multi_symbol_governed_realtime_paper_portfolio_20260507_armed.yaml --submit-paper-orders`
+- Stdout: `D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260507\paper_trader_stdout.txt`
+- Stderr: `D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260507\paper_trader_stderr.txt`
+- Ownership lease: `D:\codexalpaca_runtime\state\multi_symbol_governed_realtime_20260507_ownership_lease.json`
+
+Initial post-launch state:
+
+- Process alive: yes
+- Broker mode in logs: paper
+- Dry run in logs: false
+- Session state path: `D:\codexalpaca_runtime\state\multi_symbol_governed_realtime_20260507\session_2026-05-07.json`
+- Open trades: 0
+- Completed trades: 0
+- Signals fired: 0
+
 ## Launch Rule
 
 Do not start live trading.
