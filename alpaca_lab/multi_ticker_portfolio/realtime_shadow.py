@@ -49,8 +49,15 @@ class RealtimeShadowStats:
     max_event_latency_seconds: float | None = None
     min_event_latency_seconds: float | None = None
     _latency_samples: list[float] = field(default_factory=list, repr=False)
+    _option_quote_spread_samples: list[float] = field(default_factory=list, repr=False)
+    _option_quote_relative_spread_samples: list[float] = field(default_factory=list, repr=False)
 
-    def record(self, event_type: str, latency_seconds: float | None) -> None:
+    def record(
+        self,
+        event_type: str,
+        latency_seconds: float | None,
+        payload: dict[str, Any] | None = None,
+    ) -> None:
         if event_type == "stock_bar":
             self.stock_bar_events += 1
         elif event_type == "stock_updated_bar":
@@ -59,6 +66,7 @@ class RealtimeShadowStats:
             self.stock_quote_events += 1
         elif event_type == "option_quote":
             self.option_quote_events += 1
+            self._record_option_quote_spread(payload or {})
         elif event_type == "option_trade":
             self.option_trade_events += 1
         elif event_type == "trade_update":
@@ -76,19 +84,74 @@ class RealtimeShadowStats:
                 else min(self.min_event_latency_seconds, latency_value)
             )
 
+    def _record_option_quote_spread(self, payload: dict[str, Any]) -> None:
+        bid = _coerce_float(payload.get("bid_price", payload.get("bp")))
+        ask = _coerce_float(payload.get("ask_price", payload.get("ap")))
+        if bid is None or ask is None or ask < bid or bid < 0.0:
+            return
+        spread = ask - bid
+        midpoint = (ask + bid) / 2.0
+        self._option_quote_spread_samples.append(spread)
+        if midpoint > 0.0:
+            self._option_quote_relative_spread_samples.append(spread / midpoint)
+
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         samples = sorted(payload.pop("_latency_samples", []))
+        spread_samples = sorted(payload.pop("_option_quote_spread_samples", []))
+        relative_spread_samples = sorted(
+            payload.pop("_option_quote_relative_spread_samples", [])
+        )
         payload["latency_sample_count"] = len(samples)
         if samples:
-            payload["latency_p50_seconds"] = samples[int((len(samples) - 1) * 0.50)]
-            payload["latency_p90_seconds"] = samples[int((len(samples) - 1) * 0.90)]
-            payload["latency_p99_seconds"] = samples[int((len(samples) - 1) * 0.99)]
+            payload["latency_p50_seconds"] = _percentile(samples, 0.50)
+            payload["latency_p90_seconds"] = _percentile(samples, 0.90)
+            payload["latency_p99_seconds"] = _percentile(samples, 0.99)
         else:
             payload["latency_p50_seconds"] = None
             payload["latency_p90_seconds"] = None
             payload["latency_p99_seconds"] = None
+        payload["option_quote_spread_sample_count"] = len(spread_samples)
+        if spread_samples:
+            payload["option_quote_spread_p50"] = _percentile(spread_samples, 0.50)
+            payload["option_quote_spread_p90"] = _percentile(spread_samples, 0.90)
+            payload["option_quote_spread_p99"] = _percentile(spread_samples, 0.99)
+            payload["option_quote_spread_max"] = spread_samples[-1]
+        else:
+            payload["option_quote_spread_p50"] = None
+            payload["option_quote_spread_p90"] = None
+            payload["option_quote_spread_p99"] = None
+            payload["option_quote_spread_max"] = None
+        if relative_spread_samples:
+            payload["option_quote_relative_spread_p50"] = _percentile(
+                relative_spread_samples, 0.50
+            )
+            payload["option_quote_relative_spread_p90"] = _percentile(
+                relative_spread_samples, 0.90
+            )
+            payload["option_quote_relative_spread_p99"] = _percentile(
+                relative_spread_samples, 0.99
+            )
+            payload["option_quote_relative_spread_max"] = relative_spread_samples[-1]
+        else:
+            payload["option_quote_relative_spread_p50"] = None
+            payload["option_quote_relative_spread_p90"] = None
+            payload["option_quote_relative_spread_p99"] = None
+            payload["option_quote_relative_spread_max"] = None
         return payload
+
+
+def _percentile(sorted_samples: list[float], pct: float) -> float:
+    return sorted_samples[int((len(sorted_samples) - 1) * pct)]
+
+
+def _coerce_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def data_feed_from_name(feed: str | None) -> DataFeed:
@@ -273,7 +336,7 @@ class RealtimeShadowMonitor:
         observed_at = datetime.now(UTC)
         payload = _coerce_event_payload(event)
         latency = event_latency_seconds(payload, observed_at_utc=observed_at)
-        self.stats.record(event_type, latency)
+        self.stats.record(event_type, latency, payload=payload)
         self.writer.write(
             {
                 "event_type": event_type,

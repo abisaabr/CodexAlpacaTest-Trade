@@ -65,6 +65,31 @@ Result:
 
 Interpretation: the selected-contract universe for the currently armed 10-ticker portfolio is small enough for a focused OPRA quote/trade shadow run. The limiting issue is not subscription count; it is runtime architecture, replay accuracy, and whether the active account/SDK permits an additional stream connection without starving the order-submitting paper trader.
 
+## Shadow Monitor Upgrade
+
+Patch status: implemented for next no-submit shadow runs.
+
+The realtime shadow monitor now records option quote spread statistics in `realtime_shadow_summary.json`:
+
+- `option_quote_spread_sample_count`
+- `option_quote_spread_p50`
+- `option_quote_spread_p90`
+- `option_quote_spread_p99`
+- `option_quote_spread_max`
+- `option_quote_relative_spread_p50`
+- `option_quote_relative_spread_p90`
+- `option_quote_relative_spread_p99`
+- `option_quote_relative_spread_max`
+
+Validation:
+
+```powershell
+python -m pytest tests\test_realtime_shadow_monitor.py -q
+python -m py_compile alpaca_lab\multi_ticker_portfolio\realtime_shadow.py
+```
+
+Result: `7 passed`.
+
 ## Research Lane
 
 ### Phase 0: Live Shadow Recorder

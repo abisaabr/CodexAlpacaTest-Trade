@@ -57,6 +57,24 @@ def test_shadow_stats_tracks_event_counts_and_max_latency() -> None:
     assert "_latency_samples" not in payload
 
 
+def test_shadow_stats_tracks_option_quote_spreads() -> None:
+    stats = RealtimeShadowStats()
+
+    stats.record("option_quote", 0.2, payload={"bid_price": "1.00", "ask_price": "1.10"})
+    stats.record("option_quote", 0.3, payload={"bp": 2.0, "ap": 2.4})
+    stats.record("option_quote", 0.4, payload={"bid_price": 3.0, "ask_price": 2.9})
+
+    payload = stats.to_dict()
+
+    assert payload["option_quote_events"] == 3
+    assert payload["option_quote_spread_sample_count"] == 2
+    assert payload["option_quote_spread_p50"] == pytest.approx(0.1)
+    assert payload["option_quote_spread_max"] == pytest.approx(0.4)
+    assert payload["option_quote_relative_spread_p50"] == pytest.approx(0.1 / 1.05)
+    assert "_option_quote_spread_samples" not in payload
+    assert "_option_quote_relative_spread_samples" not in payload
+
+
 def test_shadow_plan_serializes_subscription_scope() -> None:
     plan = RealtimeShadowPlan(
         trade_date="2026-05-06",
