@@ -6,6 +6,7 @@ from datetime import date, timedelta
 import pandas as pd
 
 from alpaca_lab.qqq_portfolio.greeks import bs_price
+from scripts.build_greek_strategy_research_inputs import build_rows
 from scripts.run_option_aware_research_backtest import (
     CONTRACT_SELECTION_DELTA_TARGET,
     CONTRACT_SELECTION_NEAREST,
@@ -16,6 +17,28 @@ from scripts.run_option_aware_research_backtest import (
     _choose_entry_delta_target_contract,
     apply_runtime_parity_mode,
 )
+
+
+def test_greek_strategy_builder_includes_choppy_range_edge_gamma_candidates() -> None:
+    rows = build_rows(symbols=["QQQ"], wave_id="unit_test_greek_wave")
+    choppy_rows = [
+        row
+        for row in rows
+        if row["source_strategy_id"].startswith("qqq__choppy__")
+        and row["parameters"].get("choppy_gamma_side")
+    ]
+
+    assert len(rows) == 912
+    assert len(choppy_rows) == 144
+    assert {
+        row["parameters"]["choppy_gamma_side"]
+        for row in choppy_rows
+    } == {"lower_band_reversion_call", "upper_band_reversion_put"}
+    assert {"call", "put"} == {row["source_strategy_id"].split("__")[2] for row in choppy_rows}
+    assert {"single_leg_repair", "debit_call_vertical", "debit_put_vertical", "broken_wing_call_butterfly", "broken_wing_put_butterfly"} >= {
+        row["source_strategy_id"].split("__")[3]
+        for row in choppy_rows
+    }
 
 
 def test_entry_delta_target_selector_prefers_nearest_delta() -> None:

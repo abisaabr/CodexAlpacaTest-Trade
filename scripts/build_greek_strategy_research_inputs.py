@@ -234,6 +234,107 @@ def build_rows(*, symbols: list[str], wave_id: str) -> list[dict]:
                                     wave_id=wave_id,
                                 )
                             )
+        choppy_gamma_profiles = [
+            {
+                "timing_profile": "greek_choppy_morning_edge_gamma",
+                "hard_exit_minute": 25,
+                "min_minutes_since_open": 35,
+                "max_minutes_since_open": 150,
+                "max_range_pct": 0.010,
+                "max_trend_gap_pct": 0.0024,
+                "max_midpoint_distance_pct": 0.0065,
+                "range_edge_pct": 0.0012,
+            },
+            {
+                "timing_profile": "greek_choppy_midday_edge_gamma",
+                "hard_exit_minute": 45,
+                "min_minutes_since_open": 110,
+                "max_minutes_since_open": 300,
+                "max_range_pct": 0.012,
+                "max_trend_gap_pct": 0.0028,
+                "max_midpoint_distance_pct": 0.0075,
+                "range_edge_pct": 0.0015,
+            },
+        ]
+        choppy_gamma_exits = [
+            {
+                "option_exit_profile": "gamma_micro_12_06",
+                "option_profit_target_pct": 0.12,
+                "option_stop_loss_pct": 0.06,
+                "min_option_hold_minutes": 1,
+                "profit_target_multiple": 0.14,
+                "stop_loss_multiple": 0.07,
+            },
+            {
+                "option_exit_profile": "gamma_balanced_20_10",
+                "option_profit_target_pct": 0.20,
+                "option_stop_loss_pct": 0.10,
+                "min_option_hold_minutes": 2,
+                "profit_target_multiple": 0.22,
+                "stop_loss_multiple": 0.11,
+            },
+        ]
+        choppy_sides = [
+            ("call", "lower_band", "lower_band_reversion_call"),
+            ("put", "upper_band", "upper_band_reversion_put"),
+        ]
+        for profile in choppy_gamma_profiles:
+            for direction, range_entry_side, side_label in choppy_sides:
+                for dte_mode in ("same_day", "next_expiry"):
+                    for delta_profile in (
+                        {"target_delta": 0.35, "min_abs_delta": 0.25, "max_abs_delta": 0.45},
+                        {"target_delta": 0.50, "min_abs_delta": 0.40, "max_abs_delta": 0.60},
+                        {"target_delta": 0.65, "min_abs_delta": 0.55, "max_abs_delta": 0.78},
+                    ):
+                        signed_delta = -float(delta_profile["target_delta"]) if direction == "put" else float(delta_profile["target_delta"])
+                        for exit_profile in choppy_gamma_exits:
+                            base_params = {
+                                **profile,
+                                **exit_profile,
+                                "dte_mode": dte_mode,
+                                "stock_proxy_mode": "range_bound",
+                                "timeout_only_stock_proxy": True,
+                                "entry_signal_mode": "rising_edge",
+                                "cooldown_bars": 90,
+                                "max_signals_per_day": 2,
+                                "min_range_pct": 0.0012,
+                                "range_entry_side": range_entry_side,
+                                "target_delta": signed_delta,
+                                "min_abs_delta": delta_profile["min_abs_delta"],
+                                "max_abs_delta": delta_profile["max_abs_delta"],
+                                "option_exit_mode": "premium_target_stop",
+                            }
+                            family_specs = [
+                                ("single_leg_repair", {"family_template": "single_leg_repair"}),
+                                (
+                                    f"debit_{direction}_vertical",
+                                    {"family_template": f"debit_{direction}_vertical", "wing_width_steps": 1},
+                                ),
+                                (
+                                    f"broken_wing_{direction}_butterfly",
+                                    {
+                                        "family_template": f"broken_wing_{direction}_butterfly",
+                                        "wing_width_steps": 1,
+                                        "far_wing_width_steps": 3,
+                                    },
+                                ),
+                            ]
+                            for family, family_params in family_specs:
+                                rows.append(
+                                    _variant(
+                                        symbol=symbol,
+                                        regime="choppy",
+                                        direction=direction,
+                                        family=family,
+                                        parameters={
+                                            **base_params,
+                                            **family_params,
+                                            "choppy_gamma_side": side_label,
+                                        },
+                                        priority=2,
+                                        wave_id=wave_id,
+                                    )
+                                )
     return rows
 
 
