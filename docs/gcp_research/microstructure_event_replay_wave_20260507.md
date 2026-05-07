@@ -104,6 +104,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\launch_gcp_microstru
   -Underlyings QQQ,SPY,IWM,AMZN,MSFT,AAPL,AMD,GOOGL,TSM,TSLA `
   -ChunkSize 256 `
   -MaxLaunches 8 `
+  -MaxCreateAttempts 32 `
   -MaxContracts 240 `
   -MaxContractsPerUnderlying 0 `
   -MachineType e2-standard-4 `

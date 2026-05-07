@@ -9,6 +9,7 @@ param(
     [int]$MaxLaunches = 8,
     [int]$MaxContracts = 160,
     [int]$MaxContractsPerUnderlying = 0,
+    [int]$MaxCreateAttempts = 32,
     [int]$Processes = 4,
     [string[]]$Zones = @("us-central1-a", "us-west1-a", "us-east4-a", "us-east1-b"),
     [string]$MachineType = "e2-standard-4",
@@ -173,8 +174,10 @@ if ($PrepareOnly) {
 }
 
 $launched = 0
+$createAttempts = 0
+$stopLaunching = $false
 foreach ($row in $launchRows) {
-    if ($launched -ge $MaxLaunches) {
+    if ($launched -ge $MaxLaunches -or $createAttempts -ge $MaxCreateAttempts -or $stopLaunching) {
         break
     }
     Remove-TerminatedInstance $row.instance_name
@@ -200,6 +203,10 @@ foreach ($row in $launchRows) {
     $created = $false
     $candidateZones = @($row.zone) + @($Zones | Where-Object { $_ -ne $row.zone })
     foreach ($zone in $candidateZones) {
+        if ($createAttempts -ge $MaxCreateAttempts -or $stopLaunching) {
+            break
+        }
+        $createAttempts += 1
         $status = Invoke-GcloudCreateInstance @(
             "compute", "instances", "create", $row.instance_name,
             "--project", $Project,
@@ -224,6 +231,7 @@ foreach ($row in $launchRows) {
         }
         if ($status -eq "quota_limited") {
             Write-Output "quota_limited_after_launch_count=$launched"
+            $stopLaunching = $true
             break
         }
     }
@@ -232,3 +240,5 @@ foreach ($row in $launchRows) {
     }
 }
 Write-Output "launched_count=$launched"
+Write-Output "create_attempt_count=$createAttempts"
+Write-Output "stopped_for_quota_or_attempt_limit=$stopLaunching"
