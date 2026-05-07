@@ -675,6 +675,53 @@ class MultiTickerPortfolioPaperTrader:
             )
         ]
 
+    @staticmethod
+    def _trade_has_no_broker_position(
+        trade_payload: dict[str, Any],
+        broker_position_map: dict[str, float],
+    ) -> bool:
+        leg_symbols = {
+            str(leg.get("symbol") or "").strip()
+            for leg in trade_payload.get("legs", [])
+            if str(leg.get("symbol") or "").strip()
+        }
+        return bool(leg_symbols) and all(
+            math.isclose(float(broker_position_map.get(symbol, 0.0)), 0.0, abs_tol=1e-9)
+            for symbol in leg_symbols
+        )
+
+    def _drop_open_trade_already_flat_at_broker(
+        self,
+        *,
+        trade_payload: dict[str, Any],
+        session: SessionState,
+        trade_date: date,
+        reason: str,
+    ) -> None:
+        trade = OpenTrade(**trade_payload)
+        self._remove_open_trade_from_session(session, trade)
+        self._append_trade_event(
+            trade_date,
+            {
+                **self._event_base_for_trade(trade, phase="exit"),
+                "event_type": "exit_result",
+                "status": "broker_flat_without_session_exit",
+                "exit_reason": reason,
+                "order_id": None,
+                "expected_exit_fill_price": None,
+                "actual_exit_fill_price": None,
+                "exit_slippage": None,
+                "net_pnl": None,
+                "virtual_cash_after": round(float(session.virtual_cash), 4),
+                "via_cleanup": True,
+            },
+        )
+        self._alert(
+            session,
+            "warning",
+            f"{trade.strategy_name} removed from open session state because broker is already flat for its legs",
+        )
+
     def _cleanup_leg_plans_for_trade(
         self,
         trade: OpenTrade,
@@ -2922,6 +2969,9 @@ class MultiTickerPortfolioPaperTrader:
     ) -> int:
         cleaned = 0
         symbols_with_open_close_orders = self._symbols_with_open_close_orders()
+        broker = getattr(self, "broker", None)
+        broker_positions_authoritative = callable(getattr(broker, "get_positions", None))
+        broker_position_map = self._broker_position_qty_map() if broker_positions_authoritative else {}
         for trade_payload in list(session.open_trades):
             leg_symbols = {
                 str(leg.get("symbol") or "").strip()
@@ -2929,6 +2979,18 @@ class MultiTickerPortfolioPaperTrader:
                 if str(leg.get("symbol") or "").strip()
             }
             if leg_symbols and leg_symbols.issubset(symbols_with_open_close_orders):
+                continue
+            if broker_positions_authoritative and self._trade_has_no_broker_position(
+                trade_payload,
+                broker_position_map,
+            ):
+                self._drop_open_trade_already_flat_at_broker(
+                    trade_payload=trade_payload,
+                    session=session,
+                    trade_date=trade_date,
+                    reason=reason,
+                )
+                cleaned += 1
                 continue
             if self._force_cleanup_known_trade(
                 trade_payload=trade_payload,
@@ -3727,11 +3789,15 @@ class MultiTickerPortfolioPaperTrader:
             "forced_exit_failure_count": 0,
             "forced_exit_cleanup_count": 0,
             "forced_exit_skipped_existing_close_order_count": 0,
+            "forced_exit_skipped_broker_flat_count": 0,
         }
         if not session.open_trades:
             return summary
         trade_date = date.fromisoformat(session.trade_date)
         symbols_with_open_close_orders = self._symbols_with_open_close_orders()
+        broker = getattr(self, "broker", None)
+        broker_positions_authoritative = callable(getattr(broker, "get_positions", None))
+        broker_position_map = self._broker_position_qty_map() if broker_positions_authoritative else {}
         snapshots: dict[str, SymbolSnapshot] = {}
         for symbol in {trade["underlying_symbol"] for trade in session.open_trades}:
             stock_frame = stock_frames.get(symbol, pd.DataFrame())
@@ -3754,6 +3820,18 @@ class MultiTickerPortfolioPaperTrader:
             }
             if leg_symbols and leg_symbols.issubset(symbols_with_open_close_orders):
                 summary["forced_exit_skipped_existing_close_order_count"] += 1
+                continue
+            if broker_positions_authoritative and self._trade_has_no_broker_position(
+                trade_payload,
+                broker_position_map,
+            ):
+                summary["forced_exit_skipped_broker_flat_count"] += 1
+                self._drop_open_trade_already_flat_at_broker(
+                    trade_payload=trade_payload,
+                    session=session,
+                    trade_date=trade_date,
+                    reason=AUTO_FLATTEN_KNOWN_EOD_REASON,
+                )
                 continue
             summary["forced_exit_attempt_count"] += 1
             if self._run_exit(trade_payload, session, snapshot, "forced_flatten"):
@@ -3783,6 +3861,7 @@ class MultiTickerPortfolioPaperTrader:
             "forced_exit_attempt_count": 0,
             "forced_exit_failure_count": 0,
             "forced_exit_cleanup_count": 0,
+            "forced_exit_skipped_broker_flat_count": 0,
         }
         if stock_frames is not None:
             flatten_summary = self._flatten_all(session, stock_frames)

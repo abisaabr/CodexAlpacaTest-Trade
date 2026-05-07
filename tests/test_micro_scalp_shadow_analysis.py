@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from scripts.analyze_micro_scalp_shadow import QuotePoint, load_option_quotes, parse_underlyings, simulate_symbol
@@ -7,6 +8,7 @@ from scripts.analyze_micro_scalp_signal_grid import GridSpec, simulate_contract
 from scripts.run_microstructure_event_replay_shard import (
     StockQuotePoint,
     _stock_impulse,
+    _write_progress,
     simulate_contract as simulate_microstructure_contract,
 )
 
@@ -100,6 +102,34 @@ def test_load_option_quotes_can_filter_underlyings(tmp_path: Path) -> None:
     assert list(quotes) == ["QQQ260508C00690000"]
     assert stats["accepted_quote_count"] == 1
     assert stats["filtered_quote_count"] == 1
+
+
+def test_microstructure_replay_writes_progress_payload(tmp_path: Path) -> None:
+    progress_path = tmp_path / "microstructure_replay_progress.json"
+
+    _write_progress(
+        progress_path,
+        wave_id="wave_test",
+        worker_id="worker_test",
+        phase="running_replay",
+        completed_grid_count=5,
+        total_grid_count=10,
+        contract_count=3,
+        review_like_count=2,
+        started_epoch=1.0,
+        ingest_stats={"accepted_option_quote_count": 12},
+    )
+
+    payload = json.loads(progress_path.read_text(encoding="utf-8"))
+    assert payload["wave_id"] == "wave_test"
+    assert payload["worker_id"] == "worker_test"
+    assert payload["phase"] == "running_replay"
+    assert payload["progress_ratio"] == 0.5
+    assert payload["contract_count"] == 3
+    assert payload["review_like_count"] == 2
+    assert payload["broker_facing"] is False
+    assert payload["paper_orders"] is False
+    assert payload["ingest_stats"]["accepted_option_quote_count"] == 12
 
 
 def test_microstructure_stock_impulse_aligns_puts_and_calls() -> None:

@@ -26,6 +26,7 @@ MAX_CONTRACTS="$(metadata_value max_contracts 0)"
 MAX_CONTRACTS_PER_UNDERLYING="$(metadata_value max_contracts_per_underlying 0)"
 FEE_PER_CONTRACT="$(metadata_value fee_per_contract 0.65)"
 PROCESSES="$(metadata_value processes "$(nproc)")"
+PROGRESS_UPLOAD_INTERVAL_SECONDS="$(metadata_value progress_upload_interval_seconds 60)"
 
 if [[ -z "${EVENTS_JSONL_URI}" ]]; then
   echo "missing_required_metadata events_jsonl_uri" >&2
@@ -69,6 +70,7 @@ print(json.dumps({
     "max_contracts": "__MAX_CONTRACTS__",
     "max_contracts_per_underlying": "__MAX_CONTRACTS_PER_UNDERLYING__",
     "processes": "__PROCESSES__",
+    "progress_upload_interval_seconds": "__PROGRESS_UPLOAD_INTERVAL_SECONDS__",
     "broker_facing": False,
     "paper_orders": False,
     "live_manifest_effect": "none",
@@ -88,6 +90,7 @@ PY
     -e "s|__MAX_CONTRACTS__|${MAX_CONTRACTS}|g" \
     -e "s|__MAX_CONTRACTS_PER_UNDERLYING__|${MAX_CONTRACTS_PER_UNDERLYING}|g" \
     -e "s|__PROCESSES__|${PROCESSES}|g" \
+    -e "s|__PROGRESS_UPLOAD_INTERVAL_SECONDS__|${PROGRESS_UPLOAD_INTERVAL_SECONDS}|g" \
     "${WORKROOT}/microstructure_status.json"
   gcloud storage cp "${WORKROOT}/microstructure_status.json" "${WORKER_PREFIX}/microstructure_status.json" || true
   gcloud storage cp "${WORKROOT}/startup.log" "${WORKER_PREFIX}/startup.log" || true
@@ -112,6 +115,7 @@ cat > "${WORKROOT}/command.txt" <<EOF
 python scripts/run_microstructure_event_replay_shard.py --events-jsonl "${EVENTS_JSONL_URI}" --grid-jsonl "${GRID_JSONL_URI}" --output-dir "${OUTPUT_DIR}" --wave-id "${WAVE_ID}" --worker-id "${WORKER_ID}" --grid-start-index "${GRID_START_INDEX}" --grid-count "${GRID_COUNT}" --underlyings "${UNDERLYINGS}" --max-contracts "${MAX_CONTRACTS}" --max-contracts-per-underlying "${MAX_CONTRACTS_PER_UNDERLYING}" --fee-per-contract "${FEE_PER_CONTRACT}" --processes "${PROCESSES}"
 EOF
 
+set +e
 python scripts/run_microstructure_event_replay_shard.py \
   --events-jsonl "${EVENTS_JSONL_URI}" \
   --grid-jsonl "${GRID_JSONL_URI}" \
@@ -124,7 +128,24 @@ python scripts/run_microstructure_event_replay_shard.py \
   --max-contracts "${MAX_CONTRACTS}" \
   --max-contracts-per-underlying "${MAX_CONTRACTS_PER_UNDERLYING}" \
   --fee-per-contract "${FEE_PER_CONTRACT}" \
-  --processes "${PROCESSES}"
+  --processes "${PROCESSES}" &
+REPLAY_PID="$!"
+while kill -0 "${REPLAY_PID}" 2>/dev/null; do
+  if [[ -f "${OUTPUT_DIR}/microstructure_replay_progress.json" ]]; then
+    gcloud storage cp "${OUTPUT_DIR}/microstructure_replay_progress.json" "${WORKER_PREFIX}/microstructure_replay_progress.json" || true
+  fi
+  sleep "${PROGRESS_UPLOAD_INTERVAL_SECONDS}"
+done
+wait "${REPLAY_PID}"
+REPLAY_STATUS="$?"
+if [[ -f "${OUTPUT_DIR}/microstructure_replay_progress.json" ]]; then
+  gcloud storage cp "${OUTPUT_DIR}/microstructure_replay_progress.json" "${WORKER_PREFIX}/microstructure_replay_progress.json" || true
+fi
+set -e
+if [[ "${REPLAY_STATUS}" -ne 0 ]]; then
+  write_status "failed" "replay_exit_code=${REPLAY_STATUS}"
+  exit "${REPLAY_STATUS}"
+fi
 
 write_status "uploading_outputs" "replay_complete"
 gcloud storage cp "${WORKROOT}/command.txt" "${WORKER_PREFIX}/command.txt" || true

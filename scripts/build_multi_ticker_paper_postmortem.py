@@ -38,8 +38,12 @@ def _write_markdown(path: Path, summary: dict[str, Any], strategy_table: pd.Data
         f"- Starting equity: `{summary.get('starting_equity')}`",
         f"- Ending equity: `{summary.get('ending_equity')}`",
         f"- Net PnL: `{summary.get('net_pnl')}`",
+        f"- Strategy-attributed PnL: `{summary.get('completed_trade_net_pnl')}`",
+        f"- Unattributed session PnL: `{summary.get('unattributed_session_pnl')}`",
+        f"- Accounting status: `{summary.get('postmortem_accounting_status')}`",
         f"- Completed trades: `{summary.get('completed_trade_count')}`",
         f"- Open trades at report time: `{summary.get('open_trade_count')}`",
+        f"- Broker-flat stale session exits: `{summary.get('broker_flat_without_session_exit_count')}`",
         f"- Alert count: `{summary.get('alert_count')}`",
         f"- Strategy daily ledger: `{summary.get('strategy_daily_performance_ledger_path')}`",
         f"- Strategy cumulative ledger: `{summary.get('strategy_cumulative_performance_path')}`",
@@ -47,6 +51,14 @@ def _write_markdown(path: Path, summary: dict[str, Any], strategy_table: pd.Data
         "## Strategy Results",
         "",
     ]
+    if summary.get("postmortem_accounting_status") != "fully_attributed":
+        lines.extend(
+            [
+                "> Strategy ledgers include only completed trades with locally attributed exits. "
+                "Unattributed session PnL requires broker-fill reconciliation before it is assigned to a strategy.",
+                "",
+            ]
+        )
     if strategy_table.empty:
         lines.append("No completed strategy trades were available for this date.")
     else:
@@ -112,6 +124,20 @@ def _daily_strategy_table(completed_df: pd.DataFrame, trade_date: str) -> pd.Dat
     table["net_pnl"] = table["net_pnl"].round(4)
     table["avg_pnl"] = table["avg_pnl"].round(4)
     return table[columns].sort_values(["net_pnl", "trade_count", "strategy_name"], ascending=[False, False, True])
+
+
+def _broker_flat_without_session_exit_count(run_root: Path, trade_date: str) -> int:
+    events_path = run_root / trade_date / "trade_reconciliation_events.json"
+    events = _read_json(events_path, [])
+    if isinstance(events, dict):
+        events = [events]
+    if not isinstance(events, list):
+        return 0
+    return sum(
+        1
+        for event in events
+        if isinstance(event, dict) and str(event.get("status") or "") == "broker_flat_without_session_exit"
+    )
 
 
 def _update_ledgers(run_root: Path, daily_table: pd.DataFrame, trade_date: str) -> dict[str, Any]:
@@ -186,6 +212,15 @@ def build_postmortem(
     daily_table.to_csv(strategy_csv, index=False)
     starting_equity = float(session_payload.get("starting_equity") or 0.0)
     ending_equity = float(session_payload.get("virtual_cash") or starting_equity)
+    session_net_pnl = ending_equity - starting_equity
+    completed_trade_net_pnl = float(completed_df["net_pnl"].sum()) if "net_pnl" in completed_df else 0.0
+    unattributed_session_pnl = session_net_pnl - completed_trade_net_pnl
+    broker_flat_stale_exit_count = _broker_flat_without_session_exit_count(run_root, trade_date)
+    accounting_status = (
+        "fully_attributed"
+        if abs(unattributed_session_pnl) <= 0.01 and broker_flat_stale_exit_count == 0
+        else "needs_broker_fill_reconciliation"
+    )
     summary = {
         "trade_date": trade_date,
         "session_found": bool(session_payload),
@@ -194,7 +229,11 @@ def build_postmortem(
         "submit_paper_orders": submit_paper_orders,
         "starting_equity": round(starting_equity, 4),
         "ending_equity": round(ending_equity, 4),
-        "net_pnl": round(ending_equity - starting_equity, 4),
+        "net_pnl": round(session_net_pnl, 4),
+        "completed_trade_net_pnl": round(completed_trade_net_pnl, 4),
+        "unattributed_session_pnl": round(unattributed_session_pnl, 4),
+        "broker_flat_without_session_exit_count": int(broker_flat_stale_exit_count),
+        "postmortem_accounting_status": accounting_status,
         "completed_trade_count": int(len(session_payload.get("completed_trades") or [])),
         "open_trade_count": int(len(session_payload.get("open_trades") or [])),
         "alert_count": int(len(session_payload.get("alerts") or [])),

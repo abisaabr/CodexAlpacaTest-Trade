@@ -3721,6 +3721,86 @@ def test_force_cleanup_known_trade_uses_broker_position_sizes_for_partial_multil
     assert cleanup_entries[1]["broker_signed_qty"] == 1.0
 
 
+def test_flatten_all_drops_stale_session_trade_when_broker_is_flat(tmp_path: Path) -> None:
+    class _LoggerStub:
+        def warning(self, *_args, **_kwargs) -> None:
+            return None
+
+        def info(self, *_args, **_kwargs) -> None:
+            return None
+
+    class _BrokerStub:
+        def get_positions(self) -> list[dict[str, object]]:
+            return []
+
+        def get_orders(self, *, status: str = "all", limit: int = 100) -> list[dict[str, object]]:
+            assert status == "open"
+            return []
+
+        def submit_order(self, *_args, **_kwargs) -> dict[str, object]:  # pragma: no cover - must not call
+            raise AssertionError("broker is flat; cleanup must not submit sell_to_close")
+
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={
+                    "run_root": tmp_path / "runs",
+                    "state_root": tmp_path / "state",
+                }
+            )
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.run_root = tmp_path / "runs"
+    trader.submit_paper_orders = True
+    trader.broker = _BrokerStub()
+    trader.logger = _LoggerStub()
+    trader._build_symbol_snapshot = lambda **_kwargs: object()
+    trader._run_exit = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        AssertionError("stale session trade should be skipped before _run_exit")
+    )
+
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+        open_trades=[
+            _sample_open_trade(
+                strategy_name="spy__stale_session_trade",
+                underlying_symbol="SPY",
+                quantity=2,
+            )
+        ],
+    )
+    stock_frames = {
+        "SPY": pd.DataFrame(
+            [
+                {
+                    "timestamp_et": datetime(2026, 4, 15, 15, 59),
+                    "minute_index": 389,
+                    "close": 507.0,
+                }
+            ]
+        )
+    }
+
+    summary = trader._flatten_all(session, stock_frames)
+
+    assert summary["forced_exit_skipped_broker_flat_count"] == 1
+    assert summary["forced_exit_attempt_count"] == 0
+    assert not session.open_trades
+    assert not session.completed_trades
+    assert session.alerts[-1]["message"].endswith("broker is already flat for its legs")
+    events = json.loads(
+        (tmp_path / "runs" / "2026-04-15" / "trade_reconciliation_events.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert events[-1]["status"] == "broker_flat_without_session_exit"
+    assert events[-1]["via_cleanup"] is True
+
+
 def test_submit_cleanup_order_retries_after_cancelled_attempt(tmp_path: Path) -> None:
     class _LoggerStub:
         def warning(self, *_args, **_kwargs) -> None:

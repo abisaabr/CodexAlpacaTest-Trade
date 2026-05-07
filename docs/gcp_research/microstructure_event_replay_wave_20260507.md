@@ -283,3 +283,51 @@ python scripts\aggregate_microstructure_event_replay.py `
   --min-net-pnl 0 `
   --max-avg-spread-cost-to-target 0.65
 ```
+
+## V2 Progress Telemetry Hardening - 2026-05-07
+
+Long microstructure shards are CPU-bound and can appear idle from the control plane
+because the original worker status only changed at phase boundaries. The next source
+archive after this note adds lightweight progress telemetry:
+
+- `scripts/run_microstructure_event_replay_shard.py` writes
+  `microstructure_replay_progress.json` after input load and every configured grid
+  interval during replay.
+- `scripts/gcp_microstructure_event_replay_shard.sh` uploads that progress file to
+  each worker prefix while the replay process is still running.
+- The progress payload includes completed grid count, total grid count, progress
+  ratio, contract count, review-like count, elapsed seconds, and explicit
+  `broker_facing=false` / `paper_orders=false` safety fields.
+
+This does not affect the active first tranche already running from the prior source
+archive. It improves stall detection and throughput monitoring for subsequent
+tranches without changing promotion gates or PAPER runtime state.
+
+## V2 First-Tranche Aggregate - 2026-05-07
+
+The first executable microstructure event replay tranche completed after all 8
+workers uploaded artifacts.
+
+- Wave ID: `microstructure_event_replay_v2_executable_20260507T1935Z`
+- GCS aggregate root:
+  `gs://codexalpaca-control-us/research_results/microstructure_event_replay_v2_executable_20260507T1935Z/aggregate/`
+- Source shard summaries: `8`
+- Grid profiles: `2048`
+- Eligible microstructure-review candidates: `0`
+- Decision: `research_only_blocked`
+- Broker-facing effect: none
+- PAPER orders: none
+
+Strict gate blockers:
+
+- `avg_net_pnl_not_positive`: `2048`
+- `net_pnl_not_positive`: `2048`
+- `fill_coverage_below_gate`: `1629`
+- `trade_count_below_gate`: `237`
+- `avg_spread_cost_to_target_above_gate`: `59`
+
+Interpretation: the current fast microstructure scalping hypothesis did not show
+an executable edge on this short realtime shadow capture. The next useful path is
+not to activate these profiles; it is to improve event selection toward rarer,
+higher-expected-move events and extend the realtime quote capture window before
+testing another tranche.

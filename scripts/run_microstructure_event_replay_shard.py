@@ -8,6 +8,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -60,6 +61,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--fee-per-contract", type=float, default=0.65)
     parser.add_argument("--top-trades", type=int, default=500)
+    parser.add_argument(
+        "--progress-interval",
+        type=int,
+        default=25,
+        help="Write replay progress after this many completed grid rows.",
+    )
     parser.add_argument(
         "--processes",
         type=int,
@@ -715,6 +722,45 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
+def _write_progress(
+    path: Path,
+    *,
+    wave_id: str,
+    worker_id: str,
+    phase: str,
+    completed_grid_count: int,
+    total_grid_count: int,
+    contract_count: int,
+    review_like_count: int,
+    started_epoch: float,
+    ingest_stats: dict[str, Any] | None = None,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    now_epoch = time.time()
+    payload: dict[str, Any] = {
+        "generated_at_utc": datetime.now(UTC).replace(microsecond=0).isoformat(),
+        "wave_id": wave_id,
+        "worker_id": worker_id,
+        "phase": phase,
+        "completed_grid_count": int(completed_grid_count),
+        "total_grid_count": int(total_grid_count),
+        "progress_ratio": round(completed_grid_count / total_grid_count, 6) if total_grid_count else 1.0,
+        "contract_count": int(contract_count),
+        "review_like_count": int(review_like_count),
+        "elapsed_seconds": round(now_epoch - started_epoch, 3),
+        "research_only": True,
+        "broker_facing": False,
+        "paper_orders": False,
+    }
+    if completed_grid_count > 0:
+        payload["grids_per_second"] = round(completed_grid_count / max(now_epoch - started_epoch, 0.001), 6)
+    if ingest_stats is not None:
+        payload["ingest_stats"] = ingest_stats
+    temp_path = path.with_suffix(path.suffix + ".tmp")
+    temp_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    temp_path.replace(path)
+
+
 def _limit_contracts_per_underlying(
     option_quotes: dict[str, list[QuotePoint]],
     *,
@@ -734,8 +780,10 @@ def _limit_contracts_per_underlying(
 
 def main() -> None:
     args = parse_args()
+    started_epoch = time.time()
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    progress_path = output_dir / "microstructure_replay_progress.json"
     events_path = _resolve_input_path(args.events_jsonl)
     grid_path = _resolve_input_path(args.grid_jsonl)
     grid = load_grid(grid_path, start_index=args.grid_start_index, count=args.grid_count)
@@ -754,10 +802,40 @@ def main() -> None:
         option_quotes = dict(
             sorted(option_quotes.items(), key=lambda item: len(item[1]), reverse=True)[: args.max_contracts]
         )
+    _write_progress(
+        progress_path,
+        wave_id=args.wave_id,
+        worker_id=args.worker_id,
+        phase="loaded_inputs",
+        completed_grid_count=0,
+        total_grid_count=len(grid),
+        contract_count=len(option_quotes),
+        review_like_count=0,
+        started_epoch=started_epoch,
+        ingest_stats=ingest_stats,
+    )
 
     summary_rows: list[dict[str, Any]] = []
     top_trades: list[dict[str, Any]] = []
     processes = max(int(args.processes), 1)
+    progress_interval = max(int(args.progress_interval), 1)
+
+    def record_progress(*, phase: str = "running_replay") -> None:
+        completed = len(summary_rows)
+        if completed % progress_interval != 0 and completed != len(grid):
+            return
+        _write_progress(
+            progress_path,
+            wave_id=args.wave_id,
+            worker_id=args.worker_id,
+            phase=phase,
+            completed_grid_count=completed,
+            total_grid_count=len(grid),
+            contract_count=len(option_quotes),
+            review_like_count=sum(1 for row in summary_rows if row["review_like"]),
+            started_epoch=started_epoch,
+        )
+
     if processes > 1 and len(grid) > 1:
         with Pool(
             processes=processes,
@@ -769,6 +847,7 @@ def main() -> None:
                 top_trades.extend(spec_top_trades)
                 top_trades.sort(key=lambda row: float(row["net_pnl_per_contract"]), reverse=True)
                 del top_trades[args.top_trades :]
+                record_progress()
     else:
         for spec in grid:
             summary, spec_top_trades = simulate_spec(
@@ -782,6 +861,7 @@ def main() -> None:
             top_trades.extend(spec_top_trades)
             top_trades.sort(key=lambda row: float(row["net_pnl_per_contract"]), reverse=True)
             del top_trades[args.top_trades :]
+            record_progress()
 
     summary_rows.sort(
         key=lambda row: (
@@ -856,6 +936,17 @@ def main() -> None:
         ]
     )
     (output_dir / "microstructure_event_replay_packet.md").write_text("\n".join(md_lines), encoding="utf-8")
+    _write_progress(
+        progress_path,
+        wave_id=args.wave_id,
+        worker_id=args.worker_id,
+        phase="completed",
+        completed_grid_count=len(summary_rows),
+        total_grid_count=len(grid),
+        contract_count=len(option_quotes),
+        review_like_count=sum(1 for row in summary_rows if row["review_like"]),
+        started_epoch=started_epoch,
+    )
     print(f"packet_json={output_dir / 'microstructure_event_replay_packet.json'}")
     print(f"summary_csv={output_dir / 'microstructure_event_replay_summary.csv'}")
     print(f"top_trades_csv={output_dir / 'microstructure_event_replay_top_trades.csv'}")
