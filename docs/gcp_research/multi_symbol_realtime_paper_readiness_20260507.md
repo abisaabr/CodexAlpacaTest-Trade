@@ -7,6 +7,7 @@ Updated: 2026-05-06 20:20 ET
 - Broker-facing mode: PAPER only.
 - Active local paper trader at handoff: none.
 - Active GCP research VMs/jobs at handoff: none observed.
+- Operator approval recorded: May 7, 2026 RTH PAPER order submission is approved for appropriate runtime-compatible governed-validation strategies, conditional on the preflight and broker-state gates below.
 - Governed-validation manifest: `config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml`.
 - No-submit/preflight paper portfolio config: `config/multi_symbol_governed_realtime_paper_portfolio_20260506.yaml`.
 - Armed May 7 PAPER portfolio config: `config/multi_symbol_governed_realtime_paper_portfolio_20260507_armed.yaml`.
@@ -58,8 +59,10 @@ Do not launch broker-facing PAPER order submission unless:
 - Broker endpoint is PAPER.
 - No duplicate paper trader process is running.
 - PAPER open orders and positions are reviewed.
+- Any unexpected open orders or positions are either reconciled or explicitly accepted before launch.
 - The launch uses the dedicated armed config, not the no-submit/preflight config.
 - The armed config is local-primary self-contained for May 7: `ownership.lease_path` points to the D-drive lease and `ownership.machine_label` is `local-primary-paper-20260507`. A standby machine must override the machine label before use.
+- The launched strategy set remains restricted to runtime-compatible governed-validation strategies generated from eligible promotion-review packets.
 
 ## PAPER Order-Submitting Command
 
