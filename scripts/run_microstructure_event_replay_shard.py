@@ -52,6 +52,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--grid-count", type=int, default=0)
     parser.add_argument("--underlyings", default="")
     parser.add_argument("--max-contracts", type=int, default=0)
+    parser.add_argument(
+        "--max-contracts-per-underlying",
+        type=int,
+        default=0,
+        help="Keep the most active N option contracts per underlying before replaying the grid.",
+    )
     parser.add_argument("--fee-per-contract", type=float, default=0.65)
     parser.add_argument("--top-trades", type=int, default=500)
     parser.add_argument(
@@ -99,6 +105,16 @@ def _quote_age(point: QuotePoint | StockQuotePoint) -> float:
 def _relative_spread(bid: float, ask: float) -> float:
     mid = _mid(bid, ask)
     return (ask - bid) / mid if mid > 0.0 else math.inf
+
+
+def _spec_float(spec: dict[str, Any], key: str, default: float) -> float:
+    try:
+        value = spec.get(key, default)
+        if value in (None, ""):
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _option_entry_allowed(point: QuotePoint, spec: dict[str, Any]) -> bool:
@@ -249,6 +265,25 @@ def _option_prior_index(points: list[QuotePoint], index: int, lookback_seconds: 
     return prior_index, None
 
 
+def _option_at_or_after(
+    points: list[QuotePoint],
+    *,
+    start_index: int,
+    target_epoch: float,
+    max_wait_seconds: float,
+) -> tuple[int, QuotePoint | None]:
+    index = max(start_index, 0)
+    deadline = target_epoch + max(0.0, max_wait_seconds)
+    while index < len(points) and points[index].ts_epoch < target_epoch:
+        index += 1
+    if index >= len(points):
+        return index, None
+    point = points[index]
+    if point.ts_epoch > deadline:
+        return index, None
+    return index, point
+
+
 def _stock_impulse(
     stock_points: list[StockQuotePoint],
     *,
@@ -324,7 +359,15 @@ def simulate_contract(
     index = 1
     signal_count = 0
     fill_failure_count = 0
+    fill_failure_reasons: dict[str, int] = {}
     stale_exit_quote_count = 0
+    latency_entry_skip_count = 0
+
+    def record_fill_failure(reason: str) -> None:
+        nonlocal fill_failure_count
+        fill_failure_count += 1
+        fill_failure_reasons[reason] = fill_failure_reasons.get(reason, 0) + 1
+
     while index < len(points):
         point = points[index]
         if not _option_entry_allowed(point, spec):
@@ -358,7 +401,44 @@ def simulate_contract(
             continue
 
         signal_count += 1
-        entry = point
+        signal_point = point
+        entry_latency = _spec_float(spec, "entry_latency_seconds", 0.0)
+        entry_fill_wait = _spec_float(spec, "entry_fill_wait_seconds", max(0.0, entry_latency))
+        entry_index, entry = _option_at_or_after(
+            points,
+            start_index=index,
+            target_epoch=signal_point.ts_epoch + entry_latency,
+            max_wait_seconds=entry_fill_wait,
+        )
+        if entry is None:
+            record_fill_failure("entry_latency_no_quote")
+            latency_entry_skip_count += 1
+            index += 1
+            continue
+        if not _option_entry_allowed(entry, spec):
+            record_fill_failure("entry_latency_quote_gate_failed")
+            latency_entry_skip_count += 1
+            index = max(entry_index + 1, index + 1)
+            continue
+        max_entry_chase_pct = _spec_float(spec, "max_entry_chase_pct", math.inf)
+        entry_chase_pct = (entry.ask - signal_point.ask) / signal_point.ask if signal_point.ask > 0.0 else math.inf
+        if entry_chase_pct > max_entry_chase_pct:
+            record_fill_failure("entry_chase_above_gate")
+            latency_entry_skip_count += 1
+            index = max(entry_index + 1, index + 1)
+            continue
+        estimated_round_trip_spread = (entry.ask - entry.bid) * 2.0
+        target_profit_per_share = entry.ask * float(spec["target_pct"])
+        spread_cost_to_target = (
+            estimated_round_trip_spread / target_profit_per_share
+            if target_profit_per_share > 0.0
+            else math.inf
+        )
+        max_spread_cost_to_target = _spec_float(spec, "max_spread_cost_to_target", math.inf)
+        if spread_cost_to_target > max_spread_cost_to_target:
+            record_fill_failure("spread_cost_above_target_gate")
+            index = max(entry_index + 1, index + 1)
+            continue
         deadline = entry.ts_epoch + float(spec["max_hold_seconds"])
         target_bid = entry.ask * (1.0 + float(spec["target_pct"]))
         stop_bid = entry.ask * (1.0 - float(spec["stop_pct"]))
@@ -370,7 +450,10 @@ def simulate_contract(
         min_bid = entry.bid
         valid_exit_quote_count = 0
         quote_count_during_hold = 0
-        for exit_index in range(index + 1, len(points)):
+        exit_latency = _spec_float(spec, "exit_latency_seconds", 0.0)
+        exit_fill_wait = _spec_float(spec, "exit_fill_wait_seconds", max(0.0, exit_latency))
+        exit_fill_failure_recorded = False
+        for exit_index in range(entry_index + 1, len(points)):
             candidate = points[exit_index]
             if candidate.ts_epoch > deadline:
                 break
@@ -382,24 +465,45 @@ def simulate_contract(
             max_bid = max(max_bid, candidate.bid)
             min_bid = min(min_bid, candidate.bid)
             exit_point = candidate
+            triggered_exit_reason: str | None = None
             if candidate.bid >= target_bid:
-                exit_reason = "target"
-                break
+                triggered_exit_reason = "target"
             if candidate.bid <= stop_bid:
-                exit_reason = "stop"
-                break
+                triggered_exit_reason = triggered_exit_reason or "stop"
             if (
                 float(spec["trail_activation_pct"]) > 0.0
                 and max_bid >= trail_activation_bid
                 and candidate.bid <= max_bid * (1.0 - float(spec["trail_retrace_pct"]))
             ):
-                exit_reason = "trailing_exit"
-                break
+                triggered_exit_reason = triggered_exit_reason or "trailing_exit"
             if _relative_spread(candidate.bid, candidate.ask) > float(spec["max_exit_relative_spread"]):
-                exit_reason = "spread_widen_exit"
+                triggered_exit_reason = triggered_exit_reason or "spread_widen_exit"
+            if triggered_exit_reason is not None:
+                if exit_latency > 0.0:
+                    delayed_exit_index, delayed_exit = _option_at_or_after(
+                        points,
+                        start_index=exit_index,
+                        target_epoch=candidate.ts_epoch + exit_latency,
+                        max_wait_seconds=exit_fill_wait,
+                    )
+                    if delayed_exit is None:
+                        record_fill_failure("exit_latency_no_quote")
+                        exit_fill_failure_recorded = True
+                        exit_point = None
+                        exit_index = delayed_exit_index
+                        break
+                    exit_point = delayed_exit
+                    exit_index = delayed_exit_index
+                    if _quote_age(exit_point) > float(spec["max_exit_quote_age_seconds"]):
+                        record_fill_failure("exit_latency_quote_stale")
+                        exit_fill_failure_recorded = True
+                        exit_point = None
+                        break
+                exit_reason = triggered_exit_reason
                 break
         if exit_point is None:
-            fill_failure_count += 1
+            if not exit_fill_failure_recorded:
+                record_fill_failure("no_exit_quote")
             index += 1
             continue
         if exit_reason == "no_exit_quote":
@@ -414,13 +518,21 @@ def simulate_contract(
                 "symbol": symbol,
                 "underlying_symbol": _underlying_from_option_symbol(symbol),
                 "option_right": option_right,
+                "signal_time_utc": datetime.fromtimestamp(signal_point.ts_epoch, tz=UTC).isoformat(),
                 "entry_time_utc": datetime.fromtimestamp(entry.ts_epoch, tz=UTC).isoformat(),
                 "exit_time_utc": datetime.fromtimestamp(exit_point.ts_epoch, tz=UTC).isoformat(),
+                "entry_latency_seconds": round(max(0.0, entry.ts_epoch - signal_point.ts_epoch), 6),
                 "hold_seconds": round(max(0.0, exit_point.ts_epoch - entry.ts_epoch), 6),
+                "signal_bid": signal_point.bid,
+                "signal_ask": signal_point.ask,
                 "entry_bid": entry.bid,
                 "entry_ask": entry.ask,
+                "entry_chase_pct": round(entry_chase_pct, 6),
                 "entry_quote_age_seconds": round(_quote_age(entry), 6),
+                "entry_absolute_spread": round(entry.ask - entry.bid, 6),
                 "entry_relative_spread": round(_relative_spread(entry.bid, entry.ask), 6),
+                "estimated_round_trip_spread": round(estimated_round_trip_spread, 6),
+                "spread_cost_to_target": round(spread_cost_to_target, 6),
                 "option_momentum": round(float(signal_features["option_momentum"]), 6),
                 "stock_impulse": None
                 if signal_features["stock_impulse"] is None
@@ -446,7 +558,9 @@ def simulate_contract(
     return trades, {
         "signal_count": signal_count,
         "fill_failure_count": fill_failure_count,
+        "latency_entry_skip_count": latency_entry_skip_count,
         "stale_exit_quote_count": stale_exit_quote_count,
+        "fill_failure_reasons": fill_failure_reasons,
     }
 
 
@@ -465,12 +579,22 @@ def summarize_spec(spec: dict[str, Any], trades: list[dict[str, Any]], counters:
     avg_entry_spread = (
         sum(float(trade["entry_relative_spread"]) for trade in trades) / filled if filled else 0.0
     )
+    avg_entry_chase = (
+        sum(float(trade.get("entry_chase_pct") or 0.0) for trade in trades) / filled if filled else 0.0
+    )
+    avg_spread_cost_to_target = (
+        sum(float(trade.get("spread_cost_to_target") or 0.0) for trade in trades) / filled if filled else 0.0
+    )
     fill_coverage = filled / signal_count if signal_count else 0.0
+    max_review_avg_spread_cost_to_target = _spec_float(
+        spec, "max_review_avg_spread_cost_to_target", math.inf
+    )
     review_like = (
         fill_coverage >= 0.90
         and filled >= 20
         and total_net > 0.0
         and (total_net / filled if filled else 0.0) > 0.0
+        and avg_spread_cost_to_target <= max_review_avg_spread_cost_to_target
     )
     return {
         "grid_id": spec["grid_id"],
@@ -482,6 +606,12 @@ def summarize_spec(spec: dict[str, Any], trades: list[dict[str, Any]], counters:
         "target_pct": spec["target_pct"],
         "stop_pct": spec["stop_pct"],
         "max_hold_seconds": spec["max_hold_seconds"],
+        "execution_profile": spec.get("execution_profile", ""),
+        "entry_latency_seconds": spec.get("entry_latency_seconds", 0.0),
+        "exit_latency_seconds": spec.get("exit_latency_seconds", 0.0),
+        "max_entry_chase_pct": spec.get("max_entry_chase_pct", ""),
+        "max_spread_cost_to_target": spec.get("max_spread_cost_to_target", ""),
+        "max_review_avg_spread_cost_to_target": spec.get("max_review_avg_spread_cost_to_target", ""),
         "max_entry_quote_age_seconds": spec["max_entry_quote_age_seconds"],
         "max_relative_spread": spec["max_relative_spread"],
         "trail_activation_pct": spec["trail_activation_pct"],
@@ -498,7 +628,11 @@ def summarize_spec(spec: dict[str, Any], trades: list[dict[str, Any]], counters:
         "worst_net_pnl": round(min((float(trade["net_pnl_per_contract"]) for trade in trades), default=0.0), 4),
         "avg_entry_quote_age_seconds": round(avg_entry_age, 6),
         "avg_entry_relative_spread": round(avg_entry_spread, 6),
+        "avg_entry_chase_pct": round(avg_entry_chase, 6),
+        "avg_spread_cost_to_target": round(avg_spread_cost_to_target, 6),
+        "latency_entry_skip_count": int(counters.get("latency_entry_skip_count") or 0),
         "stale_exit_quote_count": int(counters.get("stale_exit_quote_count") or 0),
+        "fill_failure_reason_counts": counters.get("fill_failure_reasons") or {},
         "exit_reason_counts": exit_counts,
         "review_like": review_like,
     }
@@ -513,7 +647,13 @@ def simulate_spec(
     top_trades_limit: int,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     spec_trades: list[dict[str, Any]] = []
-    counters = {"signal_count": 0, "fill_failure_count": 0, "stale_exit_quote_count": 0}
+    counters = {
+        "signal_count": 0,
+        "fill_failure_count": 0,
+        "stale_exit_quote_count": 0,
+        "latency_entry_skip_count": 0,
+        "fill_failure_reasons": {},
+    }
     for symbol, points in option_quotes.items():
         underlying = _underlying_from_option_symbol(symbol)
         trades, contract_counters = simulate_contract(
@@ -525,7 +665,13 @@ def simulate_spec(
         )
         spec_trades.extend(trades)
         for key, value in contract_counters.items():
-            counters[key] = int(counters.get(key) or 0) + int(value or 0)
+            if key == "fill_failure_reasons" and isinstance(value, dict):
+                target = counters.setdefault("fill_failure_reasons", {})
+                if isinstance(target, dict):
+                    for reason, count in value.items():
+                        target[str(reason)] = int(target.get(str(reason), 0)) + int(count or 0)
+            else:
+                counters[key] = int(counters.get(key) or 0) + int(value or 0)
     spec_trades.sort(key=lambda row: float(row["net_pnl_per_contract"]), reverse=True)
     return summarize_spec(spec, spec_trades, counters), spec_trades[:top_trades_limit]
 
@@ -569,6 +715,23 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
+def _limit_contracts_per_underlying(
+    option_quotes: dict[str, list[QuotePoint]],
+    *,
+    limit: int,
+) -> dict[str, list[QuotePoint]]:
+    if limit <= 0:
+        return option_quotes
+    grouped: dict[str, list[tuple[str, list[QuotePoint]]]] = defaultdict(list)
+    for symbol, points in option_quotes.items():
+        grouped[_underlying_from_option_symbol(symbol)].append((symbol, points))
+    limited: dict[str, list[QuotePoint]] = {}
+    for contracts in grouped.values():
+        for symbol, points in sorted(contracts, key=lambda item: len(item[1]), reverse=True)[:limit]:
+            limited[symbol] = points
+    return limited
+
+
 def main() -> None:
     args = parse_args()
     output_dir = Path(args.output_dir)
@@ -582,6 +745,11 @@ def main() -> None:
             values = row.get("underlyings") if isinstance(row.get("underlyings"), list) else []
             underlyings.update(str(item).upper() for item in values)
     option_quotes, stock_quotes, ingest_stats = load_market_events(events_path, underlyings=underlyings)
+    if args.max_contracts_per_underlying > 0:
+        option_quotes = _limit_contracts_per_underlying(
+            option_quotes,
+            limit=args.max_contracts_per_underlying,
+        )
     if args.max_contracts > 0:
         option_quotes = dict(
             sorted(option_quotes.items(), key=lambda item: len(item[1]), reverse=True)[: args.max_contracts]
@@ -635,6 +803,7 @@ def main() -> None:
         "grid_count": len(grid),
         "underlyings": sorted(underlyings),
         "contract_count": len(option_quotes),
+        "max_contracts_per_underlying": args.max_contracts_per_underlying,
         "stock_quote_symbols": sorted(stock_quotes),
         "execution_assumption": "causal_signal_buy_ask_exit_bid_with_quote_age_spread_gates",
         "processes": processes,

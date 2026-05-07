@@ -176,3 +176,109 @@ def test_microstructure_replay_supports_fast_target_exit() -> None:
     assert len(trades) == 1
     assert trades[0]["exit_reason"] == "target"
     assert trades[0]["net_pnl_per_contract"] > 0
+    assert trades[0]["spread_cost_to_target"] > 0
+
+
+def test_microstructure_replay_rejects_latency_chase_entries() -> None:
+    option_points = [
+        _quote(0.0, 1.00, 1.02),
+        _quote(1.0, 1.05, 1.06),
+        _quote(1.3, 1.18, 1.20),
+        _quote(2.0, 1.25, 1.27),
+    ]
+    stock_points = [
+        StockQuotePoint(ts_epoch=0.0, observed_epoch=0.0, bid=100.0, ask=100.02),
+        StockQuotePoint(ts_epoch=1.0, observed_epoch=1.0, bid=100.2, ask=100.22),
+        StockQuotePoint(ts_epoch=2.0, observed_epoch=2.0, bid=100.3, ask=100.32),
+    ]
+    spec = {
+        "grid_id": "micro_latency_test",
+        "grid_row_index": 1,
+        "signal_mode": "stock_impulse_option_confirm",
+        "option_right": "both",
+        "lookback_seconds": 1.0,
+        "option_momentum_threshold_pct": 0.02,
+        "stock_impulse_threshold_pct": 0.001,
+        "target_pct": 0.03,
+        "stop_pct": 0.015,
+        "max_hold_seconds": 15.0,
+        "entry_latency_seconds": 0.25,
+        "entry_fill_wait_seconds": 0.50,
+        "max_entry_chase_pct": 0.01,
+        "max_spread_cost_to_target": 1.0,
+        "max_entry_quote_age_seconds": 1.0,
+        "max_exit_quote_age_seconds": 1.0,
+        "min_premium": 0.15,
+        "max_premium": 12.0,
+        "max_relative_spread": 0.04,
+        "max_absolute_spread": 0.20,
+        "max_exit_relative_spread": 0.10,
+        "min_quote_size": 1.0,
+        "trail_activation_pct": 0.0,
+        "trail_retrace_pct": 0.0,
+        "spread_compression_factor": 0.75,
+        "cooldown_seconds": 0.0,
+    }
+
+    trades, counters = simulate_microstructure_contract(
+        symbol="QQQ260508C00690000",
+        points=option_points,
+        stock_points=stock_points,
+        spec=spec,
+        fee_per_contract=0.65,
+    )
+
+    assert counters["signal_count"] == 1
+    assert trades == []
+    assert counters["fill_failure_reasons"] == {"entry_chase_above_gate": 1}
+
+
+def test_microstructure_replay_rejects_spread_dominated_targets() -> None:
+    option_points = [
+        _quote(0.0, 0.95, 0.97),
+        _quote(1.0, 1.00, 1.10),
+        _quote(2.0, 1.20, 1.25),
+    ]
+    stock_points = [
+        StockQuotePoint(ts_epoch=0.0, observed_epoch=0.0, bid=100.0, ask=100.02),
+        StockQuotePoint(ts_epoch=1.0, observed_epoch=1.0, bid=100.2, ask=100.22),
+        StockQuotePoint(ts_epoch=2.0, observed_epoch=2.0, bid=100.3, ask=100.32),
+    ]
+    spec = {
+        "grid_id": "micro_spread_cost_test",
+        "grid_row_index": 1,
+        "signal_mode": "stock_impulse_option_confirm",
+        "option_right": "both",
+        "lookback_seconds": 1.0,
+        "option_momentum_threshold_pct": 0.02,
+        "stock_impulse_threshold_pct": 0.001,
+        "target_pct": 0.03,
+        "stop_pct": 0.015,
+        "max_hold_seconds": 15.0,
+        "max_entry_chase_pct": 0.05,
+        "max_spread_cost_to_target": 0.50,
+        "max_entry_quote_age_seconds": 1.0,
+        "max_exit_quote_age_seconds": 1.0,
+        "min_premium": 0.15,
+        "max_premium": 12.0,
+        "max_relative_spread": 0.20,
+        "max_absolute_spread": 0.20,
+        "max_exit_relative_spread": 0.30,
+        "min_quote_size": 1.0,
+        "trail_activation_pct": 0.0,
+        "trail_retrace_pct": 0.0,
+        "spread_compression_factor": 0.75,
+        "cooldown_seconds": 0.0,
+    }
+
+    trades, counters = simulate_microstructure_contract(
+        symbol="QQQ260508C00690000",
+        points=option_points,
+        stock_points=stock_points,
+        spec=spec,
+        fee_per_contract=0.65,
+    )
+
+    assert counters["signal_count"] == 1
+    assert trades == []
+    assert counters["fill_failure_reasons"] == {"spread_cost_above_target_gate": 1}

@@ -183,3 +183,57 @@ A candidate can become a review lead only if it clears:
 - no severe loser cluster after longer evidence is available.
 
 Even if this short-capture wave finds positive leads, the next step is longer OPRA/SIP shadow capture or historical quote download support, then a governed promotion-review packet. Do not add these strategies to PAPER directly from this scouting wave.
+
+## V2 Executability Upgrade - 2026-05-07
+
+The replay lane now models additional execution realism before treating a signal as filled:
+
+- `entry_latency_seconds` and `exit_latency_seconds` delay fills after a signal/exit trigger.
+- `entry_fill_wait_seconds` and `exit_fill_wait_seconds` bound how long the simulator can wait for a usable quote after latency.
+- `max_entry_chase_pct` rejects entries where the option ask runs too far away after the signal.
+- `max_spread_cost_to_target` rejects entries where estimated round-trip spread cost is too large relative to the target profit.
+- `avg_spread_cost_to_target` is emitted into shard summaries and enforced by the aggregate packet via `--max-avg-spread-cost-to-target`.
+- `fill_failure_reason_counts` now classifies blocked microstructure signals, including latency/chase and spread-cost failures.
+- `--max-contracts-per-underlying` keeps smoke and GCP shards balanced across QQQ, SPY, and IWM instead of spending all compute on the top global contracts.
+
+Local v2 smoke command:
+
+```powershell
+python scripts\build_microstructure_research_grid.py `
+  --wave-id microstructure_v2_smoke_20260507T1545ET `
+  --output-dir reports\gcp_research\microstructure_v2_smoke_20260507T1545ET\inputs `
+  --profile smoke `
+  --underlyings QQQ,SPY,IWM `
+  --chunk-size 16
+
+python scripts\run_microstructure_event_replay_shard.py `
+  --events-jsonl D:\codexalpaca_runtime\runs\microstructure_shadow_stream_fastwriter_20260507T1340ET\realtime_shadow_events.jsonl `
+  --grid-jsonl reports\gcp_research\microstructure_v2_smoke_20260507T1545ET\inputs\microstructure_research_grid.jsonl `
+  --output-dir reports\gcp_research\microstructure_v2_smoke_20260507T1545ET\local_smoke `
+  --wave-id microstructure_v2_smoke_20260507T1545ET `
+  --worker-id local_smoke `
+  --grid-start-index 1 `
+  --grid-count 16 `
+  --underlyings QQQ,SPY,IWM `
+  --max-contracts-per-underlying 5 `
+  --processes 2
+
+python scripts\aggregate_microstructure_event_replay.py `
+  --workers-root reports\gcp_research\microstructure_v2_smoke_20260507T1545ET `
+  --output-dir reports\gcp_research\microstructure_v2_smoke_20260507T1545ET\aggregate `
+  --wave-id microstructure_v2_smoke_20260507T1545ET `
+  --min-fill-coverage 0.90 `
+  --min-trades 20 `
+  --min-net-pnl 0 `
+  --max-avg-spread-cost-to-target 0.65
+```
+
+Smoke result:
+
+- Grid rows replayed: `16`
+- Contracts replayed: `15`
+- Eligible for microstructure review: `0`
+- Decision: `research_only_blocked`
+- Blockers: `fill_coverage_below_gate=16`, `net_pnl_not_positive=16`, `avg_net_pnl_not_positive=16`, `trade_count_below_gate=8`
+
+Interpretation: the short websocket capture still does not produce an executable micro-scalping candidate under realistic spread/latency economics. The useful next search direction is rarer event-driven entries with larger target moves and strict quote/spread gates, not higher-frequency 1% scalps.

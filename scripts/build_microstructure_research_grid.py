@@ -39,6 +39,28 @@ def _grid(profile: str, underlyings: list[str]) -> list[dict[str, Any]]:
         max_relative_spreads = [0.02, 0.04]
         max_quote_ages = [0.5, 1.0]
         trail_pairs = [(0.0, 0.0), (0.04, 0.02)]
+        execution_profiles = [
+            {
+                "execution_profile": "zero_latency_baseline",
+                "entry_latency_seconds": 0.0,
+                "exit_latency_seconds": 0.0,
+                "entry_fill_wait_seconds": 0.0,
+                "exit_fill_wait_seconds": 0.0,
+                "max_entry_chase_pct": 0.05,
+                "max_spread_cost_to_target": 0.75,
+                "max_review_avg_spread_cost_to_target": 0.65,
+            },
+            {
+                "execution_profile": "low_latency_strict",
+                "entry_latency_seconds": 0.25,
+                "exit_latency_seconds": 0.25,
+                "entry_fill_wait_seconds": 0.75,
+                "exit_fill_wait_seconds": 0.75,
+                "max_entry_chase_pct": 0.03,
+                "max_spread_cost_to_target": 0.50,
+                "max_review_avg_spread_cost_to_target": 0.45,
+            },
+        ]
     else:
         signal_modes = [
             "option_momentum",
@@ -55,6 +77,38 @@ def _grid(profile: str, underlyings: list[str]) -> list[dict[str, Any]]:
         max_relative_spreads = [0.01, 0.02, 0.04]
         max_quote_ages = [0.25, 0.5, 1.0]
         trail_pairs = [(0.0, 0.0), (0.04, 0.02), (0.08, 0.03)]
+        execution_profiles = [
+            {
+                "execution_profile": "zero_latency_baseline",
+                "entry_latency_seconds": 0.0,
+                "exit_latency_seconds": 0.0,
+                "entry_fill_wait_seconds": 0.0,
+                "exit_fill_wait_seconds": 0.0,
+                "max_entry_chase_pct": 0.05,
+                "max_spread_cost_to_target": 0.75,
+                "max_review_avg_spread_cost_to_target": 0.65,
+            },
+            {
+                "execution_profile": "low_latency_realistic",
+                "entry_latency_seconds": 0.25,
+                "exit_latency_seconds": 0.25,
+                "entry_fill_wait_seconds": 0.75,
+                "exit_fill_wait_seconds": 0.75,
+                "max_entry_chase_pct": 0.03,
+                "max_spread_cost_to_target": 0.50,
+                "max_review_avg_spread_cost_to_target": 0.45,
+            },
+            {
+                "execution_profile": "strict_latency_realistic",
+                "entry_latency_seconds": 0.50,
+                "exit_latency_seconds": 0.50,
+                "entry_fill_wait_seconds": 1.0,
+                "exit_fill_wait_seconds": 1.0,
+                "max_entry_chase_pct": 0.02,
+                "max_spread_cost_to_target": 0.35,
+                "max_review_avg_spread_cost_to_target": 0.30,
+            },
+        ]
 
     rows: list[dict[str, Any]] = []
     grid_index = 1
@@ -73,8 +127,8 @@ def _grid(profile: str, underlyings: list[str]) -> list[dict[str, Any]]:
                                         for trail_activation, trail_retrace in trail_pairs:
                                             if trail_activation and trail_activation >= target:
                                                 continue
-                                            rows.append(
-                                                {
+                                            for execution_profile in execution_profiles:
+                                                row = {
                                                     "grid_id": f"micro_{grid_index:05d}",
                                                     "wave_id": "",
                                                     "underlyings": underlyings,
@@ -99,8 +153,9 @@ def _grid(profile: str, underlyings: list[str]) -> list[dict[str, Any]]:
                                                     "spread_compression_factor": 0.75,
                                                     "cooldown_seconds": 0.0,
                                                 }
-                                            )
-                                            grid_index += 1
+                                                row.update(execution_profile)
+                                                rows.append(row)
+                                                grid_index += 1
     for row in rows:
         row["wave_id"] = profile
     return rows

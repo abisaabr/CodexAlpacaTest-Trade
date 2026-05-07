@@ -19,6 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-fill-coverage", type=float, default=0.90)
     parser.add_argument("--min-trades", type=int, default=20)
     parser.add_argument("--min-net-pnl", type=float, default=0.0)
+    parser.add_argument("--max-avg-spread-cost-to-target", type=float, default=0.65)
     parser.add_argument("--max-review-candidates", type=int, default=50)
     return parser.parse_args()
 
@@ -42,12 +43,23 @@ def _to_int(row: dict[str, Any], key: str) -> int:
         return 0
 
 
-def _eligible(row: dict[str, Any], *, min_fill_coverage: float, min_trades: int, min_net_pnl: float) -> bool:
+def _eligible(
+    row: dict[str, Any],
+    *,
+    min_fill_coverage: float,
+    min_trades: int,
+    min_net_pnl: float,
+    max_avg_spread_cost_to_target: float,
+) -> bool:
     return (
         _to_float(row, "fill_coverage") >= min_fill_coverage
         and _to_int(row, "filled_trade_count") >= min_trades
         and _to_float(row, "net_pnl_total") > min_net_pnl
         and _to_float(row, "avg_net_pnl") > 0.0
+        and (
+            "avg_spread_cost_to_target" not in row
+            or _to_float(row, "avg_spread_cost_to_target") <= max_avg_spread_cost_to_target
+        )
     )
 
 
@@ -57,6 +69,7 @@ def _blockers(
     min_fill_coverage: float,
     min_trades: int,
     min_net_pnl: float,
+    max_avg_spread_cost_to_target: float,
 ) -> list[str]:
     result: list[str] = []
     if _to_float(row, "fill_coverage") < min_fill_coverage:
@@ -67,6 +80,11 @@ def _blockers(
         result.append("net_pnl_not_positive")
     if _to_float(row, "avg_net_pnl") <= 0.0:
         result.append("avg_net_pnl_not_positive")
+    if (
+        "avg_spread_cost_to_target" in row
+        and _to_float(row, "avg_spread_cost_to_target") > max_avg_spread_cost_to_target
+    ):
+        result.append("avg_spread_cost_to_target_above_gate")
     return result
 
 
@@ -100,6 +118,7 @@ def main() -> None:
                 min_fill_coverage=args.min_fill_coverage,
                 min_trades=args.min_trades,
                 min_net_pnl=args.min_net_pnl,
+                max_avg_spread_cost_to_target=args.max_avg_spread_cost_to_target,
             )
             row["microstructure_blockers"] = ";".join(
                 _blockers(
@@ -107,6 +126,7 @@ def main() -> None:
                     min_fill_coverage=args.min_fill_coverage,
                     min_trades=args.min_trades,
                     min_net_pnl=args.min_net_pnl,
+                    max_avg_spread_cost_to_target=args.max_avg_spread_cost_to_target,
                 )
             )
             rows.append(row)
@@ -131,6 +151,12 @@ def main() -> None:
         "workers_root": str(workers_root),
         "source_summary_file_count": len(source_files),
         "grid_result_count": len(rows),
+        "gates": {
+            "min_fill_coverage": args.min_fill_coverage,
+            "min_trades": args.min_trades,
+            "min_net_pnl": args.min_net_pnl,
+            "max_avg_spread_cost_to_target": args.max_avg_spread_cost_to_target,
+        },
         "eligible_for_microstructure_review_count": len(
             [row for row in rows if bool(row["eligible_for_microstructure_review"])]
         ),
@@ -160,6 +186,7 @@ def main() -> None:
         f"- Grid results: `{len(rows)}`",
         f"- Eligible for microstructure review: `{packet['eligible_for_microstructure_review_count']}`",
         f"- Decision: `{packet['decision']}`",
+        f"- Max average spread-cost-to-target gate: `{args.max_avg_spread_cost_to_target}`",
         "",
         "## Blockers",
         "",
