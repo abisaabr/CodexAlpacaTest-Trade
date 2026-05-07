@@ -302,7 +302,10 @@ def build_manifest(
             "This manifest does not modify the live strategy manifest.",
             "This manifest does not lower promotion gates.",
             "This manifest does not start trading by itself.",
-            "Broker-facing paper order submission requires an explicit runtime command with --submit-paper-orders.",
+            (
+                "Broker-facing paper order submission requires explicit runner arming: either "
+                "--submit-paper-orders or a config with paper_order_arming_mode=config_explicit."
+            ),
         ],
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
