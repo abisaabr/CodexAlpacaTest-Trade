@@ -1,6 +1,6 @@
 # Multi-Symbol Realtime PAPER Readiness - 2026-05-07
 
-Updated: 2026-05-06 19:05 ET
+Updated: 2026-05-06 20:20 ET
 
 ## Status
 
@@ -8,8 +8,9 @@ Updated: 2026-05-06 19:05 ET
 - Active local paper trader at handoff: none.
 - Active GCP research VMs/jobs at handoff: none observed.
 - Governed-validation manifest: `config/promotion_manifests/multi_symbol_governed_validation_20260506.yaml`.
-- Paper portfolio config: `config/multi_symbol_governed_realtime_paper_portfolio_20260506.yaml`.
-- Runtime order submission default: `execution.submit_paper_orders: false`; PAPER order submission still requires the explicit runtime flag `--submit-paper-orders`.
+- No-submit/preflight paper portfolio config: `config/multi_symbol_governed_realtime_paper_portfolio_20260506.yaml`.
+- Armed May 7 PAPER portfolio config: `config/multi_symbol_governed_realtime_paper_portfolio_20260507_armed.yaml`.
+- Runtime order submission default remains off in the no-submit/preflight config. The armed May 7 config sets `execution.submit_paper_orders: true` and `execution.paper_order_arming_mode: config_explicit`, which is the only config-driven arming mode accepted by the runner.
 
 ## Activated Runtime-Compatible Strategy Set
 
@@ -57,7 +58,8 @@ Do not launch broker-facing PAPER order submission unless:
 - Broker endpoint is PAPER.
 - No duplicate paper trader process is running.
 - PAPER open orders and positions are reviewed.
-- Config still has `submit_paper_orders: false`, so the explicit runtime flag remains the arming mechanism.
+- The launch uses the dedicated armed config, not the no-submit/preflight config.
+- The armed config is local-primary self-contained for May 7: `ownership.lease_path` points to the D-drive lease and `ownership.machine_label` is `local-primary-paper-20260507`. A standby machine must override the machine label before use.
 
 ## PAPER Order-Submitting Command
 
@@ -66,7 +68,7 @@ Authorized May 7 PAPER launch command after the fresh preflight passes:
 ```powershell
 $env:MULTI_TICKER_MACHINE_LABEL = "local-primary-paper-20260507"
 $env:MULTI_TICKER_OWNERSHIP_LEASE_PATH = "D:\codexalpaca_runtime\state\multi_symbol_governed_realtime_20260507_ownership_lease.json"
-python scripts\run_multi_ticker_portfolio_paper_trader.py --portfolio-config config\multi_symbol_governed_realtime_paper_portfolio_20260506.yaml --submit-paper-orders
+python scripts\run_multi_ticker_portfolio_paper_trader.py --portfolio-config config\multi_symbol_governed_realtime_paper_portfolio_20260507_armed.yaml
 ```
 
 This is PAPER-only. It does not authorize live trading, live manifest edits, or risk-policy changes.

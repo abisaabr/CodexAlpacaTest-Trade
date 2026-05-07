@@ -233,6 +233,7 @@ class ExecutionConfig(BaseModel):
     option_feed: str = "indicative"
     stock_feed: str | None = None
     submit_paper_orders: bool = True
+    paper_order_arming_mode: Literal["cli_flag_only", "config_explicit"] = "cli_flag_only"
     poll_interval_seconds: int = 20
     order_status_poll_seconds: int = 10
     order_fill_timeout_seconds: int = 45

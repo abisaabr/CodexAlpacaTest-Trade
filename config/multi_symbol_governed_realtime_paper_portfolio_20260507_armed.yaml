@@ -1,20 +1,21 @@
-name: multi_symbol_governed_realtime_paper_trader_20260506
-description: PAPER-only governed-validation portfolio for QQQ, SPY, IWM, AMD, AMZN, MSFT, TSLA, AVGO, GOOGL, and TSM using generated promotion-review packets.
+name: multi_symbol_governed_realtime_paper_trader_20260507_armed
+description: PAPER-only armed May 7 governed-validation portfolio for QQQ, SPY, IWM, AMD, AMZN, MSFT, TSLA, AVGO, GOOGL, and TSM. This config may submit PAPER orders only because execution.paper_order_arming_mode is config_explicit.
 strategy_manifest_paths:
   - promotion_manifests/multi_symbol_governed_validation_20260506.yaml
 
 ownership:
   enabled: true
   lease_backend: file
-  lease_path: reports/multi_ticker_portfolio/state/multi_symbol_governed_realtime_20260506_ownership_lease.json
+  lease_path: D:/codexalpaca_runtime/state/multi_symbol_governed_realtime_20260507_ownership_lease.json
   lease_ttl_seconds: 180
+  machine_label: local-primary-paper-20260507
 
 execution:
   underlying_symbols: [QQQ, SPY, IWM, AMD, AMZN, MSFT, TSLA, AVGO, GOOGL, TSM]
   option_feed: opra
   stock_feed: sip
-  submit_paper_orders: false
-  paper_order_arming_mode: cli_flag_only
+  submit_paper_orders: true
+  paper_order_arming_mode: config_explicit
   poll_interval_seconds: 20
   order_status_poll_seconds: 10
   order_fill_timeout_seconds: 45
@@ -23,9 +24,9 @@ execution:
   stock_freshness_seconds: 180
   max_relative_spread: 0.35
   max_dte_days: 7
-  state_root: reports/multi_ticker_portfolio/state/multi_symbol_governed_realtime_20260506
-  run_root: reports/multi_ticker_portfolio/runs/multi_symbol_governed_realtime_20260506
-  task_name: Multi Symbol Governed Realtime Paper Trader 20260506
+  state_root: D:/codexalpaca_runtime/state/multi_symbol_governed_realtime_20260507
+  run_root: D:/codexalpaca_runtime/runs/multi_symbol_governed_realtime_20260507
+  task_name: Multi Symbol Governed Realtime Paper Trader 20260507 Armed
   allow_market_exit_fallback: true
   market_exit_fallback_minute: 385
   startup_lead_minutes: 10

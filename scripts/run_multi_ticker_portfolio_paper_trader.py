@@ -52,10 +52,14 @@ def parse_args() -> argparse.Namespace:
 
 
 def resolve_submit_paper_orders(args: argparse.Namespace, portfolio_config: object) -> bool:
-    del portfolio_config
     if args.no_submit_paper_orders or args.startup_preflight:
         return False
-    return bool(args.submit_paper_orders)
+    if args.submit_paper_orders:
+        return True
+    execution_config = getattr(portfolio_config, "execution", None)
+    if getattr(execution_config, "paper_order_arming_mode", "cli_flag_only") == "config_explicit":
+        return bool(getattr(execution_config, "submit_paper_orders", False))
+    return False
 
 
 def main() -> None:
