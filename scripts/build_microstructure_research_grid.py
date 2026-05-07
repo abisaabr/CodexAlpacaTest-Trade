@@ -16,7 +16,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--underlyings", default="QQQ,SPY,IWM")
     parser.add_argument(
         "--profile",
-        choices=("smoke", "liquid_exhaustive_v1"),
+        choices=("smoke", "liquid_exhaustive_v1", "rare_event_larger_move_v2"),
         default="liquid_exhaustive_v1",
     )
     parser.add_argument("--chunk-size", type=int, default=128)
@@ -61,7 +61,7 @@ def _grid(profile: str, underlyings: list[str]) -> list[dict[str, Any]]:
                 "max_review_avg_spread_cost_to_target": 0.45,
             },
         ]
-    else:
+    elif profile == "liquid_exhaustive_v1":
         signal_modes = [
             "option_momentum",
             "stock_impulse_option_confirm",
@@ -105,6 +105,43 @@ def _grid(profile: str, underlyings: list[str]) -> list[dict[str, Any]]:
                 "entry_fill_wait_seconds": 1.0,
                 "exit_fill_wait_seconds": 1.0,
                 "max_entry_chase_pct": 0.02,
+                "max_spread_cost_to_target": 0.35,
+                "max_review_avg_spread_cost_to_target": 0.30,
+            },
+        ]
+    else:
+        signal_modes = [
+            "stock_impulse_option_confirm",
+            "spread_compression_momentum",
+            "option_momentum",
+        ]
+        lookbacks = [5.0, 10.0, 20.0]
+        option_thresholds = [0.06, 0.10, 0.16]
+        stock_thresholds = [0.0005, 0.001, 0.0015]
+        targets = [0.12, 0.18, 0.25, 0.35]
+        stops = [0.035, 0.05, 0.075]
+        holds = [60.0, 120.0, 240.0, 360.0]
+        max_relative_spreads = [0.008, 0.012, 0.02]
+        max_quote_ages = [0.15, 0.30, 0.50]
+        trail_pairs = [(0.0, 0.0), (0.10, 0.04), (0.15, 0.06)]
+        execution_profiles = [
+            {
+                "execution_profile": "strict_latency_realistic",
+                "entry_latency_seconds": 0.50,
+                "exit_latency_seconds": 0.50,
+                "entry_fill_wait_seconds": 1.0,
+                "exit_fill_wait_seconds": 1.0,
+                "max_entry_chase_pct": 0.015,
+                "max_spread_cost_to_target": 0.25,
+                "max_review_avg_spread_cost_to_target": 0.20,
+            },
+            {
+                "execution_profile": "low_latency_realistic",
+                "entry_latency_seconds": 0.25,
+                "exit_latency_seconds": 0.25,
+                "entry_fill_wait_seconds": 0.75,
+                "exit_fill_wait_seconds": 0.75,
+                "max_entry_chase_pct": 0.025,
                 "max_spread_cost_to_target": 0.35,
                 "max_review_avg_spread_cost_to_target": 0.30,
             },

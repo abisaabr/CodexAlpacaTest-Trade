@@ -2,7 +2,7 @@ param(
     [string]$WaveId = "microstructure_event_replay_20260507T1435Z",
     [string]$EventsJsonlUri = "gs://codexalpaca-control-us/research_results/multi_symbol_governed_realtime_20260507/microstructure_shadow_stream_fastwriter_20260507T1340ET/microstructure_shadow_stream_fastwriter_20260507T1340ET/realtime_shadow_events.jsonl",
     [string]$Underlyings = "QQQ,SPY,IWM",
-    [ValidateSet("smoke", "liquid_exhaustive_v1")]
+    [ValidateSet("smoke", "liquid_exhaustive_v1", "rare_event_larger_move_v2")]
     [string]$Profile = "liquid_exhaustive_v1",
     [string]$InstanceSuffix = "20260507m1",
     [int]$ChunkSize = 128,
