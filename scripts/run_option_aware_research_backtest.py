@@ -18,6 +18,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from alpaca_lab.backtest.engine import FixedFractionSizer, LinearCostModel, run_backtest
+from alpaca_lab.qqq_portfolio.greeks import bs_greeks, implied_volatility
 from scripts.run_gcp_research_wave import (
     _variant_stock_strategy,
     load_variants,
@@ -48,6 +49,7 @@ DEFAULT_OPTION_DATA_ROOT = (
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "reports" / "research_wave" / "option_aware_backtests"
 CONTRACT_SELECTION_NEAREST = "nearest_contract"
 CONTRACT_SELECTION_LIQUIDITY_FIRST = "entry_liquidity_first_research_only"
+CONTRACT_SELECTION_DELTA_TARGET = "entry_delta_target_research_only"
 ENTRY_LOOKUP_AT_OR_AFTER = "first_bar_at_or_after_entry_within_lag"
 ENTRY_LOOKUP_AT_OR_AFTER_OR_ASOF = "first_bar_at_or_after_or_asof_entry_within_lag"
 EXIT_LOOKUP_AT_OR_AFTER = "first_bar_at_or_after_exit_within_lag"
@@ -181,11 +183,16 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--contract-selection-method",
-        choices=[CONTRACT_SELECTION_NEAREST, CONTRACT_SELECTION_LIQUIDITY_FIRST],
+        choices=[
+            CONTRACT_SELECTION_NEAREST,
+            CONTRACT_SELECTION_LIQUIDITY_FIRST,
+            CONTRACT_SELECTION_DELTA_TARGET,
+        ],
         default=CONTRACT_SELECTION_NEAREST,
         help=(
             "Research-only contract selector. The default preserves the nearest-contract "
-            "path; liquidity-first only uses entry-window information and is not broker-facing."
+            "path; liquidity-first and delta-target only use entry-window information "
+            "and are not broker-facing."
         ),
     )
     return parser.parse_args()
@@ -528,6 +535,100 @@ def _choose_entry_liquidity_first_contract(
     return contract, entry_bar, "selected"
 
 
+def _choose_entry_delta_target_contract(
+    *,
+    contracts: pd.DataFrame,
+    option_bars: pd.DataFrame,
+    option_trades: pd.DataFrame,
+    option_index: OptionResearchIndex | None = None,
+    symbol: str,
+    option_type: str,
+    trade_date: Any,
+    entry_time: pd.Timestamp,
+    max_lag: timedelta,
+    entry_lookup_mode: str,
+    max_entry_staleness: timedelta,
+    entry_spot: float | None,
+    parameters: dict[str, Any],
+    dte_mode: str | None = None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str]:
+    frame = (
+        _candidate_contracts_from_index(
+            option_index=option_index,
+            symbol=symbol,
+            option_type=option_type,
+            trade_date=trade_date,
+        )
+        if option_index
+        else _candidate_contracts(
+            contracts=contracts,
+            symbol=symbol,
+            option_type=option_type,
+            trade_date=trade_date,
+        )
+    )
+    frame = _filter_contracts_for_dte_mode(frame, dte_mode)
+    if frame.empty:
+        return None, None, "no_selected_contract"
+
+    default_target = -0.55 if option_type.lower() == "put" else 0.55
+    target_delta = _float_parameter(parameters, "target_delta", default_target)
+    min_abs_delta = _float_parameter(parameters, "min_abs_delta", 0.05)
+    max_abs_delta = _float_parameter(parameters, "max_abs_delta", 0.95)
+    choices: list[tuple[tuple[float, ...], str, dict[str, Any], dict[str, Any]]] = []
+    saw_entry_bar = False
+    saw_greek_snapshot = False
+    for contract in frame.to_dict("records"):
+        contract_symbol = str(contract["symbol"])
+        entry_bar = _entry_option_bar(
+            option_bars=option_bars,
+            option_index=option_index,
+            contract_symbol=contract_symbol,
+            timestamp=entry_time,
+            max_lag=max_lag,
+            lookup_mode=entry_lookup_mode,
+            max_staleness=max_entry_staleness,
+        )
+        if not entry_bar:
+            continue
+        saw_entry_bar = True
+        greek_snapshot = _entry_bar_greek_snapshot(
+            contract=contract,
+            entry_bar=entry_bar,
+            entry_spot=entry_spot,
+        )
+        if greek_snapshot is None:
+            continue
+        saw_greek_snapshot = True
+        delta = float(greek_snapshot["entry_delta"])
+        if abs(delta) < min_abs_delta or abs(delta) > max_abs_delta:
+            continue
+        prints = _trade_print_count(
+            option_trades=option_trades,
+            option_index=option_index,
+            contract_symbol=contract_symbol,
+            start=entry_time,
+            end=entry_time + max_lag,
+        )
+        volume = float(entry_bar.get("volume") or 0.0)
+        abs_step = abs(float(contract.get("relative_strike_step") or 0.0))
+        dte = float(contract.get("dte") or 999.0)
+        greek_contract = {**contract, **greek_snapshot}
+        # No future bars are used here: the selector ranks only entry-window Greeks and liquidity.
+        rank_key = (abs(delta - target_delta), -float(prints), -volume, abs_step, dte)
+        choices.append((rank_key, contract_symbol, greek_contract, entry_bar))
+
+    if not choices:
+        if saw_greek_snapshot:
+            return None, None, "no_selected_contract"
+        if saw_entry_bar:
+            return None, None, "no_greek_snapshot"
+        return None, None, "no_entry_bar"
+    choices.sort(key=lambda item: (item[0], item[1]))
+    _, _, contract, entry_bar = choices[0]
+    return contract, entry_bar, "selected"
+
+
 def _variant_parameters(queue_item: dict[str, Any], variant: dict[str, Any]) -> dict[str, Any]:
     value = queue_item.get("parameter_set") or variant.get("parameters") or {}
     if isinstance(value, str):
@@ -584,6 +685,91 @@ def _contract_strike(contract: dict[str, Any]) -> float:
     return float(value)
 
 
+def _bar_mark_price(bar: dict[str, Any]) -> float | None:
+    for key in ("close", "vwap", "open"):
+        value = bar.get(key)
+        if value not in (None, ""):
+            try:
+                price = float(value)
+            except (TypeError, ValueError):
+                continue
+            if price > 0.0:
+                return price
+    return None
+
+
+def _contract_expiration_date(contract: dict[str, Any]) -> Any | None:
+    for key in ("expiration_date", "expiration", "expiry"):
+        value = contract.get(key)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _years_to_option_expiry(contract: dict[str, Any], timestamp: pd.Timestamp) -> float:
+    expiration_value = _contract_expiration_date(contract)
+    if expiration_value is None:
+        dte_value = contract.get("dte")
+        try:
+            return max(float(dte_value), 1.0 / (24.0 * 60.0)) / 365.0
+        except (TypeError, ValueError):
+            return 1.0 / (365.0 * 24.0)
+    expiration_date = pd.Timestamp(expiration_value).date()
+    expiry_et = pd.Timestamp(datetime.combine(expiration_date, time(16, 0))).tz_localize(
+        OPTION_SESSION_TIMEZONE
+    )
+    ts = pd.Timestamp(timestamp)
+    if ts.tzinfo is None:
+        ts = ts.tz_localize("UTC")
+    else:
+        ts = ts.tz_convert("UTC")
+    seconds = max(60.0, (expiry_et.tz_convert("UTC") - ts).total_seconds())
+    return seconds / (365.0 * 24.0 * 3600.0)
+
+
+def _entry_bar_greek_snapshot(
+    *,
+    contract: dict[str, Any],
+    entry_bar: dict[str, Any],
+    entry_spot: float | None,
+) -> dict[str, float] | None:
+    if entry_spot is None or entry_spot <= 0.0:
+        return None
+    market_price = _bar_mark_price(entry_bar)
+    if market_price is None:
+        return None
+    option_type = str(contract.get("option_type") or "").lower()
+    if option_type not in {"call", "put"}:
+        return None
+    strike = _contract_strike(contract)
+    years = _years_to_option_expiry(contract, pd.Timestamp(entry_bar["timestamp"]))
+    iv = implied_volatility(
+        spot=float(entry_spot),
+        strike=strike,
+        years=years,
+        market_price=market_price,
+        option_type=option_type,
+    )
+    if iv is None:
+        return None
+    greeks = bs_greeks(
+        spot=float(entry_spot),
+        strike=strike,
+        years=years,
+        sigma=iv,
+        option_type=option_type,
+    )
+    return {
+        "entry_implied_vol": float(iv),
+        "entry_delta": float(greeks["delta"]),
+        "entry_gamma": float(greeks["gamma"]),
+        "entry_theta": float(greeks["theta"]),
+        "entry_vega": float(greeks["vega"]),
+        "entry_greek_spot": float(entry_spot),
+        "entry_greek_years": float(years),
+    }
+
+
 def _contract_entry_bar(
     *,
     contract: dict[str, Any],
@@ -619,6 +805,8 @@ def _select_contract_with_entry(
     entry_lookup_mode: str,
     max_entry_staleness: timedelta,
     contract_selection_method: str,
+    entry_spot: float | None = None,
+    parameters: dict[str, Any] | None = None,
     dte_mode: str | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str]:
     if contract_selection_method == CONTRACT_SELECTION_LIQUIDITY_FIRST:
@@ -634,6 +822,23 @@ def _select_contract_with_entry(
             max_lag=max_lag,
             entry_lookup_mode=entry_lookup_mode,
             max_entry_staleness=max_entry_staleness,
+            dte_mode=dte_mode,
+        )
+    if contract_selection_method == CONTRACT_SELECTION_DELTA_TARGET:
+        return _choose_entry_delta_target_contract(
+            contracts=contracts,
+            option_bars=option_bars,
+            option_trades=option_trades,
+            option_index=option_index,
+            symbol=symbol,
+            option_type=option_type,
+            trade_date=trade_date,
+            entry_time=entry_time,
+            max_lag=max_lag,
+            entry_lookup_mode=entry_lookup_mode,
+            max_entry_staleness=max_entry_staleness,
+            entry_spot=entry_spot,
+            parameters=parameters or {},
             dte_mode=dte_mode,
         )
 
@@ -809,6 +1014,7 @@ def _option_structure_legs(
     entry_lookup_mode: str,
     max_entry_staleness: timedelta,
     contract_selection_method: str,
+    entry_spot: float | None = None,
 ) -> tuple[list[dict[str, Any]], str, str]:
     family = _option_structure_family(queue_item, variant)
     parameters = _variant_parameters(queue_item, variant)
@@ -832,6 +1038,8 @@ def _option_structure_legs(
             entry_lookup_mode=entry_lookup_mode,
             max_entry_staleness=max_entry_staleness,
             contract_selection_method=contract_selection_method,
+            entry_spot=entry_spot,
+            parameters=parameters,
             dte_mode=dte_mode,
         )
 
@@ -1804,6 +2012,7 @@ def _fill_failure_reason(summary: dict[str, Any]) -> str:
         "selected_contract_universe_gap": int(summary.get("missing_no_selected_contract") or 0),
         "entry_bar_gap_or_entry_timing_mismatch": int(summary.get("missing_no_entry_bar") or 0),
         "exit_bar_gap_or_exit_policy_mismatch": int(summary.get("missing_no_exit_bar") or 0),
+        "greek_snapshot_unavailable": int(summary.get("missing_no_greek_snapshot") or 0),
         "position_sizing_too_expensive": int(summary.get("missing_too_expensive") or 0),
     }
     if filled == 0 and not any(missing.values()):
@@ -1850,6 +2059,7 @@ def _option_rows_for_candidate(
         "no_exit_bar": 0,
         "too_expensive": 0,
         "unsupported_option_structure": 0,
+        "no_greek_snapshot": 0,
     }
     option_type = str(queue_item.get("directional_option_type") or "").lower()
     symbol = str(queue_item.get("symbol") or "").upper()
@@ -1905,6 +2115,11 @@ def _option_rows_for_candidate(
         entry_time = pd.Timestamp(trade["entry_time"])
         exit_time = pd.Timestamp(trade["exit_time"])
         trade_date = entry_time.date()
+        entry_spot = None
+        try:
+            entry_spot = float(trade.get("entry_price"))
+        except (TypeError, ValueError):
+            entry_spot = None
         legs, option_structure, status = _option_structure_legs(
             queue_item=queue_item,
             variant=variant,
@@ -1919,6 +2134,7 @@ def _option_rows_for_candidate(
             entry_lookup_mode=entry_lookup_mode,
             max_entry_staleness=max_entry_staleness,
             contract_selection_method=contract_selection_method,
+            entry_spot=entry_spot,
         )
         if status != "selected" or not legs:
             missing_counts[status] = missing_counts.get(status, 0) + 1
@@ -2027,6 +2243,12 @@ def _option_rows_for_candidate(
                     "exit_time": str(exit_bar["timestamp"]),
                     "relative_strike_step": leg_item["contract"].get("relative_strike_step"),
                     "dte": leg_item["contract"].get("dte"),
+                    "entry_delta": leg_item["contract"].get("entry_delta"),
+                    "entry_gamma": leg_item["contract"].get("entry_gamma"),
+                    "entry_theta": leg_item["contract"].get("entry_theta"),
+                    "entry_vega": leg_item["contract"].get("entry_vega"),
+                    "entry_implied_vol": leg_item["contract"].get("entry_implied_vol"),
+                    "entry_greek_spot": leg_item["contract"].get("entry_greek_spot"),
                 }
             )
         fees = fee_per_contract * quantity * 2.0 * total_contract_units
@@ -2068,6 +2290,13 @@ def _option_rows_for_candidate(
                 "contract_relative_strike_step": ";".join(
                     str(item["relative_strike_step"]) for item in leg_details
                 ),
+                "entry_delta": primary_leg.get("entry_delta"),
+                "entry_gamma": primary_leg.get("entry_gamma"),
+                "entry_theta": primary_leg.get("entry_theta"),
+                "entry_vega": primary_leg.get("entry_vega"),
+                "entry_implied_vol": primary_leg.get("entry_implied_vol"),
+                "entry_greek_spot": primary_leg.get("entry_greek_spot"),
+                "target_delta": parameters.get("target_delta"),
                 "entry_selection_trade_print_count": sum(
                     _trade_print_count(
                         option_trades=option_trades,
@@ -2279,7 +2508,12 @@ def build_option_aware_backtest(
             source_trade_count - int(missing_counts.get("no_selected_contract", 0)),
             0,
         )
-        entry_fill_count = max(selected_count - int(missing_counts.get("no_entry_bar", 0)), 0)
+        entry_fill_count = max(
+            selected_count
+            - int(missing_counts.get("no_entry_bar", 0))
+            - int(missing_counts.get("no_greek_snapshot", 0)),
+            0,
+        )
         filled_order_count = len(rows)
         strategy_fill_coverage = (
             round(filled_order_count / source_trade_count, 4) if source_trade_count else 0.0
@@ -2316,6 +2550,7 @@ def build_option_aware_backtest(
             "missing_unsupported_option_structure": int(
                 missing_counts.get("unsupported_option_structure", 0)
             ),
+            "missing_no_greek_snapshot": int(missing_counts.get("no_greek_snapshot", 0)),
             "intended_order_count": source_trade_count,
             "filled_order_count": filled_order_count,
             "skipped_order_count": missing_price_count,
@@ -2348,7 +2583,8 @@ def build_option_aware_backtest(
             "test_date_count": int(test_date_count),
             "contract_selection_lookahead": (
                 "entry_window_only"
-                if contract_selection_method == CONTRACT_SELECTION_LIQUIDITY_FIRST
+                if contract_selection_method
+                in {CONTRACT_SELECTION_LIQUIDITY_FIRST, CONTRACT_SELECTION_DELTA_TARGET}
                 else "none"
             ),
         }
