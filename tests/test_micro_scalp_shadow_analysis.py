@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from scripts.analyze_micro_scalp_shadow import QuotePoint, simulate_symbol
+from pathlib import Path
+
+from scripts.analyze_micro_scalp_shadow import QuotePoint, load_option_quotes, parse_underlyings, simulate_symbol
 from scripts.analyze_micro_scalp_signal_grid import GridSpec, simulate_contract
 
 
@@ -74,3 +76,22 @@ def test_micro_scalp_signal_grid_is_causal_and_non_overlapping() -> None:
     assert trades[0]["exit_reason"] == "target"
     assert trades[0]["entry_time_utc"].startswith("1970-01-01T00:00:01")
     assert trades[0]["net_pnl_per_contract"] == 0.7
+
+
+def test_load_option_quotes_can_filter_underlyings(tmp_path: Path) -> None:
+    events = tmp_path / "events.jsonl"
+    events.write_text(
+        "\n".join(
+            [
+                '{"event_type":"option_quote","observed_at_utc":"2026-05-07T14:00:00Z","payload":{"symbol":"QQQ260508C00690000","timestamp":"2026-05-07T14:00:00Z","bid_price":1.0,"ask_price":1.02,"bid_size":1,"ask_size":1}}',
+                '{"event_type":"option_quote","observed_at_utc":"2026-05-07T14:00:00Z","payload":{"symbol":"SPY260508C00600000","timestamp":"2026-05-07T14:00:00Z","bid_price":1.0,"ask_price":1.02,"bid_size":1,"ask_size":1}}',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    quotes, stats = load_option_quotes(events, underlyings=parse_underlyings("QQQ"))
+
+    assert list(quotes) == ["QQQ260508C00690000"]
+    assert stats["accepted_quote_count"] == 1
+    assert stats["filtered_quote_count"] == 1

@@ -45,6 +45,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-quote-size", type=float, default=1.0)
     parser.add_argument("--fee-per-contract", type=float, default=0.65)
     parser.add_argument("--top-n", type=int, default=50)
+    parser.add_argument(
+        "--underlyings",
+        default="",
+        help="Optional comma-separated underlying filter, for example QQQ,SPY,IWM.",
+    )
     return parser.parse_args()
 
 
@@ -73,13 +78,23 @@ def _safe_float(value: Any) -> float:
     return result if math.isfinite(result) else math.nan
 
 
-def load_option_quotes(path: Path) -> tuple[dict[str, list[QuotePoint]], dict[str, Any]]:
+def parse_underlyings(value: str) -> set[str]:
+    return {item.strip().upper() for item in value.split(",") if item.strip()}
+
+
+def load_option_quotes(
+    path: Path,
+    *,
+    underlyings: set[str] | None = None,
+) -> tuple[dict[str, list[QuotePoint]], dict[str, Any]]:
     quotes: dict[str, list[QuotePoint]] = defaultdict(list)
     stats: dict[str, Any] = {
         "event_count": 0,
         "option_quote_event_count": 0,
         "accepted_quote_count": 0,
         "rejected_quote_count": 0,
+        "filtered_quote_count": 0,
+        "underlying_filter": sorted(underlyings) if underlyings else [],
         "first_observed_at_utc": None,
         "last_observed_at_utc": None,
     }
@@ -98,6 +113,9 @@ def load_option_quotes(path: Path) -> tuple[dict[str, list[QuotePoint]], dict[st
             stats["option_quote_event_count"] += 1
             payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
             symbol = str(payload.get("symbol") or "").upper()
+            if underlyings and _underlying_from_option_symbol(symbol) not in underlyings:
+                stats["filtered_quote_count"] += 1
+                continue
             observed_epoch = _parse_ts(event.get("observed_at_utc"))
             quote_epoch = _parse_ts(payload.get("timestamp"))
             if not symbol or observed_epoch is None or quote_epoch is None:
@@ -255,7 +273,8 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    quotes, ingest_stats = load_option_quotes(events_path)
+    underlyings = parse_underlyings(args.underlyings)
+    quotes, ingest_stats = load_option_quotes(events_path, underlyings=underlyings or None)
     all_opportunities: list[dict[str, Any]] = []
     symbol_summaries: list[dict[str, Any]] = []
     for symbol, points in quotes.items():
@@ -326,6 +345,7 @@ def main() -> None:
             "max_absolute_spread": args.max_absolute_spread,
             "min_quote_size": args.min_quote_size,
             "fee_per_contract": args.fee_per_contract,
+            "underlyings": sorted(underlyings),
         },
         "ingest_stats": ingest_stats,
         "contract_count": len(quotes),

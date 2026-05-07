@@ -19,6 +19,7 @@ from scripts.analyze_micro_scalp_shadow import (
     QuotePoint,
     _underlying_from_option_symbol,
     load_option_quotes,
+    parse_underlyings,
 )
 
 
@@ -52,6 +53,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-quote-size", type=float, default=1.0)
     parser.add_argument("--fee-per-contract", type=float, default=0.65)
     parser.add_argument("--max-contracts", type=int, default=0)
+    parser.add_argument(
+        "--underlyings",
+        default="",
+        help="Optional comma-separated underlying filter, for example QQQ,SPY,IWM.",
+    )
     return parser.parse_args()
 
 
@@ -247,7 +253,8 @@ def main() -> None:
     args = parse_args()
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    quotes, ingest_stats = load_option_quotes(Path(args.events_jsonl))
+    underlyings = parse_underlyings(args.underlyings)
+    quotes, ingest_stats = load_option_quotes(Path(args.events_jsonl), underlyings=underlyings or None)
     if args.max_contracts > 0:
         ranked = sorted(quotes.items(), key=lambda item: len(item[1]), reverse=True)[: args.max_contracts]
         quotes = dict(ranked)
@@ -279,6 +286,21 @@ def main() -> None:
         "input_events_jsonl": args.events_jsonl,
         "research_only": True,
         "execution_assumption": "causal_momentum_buy_ask_exit_bid",
+        "parameters": {
+            "lookbacks": args.lookbacks,
+            "momentum_thresholds": args.momentum_thresholds,
+            "targets": args.targets,
+            "stops": args.stops,
+            "max_holds": args.max_holds,
+            "min_premium": args.min_premium,
+            "max_premium": args.max_premium,
+            "max_relative_spread": args.max_relative_spread,
+            "max_absolute_spread": args.max_absolute_spread,
+            "min_quote_size": args.min_quote_size,
+            "fee_per_contract": args.fee_per_contract,
+            "max_contracts": args.max_contracts,
+            "underlyings": sorted(underlyings),
+        },
         "ingest_stats": ingest_stats,
         "contract_count": len(quotes),
         "grid_count": len(specs),

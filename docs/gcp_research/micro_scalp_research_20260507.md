@@ -29,6 +29,7 @@ Research outputs:
 ```text
 reports\gcp_research\micro_scalp_shadow_20260507T1410ET\
 reports\gcp_research\micro_scalp_signal_grid_compact_20260507T1422ET\
+reports\gcp_research\micro_scalp_signal_grid_liquid_targets_20260507T1430ET\
 ```
 
 GCS mirrors:
@@ -36,6 +37,7 @@ GCS mirrors:
 ```text
 gs://codexalpaca-control-us/research_results/multi_symbol_governed_realtime_20260507/micro_scalp_shadow_20260507T1410ET/
 gs://codexalpaca-control-us/research_results/multi_symbol_governed_realtime_20260507/micro_scalp_signal_grid_compact_20260507T1422ET/
+gs://codexalpaca-control-us/research_results/multi_symbol_governed_realtime_20260507/micro_scalp_signal_grid_liquid_targets_20260507T1430ET/
 gs://codexalpaca-control-us/gcp_research/micro_scalp_research_20260507.md
 ```
 
@@ -62,7 +64,7 @@ python -m pytest tests\test_micro_scalp_shadow_analysis.py tests\test_option_bac
 python -m py_compile scripts\analyze_micro_scalp_shadow.py scripts\analyze_micro_scalp_signal_grid.py
 ```
 
-Result: `5 passed`; both analyzers compile.
+Result: `6 passed`; both analyzers compile.
 
 ## Blind 1% Scout
 
@@ -131,6 +133,46 @@ Best compact grid:
 - Total net PnL: -82,736.8
 
 Interpretation: even with causal quote momentum, short-horizon option scalping loses under taker economics in this sample.
+
+## Liquid 2-5% Target Grid
+
+Command:
+
+```powershell
+python scripts\analyze_micro_scalp_signal_grid.py `
+  --events-jsonl D:\codexalpaca_runtime\runs\microstructure_shadow_stream_fastwriter_20260507T1340ET\realtime_shadow_events.jsonl `
+  --output-dir reports\gcp_research\micro_scalp_signal_grid_liquid_targets_20260507T1430ET `
+  --underlyings QQQ,SPY,IWM `
+  --lookbacks 1,3,5,10 `
+  --momentum-thresholds 0.01,0.015,0.02,0.03 `
+  --targets 0.02,0.03,0.05 `
+  --stops 0.01,0.015,0.02 `
+  --max-holds 15,30,60 `
+  --min-premium 0.15 `
+  --max-premium 12 `
+  --max-relative-spread 0.04 `
+  --max-absolute-spread 0.20 `
+  --min-quote-size 1 `
+  --fee-per-contract 0.65 `
+  --max-contracts 120
+```
+
+Best liquid-target grid:
+
+- Underlyings: QQQ, SPY, IWM
+- Contracts analyzed: 120
+- Grid count: 432
+- Lookback: 1 second
+- Momentum threshold: 3%
+- Target: 2%
+- Stop: 2%
+- Max hold: 15 seconds
+- Trades: 3,531
+- Average net PnL per contract: -2.4396
+- Total net PnL: -8,614.3
+- Win rate: 0.1982%
+
+Interpretation: widening the target to 2-5% and restricting to liquid underlyings still did not overcome taker spread and fees in this sample.
 
 ## What This Means
 
