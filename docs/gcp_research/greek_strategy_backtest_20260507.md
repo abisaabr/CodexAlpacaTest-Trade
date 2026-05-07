@@ -155,6 +155,21 @@ No new PAPER activation is authorized. Continue scanning remaining expanded tran
 
 Eighth-tranche workers `c449-512` are now running under suffix `20260507gx8`.
 
+Eighth-tranche `c449-512` completed for QQQ, SPY, and IWM with `runtime_parity_mode=paper_snapshot_greeks`. All three per-worker packets were `research_only_blocked` with 0 review candidates and the full blocker stack across fill coverage, trade count, full-period PnL, and test PnL.
+
+Partial aggregate `aggregate_partial_20260507T014241` covers completed expanded workers through `c449-512`:
+
+- GCS: `gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_partial_20260507T014241/`
+- Candidate profiles aggregated: 4,608
+- Portfolio-gate eligible profiles: 80
+- Promotion packet decision: `research_only_blocked_regime_incomplete`
+- Review candidates in packet: 20
+- Lead cluster remains bull-only; `c449-512` added no new review candidates.
+
+No new PAPER activation is authorized.
+
+Ninth-tranche workers `c513-576` are now running under suffix `20260507gx9`.
+
 ## Commands
 
 Prepare-only smoke:
