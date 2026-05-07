@@ -82,6 +82,25 @@ Partial aggregate `aggregate_partial_20260506T224725` covers expanded workers th
 
 Fourth-tranche workers `c193-256` were launched after this aggregate with source commit `f8a9c20`.
 
+Fourth-tranche `c193-256` completed for QQQ, SPY, and IWM with `runtime_parity_mode=paper_snapshot_greeks`. Per-worker packets remain `research_only_blocked_regime_incomplete`, but the tranche materially increased the number of bull leads:
+
+- QQQ `c193-256`: 4 review candidates inside a blocked/regime-incomplete packet.
+- SPY `c193-256`: 2 review candidates inside a blocked/regime-incomplete packet.
+- IWM `c193-256`: 13 review candidates inside a blocked/regime-incomplete packet.
+
+Partial aggregate `aggregate_partial_20260506T232205` covers expanded workers through `c193-256`:
+
+- GCS: `gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_partial_20260506T232205/`
+- Candidate profiles aggregated: 2,304
+- Portfolio-gate eligible profiles: 54
+- Promotion packet decision: `research_only_blocked_regime_incomplete`
+- Review candidates in packet: 19
+- Lead cluster: bull-only QQQ/IWM single-leg repair plus IWM bull-put credit-spread variants.
+
+The generated packet still does not authorize PAPER activation. A no-required-regime aggregate attempt at `aggregate_bull_only_review_20260506T232349` also remained `research_only_blocked_regime_incomplete` because the packet builder's current governed completeness rule still requires bull, bear, and choppy eligible regimes. Do not bypass this by manually editing manifests.
+
+Fifth-tranche workers `c257-320` are now running under suffix `20260507gx5`.
+
 ## Commands
 
 Prepare-only smoke:
