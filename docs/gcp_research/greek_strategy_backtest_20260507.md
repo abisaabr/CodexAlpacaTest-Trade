@@ -190,6 +190,26 @@ This is material progress, but no new PAPER activation is authorized until the g
 
 Tenth-tranche workers `c577-640` are now running under suffix `20260507gx10`.
 
+Tenth-tranche `c577-640` completed for QQQ, SPY, and IWM with `runtime_parity_mode=paper_snapshot_greeks`:
+
+- QQQ `c577-640`: `research_only_blocked_regime_incomplete`, 1 review candidate.
+- SPY `c577-640`: `research_only_blocked_regime_incomplete`, 2 review candidates.
+- IWM `c577-640`: `research_only_blocked_regime_incomplete`, 5 review candidates.
+
+Partial aggregate `aggregate_partial_20260507T025506` covers completed expanded workers through `c577-640`:
+
+- GCS: `gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_partial_20260507T025506/`
+- Candidate profiles aggregated: 5,760
+- Portfolio-gate eligible profiles: 101
+- Promotion packet decision: `research_only_blocked_regime_incomplete`
+- Review candidates in packet: 20
+- Eligible regimes remain bull and bear; choppy remains missing.
+- Bear stack improved: IWM `debit_put_vertical` has two strong profiles, and SPY `broken_wing_put_butterfly` joined the bear lead set.
+
+No new PAPER activation is authorized until eligible choppy coverage is found or a separate governed packet explicitly narrows scope.
+
+Eleventh-tranche workers `c641-704` are now running under suffix `20260507gx11`.
+
 ## Commands
 
 Prepare-only smoke:
