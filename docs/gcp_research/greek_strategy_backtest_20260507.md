@@ -228,7 +228,27 @@ Partial aggregate `aggregate_partial_20260507T033134` covers completed expanded 
 
 No new PAPER activation is authorized until eligible choppy coverage is found or a separate governed packet explicitly narrows scope.
 
-Final expanded-tranche workers `c705-768` are now running under suffix `20260507gx12`.
+Final expanded-tranche workers `c705-768` completed under suffix `20260507gx12`:
+
+- QQQ `c705-768`: `research_only_blocked`, 0 review candidates.
+- SPY `c705-768`: `research_only_blocked`, 0 review candidates.
+- IWM `c705-768`: `research_only_blocked_regime_incomplete`, 1 bear review candidate.
+
+The terminated final-tranche research VMs were deleted after their GCS artifacts were present.
+
+Final strict aggregate `aggregate_final_20260507T054014` covers all expanded workers through `c705-768`:
+
+- GCS: `gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/`
+- Candidate profiles aggregated: 6,848
+- Portfolio-gate eligible profiles: 116
+- Promotion packet decision: `research_only_blocked_regime_incomplete`
+- Review candidates in packet: 20
+- Eligible regimes: bull and bear only; choppy remains missing.
+- Review candidate split: bear 11, bull 9.
+- Top bear lead remains IWM `debit_put_vertical` with `min_net_pnl=27341.452`, `min_test_net_pnl=7015.793`, `min_fill_coverage=0.9086`, and `min_option_trade_count=179`.
+- Top bull lead remains QQQ `single_leg_repair` with `min_net_pnl=3576.51`, `min_test_net_pnl=2358.271`, `min_fill_coverage=0.9487`, and `min_option_trade_count=185`.
+
+Final decision: this Greek/realtime-parity wave produced strong bull and bear governed-review leads, but it did not produce a complete bull/bear/choppy packet. No new Greek strategy is authorized for PAPER activation from this packet.
 
 ## Commands
 
