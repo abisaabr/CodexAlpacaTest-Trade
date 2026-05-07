@@ -4046,3 +4046,128 @@ def test_finalize_session_writes_broker_activity_audit_outputs(tmp_path: Path, m
         / "2026-04-15"
         / "multi_ticker_portfolio_session_summary_broker_account_activities.csv"
     ).exists()
+
+
+def test_wait_for_terminal_order_survives_transient_poll_failure(tmp_path: Path) -> None:
+    class _LoggerStub:
+        def __init__(self) -> None:
+            self.warnings: list[tuple[object, ...]] = []
+
+        def warning(self, *args, **_kwargs) -> None:
+            self.warnings.append(args)
+
+    class _BrokerStub:
+        def __init__(self) -> None:
+            self.poll_count = 0
+
+        def get_order(self, order_id: str) -> dict[str, object]:
+            self.poll_count += 1
+            if self.poll_count == 1:
+                raise OSError("temporary dns failure")
+            return {
+                "id": order_id,
+                "status": "filled",
+                "qty": "1",
+                "filled_qty": "1",
+                "filled_avg_price": "1.23",
+            }
+
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={
+                    "run_root": tmp_path / "runs",
+                    "state_root": tmp_path / "state",
+                    "order_fill_timeout_seconds": 1,
+                    "order_status_poll_seconds": 0,
+                }
+            )
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.state_root = tmp_path / "state"
+    trader.broker = _BrokerStub()
+    trader.logger = _LoggerStub()
+    heartbeats: list[str] = []
+    trader._heartbeat_runtime_ownership = lambda *, context: heartbeats.append(context)  # type: ignore[method-assign]
+    session = SessionState(trade_date="2026-05-07", starting_equity=25_000.0, virtual_cash=25_000.0)
+
+    terminal = trader._wait_for_terminal_order("order-1", session=session)
+
+    assert terminal["status"] == "filled"
+    assert terminal["order_status_poll_error_count"] == 1
+    assert trader.broker.poll_count == 2
+    assert heartbeats == ["order_wait:order-1"]
+    assert (tmp_path / "state" / "session_2026-05-07.json").exists()
+    assert trader.logger.warnings
+
+
+def test_execute_attempts_records_cancel_failure_without_crashing(tmp_path: Path) -> None:
+    class _LoggerStub:
+        def __init__(self) -> None:
+            self.warnings: list[tuple[object, ...]] = []
+
+        def warning(self, *args, **_kwargs) -> None:
+            self.warnings.append(args)
+
+    class _BrokerStub:
+        def __init__(self) -> None:
+            self.cancel_count = 0
+
+        def submit_order(self, request: OrderRequest, **_kwargs) -> dict[str, object]:
+            return {"id": "open-order-1", "status": "accepted", "client_order_id": request.client_order_id}
+
+        def get_order(self, order_id: str) -> dict[str, object]:
+            return {"id": order_id, "status": "new", "qty": "1", "filled_qty": "0"}
+
+        def cancel_order(self, *_args, **_kwargs) -> dict[str, object]:
+            self.cancel_count += 1
+            raise OSError("temporary cancel outage")
+
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={
+                    "run_root": tmp_path / "runs",
+                    "state_root": tmp_path / "state",
+                    "order_fill_timeout_seconds": 0,
+                    "order_status_poll_seconds": 0,
+                }
+            )
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.run_root = tmp_path / "runs"
+    trader.broker = _BrokerStub()
+    trader.logger = _LoggerStub()
+    trader.submit_paper_orders = True
+    trade = OpenTrade(**_sample_open_trade(strategy_name="qqq_test", underlying_symbol="QQQ"))
+    request = OrderRequest(
+        symbol="QQQ260417C00600000",
+        side="sell",
+        strategy_name="qqq_test_exit",
+        asset_class="option",
+        qty=1,
+        order_type="limit",
+        time_in_force="day",
+        limit_price=1.0,
+        client_order_id="order-client-id",
+        extra={"position_intent": "sell_to_close"},
+    )
+
+    terminal, fill_price = trader._execute_attempts(
+        [request],
+        journal_name="test_orders",
+        trade=trade,
+        phase="exit",
+    )
+
+    assert terminal == {"status": "not_filled"}
+    assert fill_price == 0.0
+    assert trader.broker.cancel_count == 1
+    events = json.loads((tmp_path / "runs" / "2026-04-15" / "trade_reconciliation_events.json").read_text())
+    cancel_events = [event for event in events if event["event_type"] == "order_cancel"]
+    assert cancel_events[0]["cancel_requested"] is False
+    assert trader.logger.warnings

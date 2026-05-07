@@ -2029,15 +2029,85 @@ class MultiTickerPortfolioPaperTrader:
         trimmed = request.client_order_id[: max(1, max_length - len(suffix))]
         return replace(request, client_order_id=f"{trimmed}{suffix}")
 
-    def _wait_for_terminal_order(self, order_id: str) -> dict[str, Any]:
+    def _heartbeat_runtime_ownership(self, *, context: str) -> None:
+        try:
+            status = self.acquire_runtime_ownership(role="portfolio_trader")
+        except Exception as exc:  # noqa: BLE001
+            self.logger.warning("runtime ownership heartbeat failed during %s: %s", context, exc)
+            return
+        if status.blocked:
+            self.logger.error(
+                "runtime ownership blocked during %s by owner=%s label=%s expires_at=%s",
+                context,
+                status.blocked_by_owner_id,
+                status.blocked_by_owner_label,
+                status.expires_at,
+            )
+
+    def _get_order_status_or_last(
+        self,
+        order_id: str,
+        *,
+        last: dict[str, Any] | None,
+        poll_error_count: int,
+        context: str,
+    ) -> tuple[dict[str, Any], int]:
+        try:
+            payload = self.broker.get_order(order_id)
+        except Exception as exc:  # noqa: BLE001
+            poll_error_count += 1
+            self.logger.warning("order status poll failed during %s for %s: %s", context, order_id, exc)
+            fallback = dict(last or {})
+            fallback.setdefault("id", order_id)
+            if not fallback.get("status"):
+                # Treat unknown order state as still cancelable at timeout. A stale open
+                # order is more dangerous than a failed cancel request against a filled one.
+                fallback["status"] = "new"
+            fallback["order_status_poll_error_count"] = poll_error_count
+            fallback["order_status_poll_error"] = str(exc)
+            fallback["order_status_poll_unavailable"] = True
+            return fallback, poll_error_count
+        if poll_error_count:
+            payload = dict(payload)
+            payload["order_status_poll_error_count"] = poll_error_count
+        return payload, poll_error_count
+
+    def _request_order_cancel(self, order_id: str, *, context: str) -> bool:
+        try:
+            self.broker.cancel_order(order_id, dry_run=False, explicitly_requested=True)
+        except Exception as exc:  # noqa: BLE001
+            self.logger.warning("order cancel failed during %s for %s: %s", context, order_id, exc)
+            return False
+        return True
+
+    def _wait_for_terminal_order(
+        self,
+        order_id: str,
+        *,
+        session: SessionState | None = None,
+    ) -> dict[str, Any]:
         deadline = time.time() + self.portfolio_config.execution.order_fill_timeout_seconds
-        last = self.broker.get_order(order_id)
+        poll_error_count = 0
+        last, poll_error_count = self._get_order_status_or_last(
+            order_id,
+            last=None,
+            poll_error_count=poll_error_count,
+            context="order_wait_initial",
+        )
         while time.time() < deadline:
             status = str(last.get("status", ""))
             if status in TERMINAL_STATUSES:
                 return last
+            self._heartbeat_runtime_ownership(context=f"order_wait:{order_id}")
+            if session is not None:
+                self.save_session(session)
             time.sleep(self.portfolio_config.execution.order_status_poll_seconds)
-            last = self.broker.get_order(order_id)
+            last, poll_error_count = self._get_order_status_or_last(
+                order_id,
+                last=last,
+                poll_error_count=poll_error_count,
+                context="order_wait",
+            )
         return last
 
     def _wait_for_terminal_order_with_timeout(
@@ -2045,15 +2115,30 @@ class MultiTickerPortfolioPaperTrader:
         order_id: str,
         *,
         timeout_seconds: int,
+        session: SessionState | None = None,
     ) -> dict[str, Any]:
         deadline = time.time() + timeout_seconds
-        last = self.broker.get_order(order_id)
+        poll_error_count = 0
+        last, poll_error_count = self._get_order_status_or_last(
+            order_id,
+            last=None,
+            poll_error_count=poll_error_count,
+            context="order_wait_initial",
+        )
         while time.time() < deadline:
             status = str(last.get("status", ""))
             if status in TERMINAL_STATUSES:
                 return last
+            self._heartbeat_runtime_ownership(context=f"order_wait:{order_id}")
+            if session is not None:
+                self.save_session(session)
             time.sleep(self.portfolio_config.execution.order_status_poll_seconds)
-            last = self.broker.get_order(order_id)
+            last, poll_error_count = self._get_order_status_or_last(
+                order_id,
+                last=last,
+                poll_error_count=poll_error_count,
+                context="order_wait",
+            )
         return last
 
     def _is_filled(self, order_payload: dict[str, Any]) -> bool:
@@ -2071,6 +2156,7 @@ class MultiTickerPortfolioPaperTrader:
         journal_name: str,
         trade: OpenTrade,
         phase: str,
+        session: SessionState | None = None,
     ) -> tuple[dict[str, Any], float]:
         trade_date = date.fromisoformat(trade.entry_time_et[:10])
         run_dir = self._session_run_dir(trade_date)
@@ -2138,7 +2224,7 @@ class MultiTickerPortfolioPaperTrader:
                 )
                 return response, fallback_price
             order_id = str(response.get("id") or "")
-            terminal = self._wait_for_terminal_order(order_id)
+            terminal = self._wait_for_terminal_order(order_id, session=session)
             append_journal_entry(
                 run_dir / "order_journal.json",
                 {
@@ -2174,7 +2260,7 @@ class MultiTickerPortfolioPaperTrader:
                 filled_avg_price = float(terminal.get("filled_avg_price") or request.limit_price or 0.0)
                 return terminal, filled_avg_price
             if str(terminal.get("status", "")) in OPEN_STATUSES:
-                self.broker.cancel_order(order_id, dry_run=False, explicitly_requested=True)
+                cancel_requested = self._request_order_cancel(order_id, context=f"{phase}_attempt")
                 self._append_trade_event(
                     trade_date,
                     {
@@ -2183,6 +2269,7 @@ class MultiTickerPortfolioPaperTrader:
                         "request_index": request_index,
                         "order_id": order_id,
                         "client_order_id": request.client_order_id,
+                        "cancel_requested": cancel_requested,
                     },
                 )
         return {"status": "not_filled"}, 0.0
@@ -2222,6 +2309,7 @@ class MultiTickerPortfolioPaperTrader:
             journal_name=f"{trade.strategy_name}_entry",
             trade=trade,
             phase="entry",
+            session=session,
         )
         if response.get("status") == "not_filled":
             self._record_entry_execution_outcome(
@@ -2365,6 +2453,7 @@ class MultiTickerPortfolioPaperTrader:
             journal_name=f"{trade.strategy_name}_exit",
             trade=trade,
             phase="exit",
+            session=session,
         )
         if response.get("status") == "not_filled":
             if len(trade.legs) > 1:
@@ -2549,8 +2638,10 @@ class MultiTickerPortfolioPaperTrader:
             )
             journal_entry["terminal"] = terminal
             if str(terminal.get("status", "")) in OPEN_STATUSES:
-                self.broker.cancel_order(order_id, dry_run=False, explicitly_requested=True)
-                journal_entry["cancel_requested"] = True
+                journal_entry["cancel_requested"] = self._request_order_cancel(
+                    order_id,
+                    context="broker_position_cleanup",
+                )
             self._append_broker_position_cleanup_entry(trade_date, journal_entry)
             if self._is_filled(terminal):
                 return {

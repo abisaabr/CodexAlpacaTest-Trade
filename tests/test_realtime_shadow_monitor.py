@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+import json
 
 import pytest
 
 from alpaca_lab.multi_ticker_portfolio.realtime_shadow import (
+    JsonlEventWriter,
     RealtimeShadowPlan,
     RealtimeShadowStats,
     data_feed_from_name,
@@ -54,7 +56,28 @@ def test_shadow_stats_tracks_event_counts_and_max_latency() -> None:
     payload = stats.to_dict()
     assert payload["latency_sample_count"] == 3
     assert payload["latency_p50_seconds"] == pytest.approx(0.4)
+    assert payload["latency_by_event_type"]["stock_bar"]["sample_count"] == 2
+    assert payload["latency_by_event_type"]["stock_bar"]["p50_seconds"] == pytest.approx(0.4)
+    assert payload["latency_by_event_type"]["stock_bar"]["max_seconds"] == pytest.approx(0.7)
+    assert payload["latency_by_event_type"]["option_quote"]["sample_count"] == 1
+    assert payload["latency_by_event_type"]["option_quote"]["p50_seconds"] == pytest.approx(0.2)
     assert "_latency_samples" not in payload
+    assert "_latency_samples_by_event_type" not in payload
+
+
+def test_shadow_stats_separates_quote_latency_from_bar_completion_latency() -> None:
+    stats = RealtimeShadowStats()
+
+    stats.record("stock_bar", 64.0)
+    stats.record("option_quote", 0.02)
+    stats.record("option_quote", 0.04)
+
+    payload = stats.to_dict()
+
+    assert payload["latency_p50_seconds"] == pytest.approx(0.04)
+    assert payload["latency_by_event_type"]["stock_bar"]["p50_seconds"] == pytest.approx(64.0)
+    assert payload["latency_by_event_type"]["option_quote"]["p50_seconds"] == pytest.approx(0.02)
+    assert payload["latency_by_event_type"]["option_quote"]["max_seconds"] == pytest.approx(0.04)
 
 
 def test_shadow_stats_tracks_option_quote_spreads() -> None:
@@ -92,3 +115,19 @@ def test_shadow_plan_serializes_subscription_scope() -> None:
     assert payload["underlyings"] == ["QQQ", "SPY"]
     assert payload["option_symbols"] == ["QQQ260507C00400000"]
     assert payload["source"] == "rest_bootstrap_for_realtime_shadow"
+
+
+def test_jsonl_event_writer_keeps_valid_lines_until_close(tmp_path) -> None:
+    path = tmp_path / "events.jsonl"
+    writer = JsonlEventWriter(path)
+
+    writer.write({"event_type": "stock_quote", "symbol": "QQQ"})
+    writer.write({"event_type": "option_quote", "symbol": "QQQ260508C00697000"})
+    writer.close()
+    writer.close()
+
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    assert rows == [
+        {"event_type": "stock_quote", "symbol": "QQQ"},
+        {"event_type": "option_quote", "symbol": "QQQ260508C00697000"},
+    ]

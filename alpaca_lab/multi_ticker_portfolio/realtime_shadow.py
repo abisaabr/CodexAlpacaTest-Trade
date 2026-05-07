@@ -49,6 +49,10 @@ class RealtimeShadowStats:
     max_event_latency_seconds: float | None = None
     min_event_latency_seconds: float | None = None
     _latency_samples: list[float] = field(default_factory=list, repr=False)
+    _latency_samples_by_event_type: dict[str, list[float]] = field(
+        default_factory=dict,
+        repr=False,
+    )
     _option_quote_spread_samples: list[float] = field(default_factory=list, repr=False)
     _option_quote_relative_spread_samples: list[float] = field(default_factory=list, repr=False)
 
@@ -77,6 +81,7 @@ class RealtimeShadowStats:
         if latency_seconds is not None:
             latency_value = float(latency_seconds)
             self._latency_samples.append(latency_value)
+            self._latency_samples_by_event_type.setdefault(event_type, []).append(latency_value)
             self.max_event_latency_seconds = max(self.max_event_latency_seconds or 0.0, latency_value)
             self.min_event_latency_seconds = (
                 latency_value
@@ -98,6 +103,7 @@ class RealtimeShadowStats:
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         samples = sorted(payload.pop("_latency_samples", []))
+        latency_samples_by_event_type = payload.pop("_latency_samples_by_event_type", {})
         spread_samples = sorted(payload.pop("_option_quote_spread_samples", []))
         relative_spread_samples = sorted(
             payload.pop("_option_quote_relative_spread_samples", [])
@@ -111,6 +117,11 @@ class RealtimeShadowStats:
             payload["latency_p50_seconds"] = None
             payload["latency_p90_seconds"] = None
             payload["latency_p99_seconds"] = None
+        payload["latency_by_event_type"] = {
+            str(event_type): _sample_summary(sorted(event_samples))
+            for event_type, event_samples in sorted(latency_samples_by_event_type.items())
+            if event_samples
+        }
         payload["option_quote_spread_sample_count"] = len(spread_samples)
         if spread_samples:
             payload["option_quote_spread_p50"] = _percentile(spread_samples, 0.50)
@@ -143,6 +154,17 @@ class RealtimeShadowStats:
 
 def _percentile(sorted_samples: list[float], pct: float) -> float:
     return sorted_samples[int((len(sorted_samples) - 1) * pct)]
+
+
+def _sample_summary(sorted_samples: list[float]) -> dict[str, float | int]:
+    return {
+        "sample_count": len(sorted_samples),
+        "min_seconds": sorted_samples[0],
+        "p50_seconds": _percentile(sorted_samples, 0.50),
+        "p90_seconds": _percentile(sorted_samples, 0.90),
+        "p99_seconds": _percentile(sorted_samples, 0.99),
+        "max_seconds": sorted_samples[-1],
+    }
 
 
 def _coerce_float(value: Any) -> float | None:
@@ -232,12 +254,19 @@ class JsonlEventWriter:
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        self._handle = self.path.open("a", encoding="utf-8", buffering=1)
 
     def write(self, payload: dict[str, Any]) -> None:
         line = json.dumps(_json_safe(payload), sort_keys=True)
         with self._lock:
-            with self.path.open("a", encoding="utf-8") as handle:
-                handle.write(line + "\n")
+            self._handle.write(line + "\n")
+
+    def close(self) -> None:
+        with self._lock:
+            if self._handle.closed:
+                return
+            self._handle.flush()
+            self._handle.close()
 
 
 class RealtimeShadowMonitor:
@@ -417,4 +446,5 @@ class RealtimeShadowMonitor:
                         stream.stop_ws()
                     except Exception:  # noqa: BLE001
                         pass
+            self.writer.close()
         return self.write_summary(plan, status=status)
