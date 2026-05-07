@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from scripts.build_governed_validation_manifest_from_packets import build_manifest
 
 
@@ -48,7 +50,7 @@ def _candidate(
     }
 
 
-def test_manifest_builder_skips_multileg_families_until_runtime_mapping_is_native(
+def test_manifest_builder_includes_native_multileg_families(
     tmp_path: Path,
 ) -> None:
     packet_path = tmp_path / "packet.json"
@@ -81,11 +83,23 @@ def test_manifest_builder_skips_multileg_families_until_runtime_mapping_is_nativ
         packet_uris=[],
     )
 
-    assert manifest["strategy_count"] == 1
-    assert manifest["strategies"][0]["source_strategy_id"] == "qqq__bear__put__single_leg_repair"
-    assert manifest["skipped_candidates"] == [
-        {
-            "candidate_variant_id": "portfolio12h__iwm__bull__put__bull_put_credit_spread__def__profile_unit",
-            "reason": "unsupported_runtime_family_for_paper_manifest:bull_put_credit_spread",
-        }
+    assert manifest["strategy_count"] == 2
+    assert manifest["skipped_candidates"] == []
+
+    strategies = {
+        strategy["source_strategy_id"]: strategy for strategy in manifest["strategies"]
+    }
+    assert (
+        strategies["qqq__bear__put__single_leg_repair"]["runner_semantics_status"]
+        == "packet_translated_to_runtime_single_leg"
+    )
+
+    spread = strategies["iwm__bull__put__bull_put_credit_spread"]
+    assert spread["runner_semantics_status"] == "packet_translated_to_runtime_native_multileg"
+    assert [(leg["option_type"], leg["side"]) for leg in spread["legs"]] == [
+        ("put", "short"),
+        ("put", "long"),
     ]
+    assert [leg["target_delta"] for leg in spread["legs"]] == pytest.approx([-0.55, -0.37])
+    assert [leg["min_abs_delta"] for leg in spread["legs"]] == pytest.approx([0.35, 0.17])
+    assert [leg["max_abs_delta"] for leg in spread["legs"]] == pytest.approx([0.75, 0.57])

@@ -122,6 +122,13 @@ def _is_runtime_supported_family(raw_family: str) -> bool:
     }
 
 
+def _runner_semantics_status(raw_family: str) -> str:
+    normalized = _slug(raw_family, max_len=64)
+    if normalized in {"single_leg", "single_leg_repair"}:
+        return "packet_translated_to_runtime_single_leg"
+    return "packet_translated_to_runtime_native_multileg"
+
+
 def _clamp_abs_delta(value: float) -> float:
     return max(0.05, min(0.95, abs(value)))
 
@@ -263,7 +270,7 @@ def _build_strategy(
         "min_test_net_pnl": _float_or_none(candidate.get("min_test_net_pnl")),
         "research_profile": candidate.get("aggregate_profile"),
         "research_entry_timing_mode": params.get("entry_signal_mode"),
-        "runner_semantics_status": "packet_translated_to_runtime_single_leg",
+        "runner_semantics_status": _runner_semantics_status(raw_family),
         "stock_proxy_mode": params.get("stock_proxy_mode") or ("range_bound" if regime == "choppy" else "breakout"),
         "entry_signal_mode": params.get("entry_signal_mode") or ("rising_edge" if regime != "bull" else "daily_first"),
         "min_minutes_since_open": _int_or_default(params.get("min_minutes_since_open"), 15),
