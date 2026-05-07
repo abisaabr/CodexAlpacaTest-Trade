@@ -28,6 +28,7 @@ $ReportDir = Join-Path $RepoRoot "reports\gcp_research\$WaveId"
 $InputsDir = Join-Path $ReportDir "inputs"
 $LaunchRowsPath = Join-Path $ReportDir "microstructure_event_replay_launch_rows.json"
 $SourceArchivePath = Join-Path $env:TEMP "$WaveId-codexalpaca_repo_source.tar.gz"
+$MetadataUnderlyings = $Underlyings.Replace(",", ";")
 
 Set-Location $RepoRoot
 New-Item -ItemType Directory -Path $InputsDir -Force | Out-Null
@@ -148,7 +149,7 @@ foreach ($chunk in $Manifest.chunks) {
         machine_type = $MachineType
         max_contracts = $MaxContracts
         risk_policy_effect = "none"
-        underlyings = $Underlyings
+        underlyings = $MetadataUnderlyings
         worker_id = $workerId
         zone = $zone
     }

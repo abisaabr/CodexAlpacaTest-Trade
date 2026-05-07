@@ -21,6 +21,7 @@ GRID_JSONL_URI="$(metadata_value grid_jsonl_uri "${GCS_PREFIX}/inputs/microstruc
 GRID_START_INDEX="$(metadata_value grid_start_index 1)"
 GRID_COUNT="$(metadata_value grid_count 128)"
 UNDERLYINGS="$(metadata_value underlyings QQQ,SPY,IWM)"
+UNDERLYINGS="${UNDERLYINGS//;/,}"
 MAX_CONTRACTS="$(metadata_value max_contracts 0)"
 FEE_PER_CONTRACT="$(metadata_value fee_per_contract 0.65)"
 
