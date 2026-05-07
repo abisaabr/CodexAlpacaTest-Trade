@@ -104,3 +104,30 @@ Terminated rt2 research VMs with visible GCS worker directories were deleted to 
 - `meta-rescue-c181-216-20260507rt2`
 
 The `meta-rescue-c145-180-20260507rt2` worker reached `TERMINATED` after artifacts were visible and was deleted. No broker-facing process or paper runtime state was changed.
+
+## Final Rt2 Aggregate
+
+Updated: 2026-05-07 13:25 ET
+
+All rt2 workers for `AAPL`, `NVDA`, `INTC`, and `META` c109-216 completed and terminated. The remaining terminated META workers were deleted after GCS artifacts were visible.
+
+Strict aggregate output:
+
+- Local report root: `D:\rt2_aggregate`
+- GCS report root: `gs://codexalpaca-control-us/research_results/other_tickers_realtime_compatible_20260507T0030Z/aggregate_rt2/`
+- Portfolio report: `D:\rt2_aggregate\research_portfolio_report.json`
+- Promotion packet: `D:\rt2_aggregate\promotion_packet\research_promotion_review_packet.json`
+- Decision: `ready_for_governed_validation_review`
+- Candidate profiles evaluated: `2592`
+- Profile-level eligible candidates: `19`
+- Unique eligible base candidates: `13`
+- Eligible regimes: `bull`, `bear`, `choppy`
+- Missing eligible regimes: none
+
+Primary review clusters:
+
+- `NVDA` bull `single_leg_repair`
+- `INTC` bear `single_leg_repair`
+- `META` choppy `debit_call_vertical`
+
+This is governed-validation review only. It does not change the active PAPER trader, live manifest, or risk policy.
