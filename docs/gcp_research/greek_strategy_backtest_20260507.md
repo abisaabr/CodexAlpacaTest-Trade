@@ -1,18 +1,21 @@
 # Greek Strategy Backtest Lane - 2026-05-07
 
-Updated: 2026-05-06 21:50 ET / 2026-05-07T01:50Z
+Updated: 2026-05-06 22:20 ET / 2026-05-07T02:20Z
 
 ## Status
 
 Greek-aware historical replay is now supported as a research-only lane.
 
-- Wave id: `qqq_spy_iwm_greek_research_20260507T0145Z`
-- GCS root: `gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_research_20260507T0145Z/`
+- Active wave id: `qqq_spy_iwm_greek_research_20260507T0215Z`
+- Active GCS root: `gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_research_20260507T0215Z/`
+- Invalidated stale wave: `qqq_spy_iwm_greek_research_20260507T0145Z`
 - Symbols: QQQ, SPY, IWM
 - Builder: `scripts/build_greek_strategy_research_inputs.py`
 - Launcher: `scripts/launch_gcp_greek_strategy_shards.ps1`
 - Backtester selector: `entry_delta_target_research_only`
-- First tranche launched: QQQ/SPY/IWM c001-028
+- Active first tranche launched: QQQ/SPY/IWM c001-028 with suffix `20260507g2`
+
+The first `20260507g1` workers under `qqq_spy_iwm_greek_research_20260507T0145Z` were stopped and must not be used for promotion review because they were launched before the Greek selector patch was present in the worker source archive. Aggregate only the active `T0215Z` wave unless a later handoff supersedes it.
 
 This lane is not broker-facing and does not change live manifests or risk policy.
 
@@ -43,39 +46,39 @@ Directional variants test target deltas 0.35, 0.50, and 0.65 with bounded min/ma
 Prepare-only smoke:
 
 ```powershell
-$wave = "qqq_spy_iwm_greek_research_20260507T0145Z"
+$wave = "qqq_spy_iwm_greek_research_20260507T0215Z"
 powershell -ExecutionPolicy Bypass -File .\scripts\launch_gcp_greek_strategy_shards.ps1 `
   -WaveId $wave `
   -Symbols QQQ,SPY,IWM `
   -CandidateCountPerWorker 28 `
   -MaxLaunchesPerSymbol 1 `
-  -InstanceSuffix 20260507g1 `
+  -InstanceSuffix 20260507g2 `
   -PrepareOnly
 ```
 
 First tranche launch:
 
 ```powershell
-$wave = "qqq_spy_iwm_greek_research_20260507T0145Z"
+$wave = "qqq_spy_iwm_greek_research_20260507T0215Z"
 powershell -ExecutionPolicy Bypass -File .\scripts\launch_gcp_greek_strategy_shards.ps1 `
   -WaveId $wave `
   -Symbols QQQ,SPY,IWM `
   -CandidateCountPerWorker 28 `
   -MaxLaunchesPerSymbol 1 `
-  -InstanceSuffix 20260507g1
+  -InstanceSuffix 20260507g2
 ```
 
 Continue second tranche after capacity frees:
 
 ```powershell
-$wave = "qqq_spy_iwm_greek_research_20260507T0145Z"
+$wave = "qqq_spy_iwm_greek_research_20260507T0215Z"
 powershell -ExecutionPolicy Bypass -File .\scripts\launch_gcp_greek_strategy_shards.ps1 `
   -WaveId $wave `
   -Symbols QQQ,SPY,IWM `
   -StartCandidateIndex 29 `
   -CandidateCountPerWorker 28 `
   -MaxLaunchesPerSymbol 1 `
-  -InstanceSuffix 20260507g2
+  -InstanceSuffix 20260507g3
 ```
 
 ## Aggregation
@@ -83,7 +86,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\launch_gcp_greek_strategy_sha
 After workers complete:
 
 ```powershell
-$wave = "qqq_spy_iwm_greek_research_20260507T0145Z"
+$wave = "qqq_spy_iwm_greek_research_20260507T0215Z"
 $gcs = "gs://codexalpaca-control-us/research_results/$wave"
 $local = "reports/gcp_research/$wave/gcs_worker_pull_final/workers"
 $out = "reports/gcp_research/$wave/aggregate_final"
