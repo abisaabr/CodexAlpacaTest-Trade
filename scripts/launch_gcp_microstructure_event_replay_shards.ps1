@@ -8,6 +8,7 @@ param(
     [int]$ChunkSize = 128,
     [int]$MaxLaunches = 8,
     [int]$MaxContracts = 160,
+    [int]$Processes = 4,
     [string[]]$Zones = @("us-central1-a", "us-west1-a", "us-east4-a", "us-east1-b"),
     [string]$MachineType = "e2-standard-4",
     [switch]$PrepareOnly
@@ -148,6 +149,7 @@ foreach ($chunk in $Manifest.chunks) {
         live_manifest_effect = "none"
         machine_type = $MachineType
         max_contracts = $MaxContracts
+        processes = $Processes
         risk_policy_effect = "none"
         underlyings = $MetadataUnderlyings
         worker_id = $workerId
@@ -186,6 +188,7 @@ foreach ($row in $launchRows) {
         grid_jsonl_uri = $GridJsonlUri
         grid_start_index = "$($row.grid_start_index)"
         max_contracts = "$MaxContracts"
+        processes = "$Processes"
         source_archive_uri = $SourceArchiveUri
         underlyings = $MetadataUnderlyings
         wave_id = $WaveId

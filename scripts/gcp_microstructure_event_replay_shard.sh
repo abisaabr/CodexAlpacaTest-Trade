@@ -24,6 +24,7 @@ UNDERLYINGS="$(metadata_value underlyings QQQ,SPY,IWM)"
 UNDERLYINGS="${UNDERLYINGS//;/,}"
 MAX_CONTRACTS="$(metadata_value max_contracts 0)"
 FEE_PER_CONTRACT="$(metadata_value fee_per_contract 0.65)"
+PROCESSES="$(metadata_value processes "$(nproc)")"
 
 if [[ -z "${EVENTS_JSONL_URI}" ]]; then
   echo "missing_required_metadata events_jsonl_uri" >&2
@@ -65,6 +66,7 @@ print(json.dumps({
     "grid_count": "__GRID_COUNT__",
     "underlyings": "__UNDERLYINGS__",
     "max_contracts": "__MAX_CONTRACTS__",
+    "processes": "__PROCESSES__",
     "broker_facing": False,
     "paper_orders": False,
     "live_manifest_effect": "none",
@@ -82,6 +84,7 @@ PY
     -e "s|__GRID_COUNT__|${GRID_COUNT}|g" \
     -e "s|__UNDERLYINGS__|${UNDERLYINGS}|g" \
     -e "s|__MAX_CONTRACTS__|${MAX_CONTRACTS}|g" \
+    -e "s|__PROCESSES__|${PROCESSES}|g" \
     "${WORKROOT}/microstructure_status.json"
   gcloud storage cp "${WORKROOT}/microstructure_status.json" "${WORKER_PREFIX}/microstructure_status.json" || true
   gcloud storage cp "${WORKROOT}/startup.log" "${WORKER_PREFIX}/startup.log" || true
@@ -103,7 +106,7 @@ python -m pip install --upgrade pip
 
 write_status "running_replay" "grid_start=${GRID_START_INDEX} grid_count=${GRID_COUNT}"
 cat > "${WORKROOT}/command.txt" <<EOF
-python scripts/run_microstructure_event_replay_shard.py --events-jsonl "${EVENTS_JSONL_URI}" --grid-jsonl "${GRID_JSONL_URI}" --output-dir "${OUTPUT_DIR}" --wave-id "${WAVE_ID}" --worker-id "${WORKER_ID}" --grid-start-index "${GRID_START_INDEX}" --grid-count "${GRID_COUNT}" --underlyings "${UNDERLYINGS}" --max-contracts "${MAX_CONTRACTS}" --fee-per-contract "${FEE_PER_CONTRACT}"
+python scripts/run_microstructure_event_replay_shard.py --events-jsonl "${EVENTS_JSONL_URI}" --grid-jsonl "${GRID_JSONL_URI}" --output-dir "${OUTPUT_DIR}" --wave-id "${WAVE_ID}" --worker-id "${WORKER_ID}" --grid-start-index "${GRID_START_INDEX}" --grid-count "${GRID_COUNT}" --underlyings "${UNDERLYINGS}" --max-contracts "${MAX_CONTRACTS}" --fee-per-contract "${FEE_PER_CONTRACT}" --processes "${PROCESSES}"
 EOF
 
 python scripts/run_microstructure_event_replay_shard.py \
@@ -116,7 +119,8 @@ python scripts/run_microstructure_event_replay_shard.py \
   --grid-count "${GRID_COUNT}" \
   --underlyings "${UNDERLYINGS}" \
   --max-contracts "${MAX_CONTRACTS}" \
-  --fee-per-contract "${FEE_PER_CONTRACT}"
+  --fee-per-contract "${FEE_PER_CONTRACT}" \
+  --processes "${PROCESSES}"
 
 write_status "uploading_outputs" "replay_complete"
 gcloud storage cp "${WORKROOT}/command.txt" "${WORKER_PREFIX}/command.txt" || true

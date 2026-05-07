@@ -11,6 +11,7 @@ import tempfile
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from multiprocessing import Pool
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,12 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.analyze_micro_scalp_shadow import CONTRACT_MULTIPLIER, QuotePoint, _parse_ts, _safe_float
+
+
+_POOL_OPTION_QUOTES: dict[str, list[QuotePoint]] = {}
+_POOL_STOCK_QUOTES: dict[str, list["StockQuotePoint"]] = {}
+_POOL_FEE_PER_CONTRACT = 0.65
+_POOL_TOP_TRADES = 500
 
 
 @dataclass(slots=True)
@@ -47,6 +54,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-contracts", type=int, default=0)
     parser.add_argument("--fee-per-contract", type=float, default=0.65)
     parser.add_argument("--top-trades", type=int, default=500)
+    parser.add_argument(
+        "--processes",
+        type=int,
+        default=1,
+        help="Parallel worker processes for grid specs. Use >1 on GCP VMs.",
+    )
     return parser.parse_args()
 
 
@@ -491,6 +504,55 @@ def summarize_spec(spec: dict[str, Any], trades: list[dict[str, Any]], counters:
     }
 
 
+def simulate_spec(
+    spec: dict[str, Any],
+    *,
+    option_quotes: dict[str, list[QuotePoint]],
+    stock_quotes: dict[str, list[StockQuotePoint]],
+    fee_per_contract: float,
+    top_trades_limit: int,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    spec_trades: list[dict[str, Any]] = []
+    counters = {"signal_count": 0, "fill_failure_count": 0, "stale_exit_quote_count": 0}
+    for symbol, points in option_quotes.items():
+        underlying = _underlying_from_option_symbol(symbol)
+        trades, contract_counters = simulate_contract(
+            symbol=symbol,
+            points=points,
+            stock_points=stock_quotes.get(underlying, []),
+            spec=spec,
+            fee_per_contract=fee_per_contract,
+        )
+        spec_trades.extend(trades)
+        for key, value in contract_counters.items():
+            counters[key] = int(counters.get(key) or 0) + int(value or 0)
+    spec_trades.sort(key=lambda row: float(row["net_pnl_per_contract"]), reverse=True)
+    return summarize_spec(spec, spec_trades, counters), spec_trades[:top_trades_limit]
+
+
+def _init_pool(
+    option_quotes: dict[str, list[QuotePoint]],
+    stock_quotes: dict[str, list[StockQuotePoint]],
+    fee_per_contract: float,
+    top_trades_limit: int,
+) -> None:
+    global _POOL_OPTION_QUOTES, _POOL_STOCK_QUOTES, _POOL_FEE_PER_CONTRACT, _POOL_TOP_TRADES
+    _POOL_OPTION_QUOTES = option_quotes
+    _POOL_STOCK_QUOTES = stock_quotes
+    _POOL_FEE_PER_CONTRACT = fee_per_contract
+    _POOL_TOP_TRADES = top_trades_limit
+
+
+def _simulate_spec_from_pool(spec: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    return simulate_spec(
+        spec,
+        option_quotes=_POOL_OPTION_QUOTES,
+        stock_quotes=_POOL_STOCK_QUOTES,
+        fee_per_contract=_POOL_FEE_PER_CONTRACT,
+        top_trades_limit=_POOL_TOP_TRADES,
+    )
+
+
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
@@ -527,24 +589,29 @@ def main() -> None:
 
     summary_rows: list[dict[str, Any]] = []
     top_trades: list[dict[str, Any]] = []
-    for spec in grid:
-        spec_trades: list[dict[str, Any]] = []
-        counters = {"signal_count": 0, "fill_failure_count": 0, "stale_exit_quote_count": 0}
-        for symbol, points in option_quotes.items():
-            underlying = _underlying_from_option_symbol(symbol)
-            trades, contract_counters = simulate_contract(
-                symbol=symbol,
-                points=points,
-                stock_points=stock_quotes.get(underlying, []),
-                spec=spec,
+    processes = max(int(args.processes), 1)
+    if processes > 1 and len(grid) > 1:
+        with Pool(
+            processes=processes,
+            initializer=_init_pool,
+            initargs=(option_quotes, stock_quotes, args.fee_per_contract, args.top_trades),
+        ) as pool:
+            for summary, spec_top_trades in pool.imap_unordered(_simulate_spec_from_pool, grid):
+                summary_rows.append(summary)
+                top_trades.extend(spec_top_trades)
+                top_trades.sort(key=lambda row: float(row["net_pnl_per_contract"]), reverse=True)
+                del top_trades[args.top_trades :]
+    else:
+        for spec in grid:
+            summary, spec_top_trades = simulate_spec(
+                spec,
+                option_quotes=option_quotes,
+                stock_quotes=stock_quotes,
                 fee_per_contract=args.fee_per_contract,
+                top_trades_limit=args.top_trades,
             )
-            spec_trades.extend(trades)
-            for key, value in contract_counters.items():
-                counters[key] = int(counters.get(key) or 0) + int(value or 0)
-        summary_rows.append(summarize_spec(spec, spec_trades, counters))
-        if spec_trades:
-            top_trades.extend(spec_trades)
+            summary_rows.append(summary)
+            top_trades.extend(spec_top_trades)
             top_trades.sort(key=lambda row: float(row["net_pnl_per_contract"]), reverse=True)
             del top_trades[args.top_trades :]
 
@@ -570,6 +637,7 @@ def main() -> None:
         "contract_count": len(option_quotes),
         "stock_quote_symbols": sorted(stock_quotes),
         "execution_assumption": "causal_signal_buy_ask_exit_bid_with_quote_age_spread_gates",
+        "processes": processes,
         "ingest_stats": ingest_stats,
         "review_like_count": sum(1 for row in summary_rows if row["review_like"]),
         "top_grids": summary_rows[:50],
