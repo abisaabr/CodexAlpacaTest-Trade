@@ -110,7 +110,82 @@ def _family_label(option_type: str, raw_family: str) -> str:
 
 def _is_runtime_supported_family(raw_family: str) -> bool:
     normalized = _slug(raw_family, max_len=64)
-    return normalized in {"single_leg", "single_leg_repair"}
+    return normalized in {
+        "single_leg",
+        "single_leg_repair",
+        "debit_call_vertical",
+        "debit_put_vertical",
+        "bull_put_credit_spread",
+        "bear_call_credit_spread",
+        "broken_wing_call_butterfly",
+        "broken_wing_put_butterfly",
+    }
+
+
+def _clamp_abs_delta(value: float) -> float:
+    return max(0.05, min(0.95, abs(value)))
+
+
+def _leg(option_type: str, side: str, target_delta: float) -> dict[str, Any]:
+    abs_delta = _clamp_abs_delta(target_delta)
+    return {
+        "option_type": option_type,
+        "side": side,
+        "target_delta": target_delta,
+        "min_abs_delta": max(0.05, abs_delta - 0.20),
+        "max_abs_delta": min(0.95, abs_delta + 0.20),
+    }
+
+
+def _strategy_legs(option_type: str, raw_family: str, params: dict[str, Any]) -> list[dict[str, Any]]:
+    normalized = _slug(raw_family, max_len=64)
+    target = _float_or_none(params.get("target_delta"))
+    if target is None:
+        target = -0.55 if option_type == "put" else 0.55
+    direction = -1.0 if target < 0 else 1.0
+    abs_target = _clamp_abs_delta(target)
+
+    if normalized in {"single_leg", "single_leg_repair"}:
+        return [_leg(option_type, "long", direction * abs_target)]
+    if normalized == "debit_call_vertical":
+        return [
+            _leg("call", "long", abs_target),
+            _leg("call", "short", max(0.05, abs_target - 0.18)),
+        ]
+    if normalized == "debit_put_vertical":
+        return [
+            _leg("put", "long", -abs_target),
+            _leg("put", "short", -max(0.05, abs_target - 0.18)),
+        ]
+    if normalized == "bull_put_credit_spread":
+        short_abs = min(0.95, max(0.20, abs_target))
+        return [
+            _leg("put", "short", -short_abs),
+            _leg("put", "long", -max(0.05, short_abs - 0.18)),
+        ]
+    if normalized == "bear_call_credit_spread":
+        short_abs = min(0.95, max(0.20, abs_target))
+        return [
+            _leg("call", "short", short_abs),
+            _leg("call", "long", max(0.05, short_abs - 0.18)),
+        ]
+    if normalized == "broken_wing_call_butterfly":
+        center = min(0.90, max(0.30, abs_target))
+        return [
+            _leg("call", "long", min(0.95, center + 0.12)),
+            _leg("call", "short", center),
+            _leg("call", "short", max(0.05, center - 0.08)),
+            _leg("call", "long", max(0.05, center - 0.24)),
+        ]
+    if normalized == "broken_wing_put_butterfly":
+        center = min(0.90, max(0.30, abs_target))
+        return [
+            _leg("put", "long", -min(0.95, center + 0.12)),
+            _leg("put", "short", -center),
+            _leg("put", "short", -max(0.05, center - 0.08)),
+            _leg("put", "long", -max(0.05, center - 0.24)),
+        ]
+    raise ValueError(f"unsupported_runtime_family_for_paper_manifest:{raw_family or 'unknown'}")
 
 
 def _risk_fraction(symbol: str, regime: str, option_type: str) -> float:
@@ -158,7 +233,6 @@ def _build_strategy(
     signal_name = _signal_name(regime, option_type, params)
     profit_target = _float_or_none(params.get("profit_target_multiple")) or 0.35
     stop_loss = _float_or_none(params.get("stop_loss_multiple")) or 0.18
-    target_delta = -0.55 if option_type == "put" else 0.55
     strategy: dict[str, Any] = {
         "name": _strategy_name(candidate, params, generated_for),
         "underlying_symbol": symbol,
@@ -200,15 +274,7 @@ def _build_strategy(
         "option_profit_target_pct": profit_target,
         "option_stop_loss_pct": stop_loss,
         "min_option_hold_minutes": _int_or_default(params.get("min_option_hold_minutes"), 3),
-        "legs": [
-            {
-                "option_type": option_type,
-                "side": "long",
-                "target_delta": target_delta,
-                "min_abs_delta": 0.05,
-                "max_abs_delta": 0.95,
-            }
-        ],
+        "legs": _strategy_legs(option_type, raw_family, params),
     }
     optional_float_fields = (
         "min_trend_gap_pct",

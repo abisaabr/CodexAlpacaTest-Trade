@@ -1,5 +1,5 @@
 version: 1
-generated_at_utc: '2026-05-07T13:13:13+00:00'
+generated_at_utc: '2026-05-07T13:21:21+00:00'
 scope: research_governed_validation_review_only
 broker_facing: false
 live_manifest_effect: none
@@ -75,16 +75,17 @@ source_packets:
   - bear
   - choppy
   missing_eligible_regimes: []
-- path: reports/gcp_research/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_bull_bear_scoped_20260507T0915/promotion_packet/research_promotion_review_packet.json
-  gcs_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_bull_bear_scoped_20260507T0915/promotion_packet/research_promotion_review_packet.json
-  decision: ready_for_governed_validation_review
+- path: reports/gcp_research/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
+  gcs_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
+  decision: research_only_blocked_regime_incomplete
   candidate_level_decision: ready_for_governed_validation_review
   eligible_for_promotion_review_count: 116
   eligible_regimes:
   - bull
   - bear
-  missing_eligible_regimes: []
-strategy_count: 144
+  missing_eligible_regimes:
+  - choppy
+strategy_count: 160
 symbols:
 - AMD
 - AMZN
@@ -100,39 +101,7 @@ regimes:
 - bear
 - bull
 - choppy
-skipped_candidates:
-- candidate_variant_id: portfolio12h__tsm__bull__call__debit_call_vertical__1fa3d8a43e2aad__profile_tsm-regime-rescue-c001-021-tsm-e30-x120-entry-liquidity-first-research-only
-  reason: unsupported_runtime_family_for_paper_manifest:debit_call_vertical
-- candidate_variant_id: portfolio12h__iwm__bull__put__bull_put_credit_spread__8173040a700d44__profile_iwm-regime-rescue-c217-288-iwm-e10-x60-entry-liquidity-first-research-only
-  reason: unsupported_runtime_family_for_paper_manifest:bull_put_credit_spread
-- candidate_variant_id: portfolio12h__iwm__bull__put__bull_put_credit_spread__560a5693a2049d__profile_iwm-regime-rescue-c217-288-iwm-e10-x60-entry-liquidity-first-research-only
-  reason: unsupported_runtime_family_for_paper_manifest:bull_put_credit_spread
-- candidate_variant_id: portfolio12h__iwm__bull__put__bull_put_credit_spread__a6c4ec21dacf6c__profile_iwm-regime-rescue-c217-288-iwm-e10-x60-entry-liquidity-first-research-only
-  reason: unsupported_runtime_family_for_paper_manifest:bull_put_credit_spread
-- candidate_variant_id: portfolio12h__iwm__bull__call__broken_wing_call_butterfly__7107b7c20a3541__profile_iwm-greek-c257-320-iwm-e30-x120-entry-delta-target-research-only
-  reason: unsupported_runtime_family_for_paper_manifest:broken_wing_call_butterfly
-- candidate_variant_id: portfolio12h__iwm__bear__put__debit_put_vertical__a20928999d5db0__profile_iwm-greek-c577-640-iwm-e30-x120-entry-delta-target-research-only
-  reason: unsupported_runtime_family_for_paper_manifest:debit_put_vertical
-- candidate_variant_id: portfolio12h__iwm__bear__put__debit_put_vertical__20ebc9cc1cfb6a__profile_iwm-greek-c513-576-iwm-e30-x120-entry-delta-target-research-only
-  reason: unsupported_runtime_family_for_paper_manifest:debit_put_vertical
-- candidate_variant_id: portfolio12h__iwm__bear__put__debit_put_vertical__1f844a7b701591__profile_iwm-greek-c641-704-iwm-e30-x120-entry-delta-target-research-only
-  reason: unsupported_runtime_family_for_paper_manifest:debit_put_vertical
-- candidate_variant_id: portfolio12h__iwm__bear__put__debit_put_vertical__42fac45a539050__profile_iwm-greek-c641-704-iwm-e30-x120-entry-delta-target-research-only
-  reason: unsupported_runtime_family_for_paper_manifest:debit_put_vertical
-- candidate_variant_id: portfolio12h__spy__bear__put__broken_wing_put_butterfly__289ba326358885__profile_spy-greek-c577-640-spy-e0-x60-entry-delta-target-research-only
-  reason: unsupported_runtime_family_for_paper_manifest:broken_wing_put_butterfly
-- candidate_variant_id: portfolio12h__iwm__bear__put__debit_put_vertical__6f41d65b7a2323__profile_iwm-greek-c705-768-iwm-e30-x120-entry-delta-target-research-only
-  reason: unsupported_runtime_family_for_paper_manifest:debit_put_vertical
-- candidate_variant_id: portfolio12h__iwm__bull__call__bull_put_credit_spread__6e0c4e8c330c90__profile_iwm-greek-c129-192-iwm-e0-x60-entry-delta-target-research-only
-  reason: unsupported_runtime_family_for_paper_manifest:bull_put_credit_spread
-- candidate_variant_id: portfolio12h__spy__bear__put__broken_wing_put_butterfly__6d2a6005ac41bb__profile_spy-greek-c641-704-spy-e0-x60-entry-delta-target-research-only
-  reason: unsupported_runtime_family_for_paper_manifest:broken_wing_put_butterfly
-- candidate_variant_id: portfolio12h__spy__bear__put__broken_wing_put_butterfly__e838288159fe16__profile_spy-greek-c577-640-spy-e0-x60-entry-delta-target-research-only
-  reason: unsupported_runtime_family_for_paper_manifest:broken_wing_put_butterfly
-- candidate_variant_id: portfolio12h__qqq__bear__put__broken_wing_put_butterfly__ef6b02bb230b83__profile_qqq-greek-c513-576-qqq-e0-x60-entry-delta-target-research-only
-  reason: unsupported_runtime_family_for_paper_manifest:broken_wing_put_butterfly
-- candidate_variant_id: portfolio12h__qqq__bear__put__broken_wing_put_butterfly__2f1c6cf01e114a__profile_qqq-greek-c513-576-qqq-e0-x60-entry-delta-target-research-only
-  reason: unsupported_runtime_family_for_paper_manifest:broken_wing_put_butterfly
+skipped_candidates: []
 strategies:
 - name: qqq__governed__bull__call__single_leg_repair__qqq_spy_ff_qqq_20260505__7f37aee10d5fda__qqq_spy_ff_qqq_202__20260507
   underlying_symbol: QQQ
@@ -176,8 +145,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
 - name: qqq__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__4c6be7e0bfb22a__qqq_regime_rescue__20260507
   underlying_symbol: QQQ
   regime: bear
@@ -220,8 +189,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: qqq__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__06ea81e50c1090__qqq_regime_rescue__20260507
   underlying_symbol: QQQ
@@ -265,8 +234,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: qqq__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__4549f09c6fd367__qqq_regime_rescue__20260507
   underlying_symbol: QQQ
@@ -310,8 +279,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: qqq__governed__choppy__call__single_leg_repair__iwm_choppy_midday_bands__7d707d30b09023__qqq_regime_rescue__20260507
   underlying_symbol: QQQ
@@ -355,8 +324,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0024
   min_range_pct: 0.0012
   max_range_pct: 0.01
@@ -405,8 +374,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: spy__governed__choppy__call__single_leg_repair__iwm_choppy_midday_bands__c16ef5836987f2__spy_regime_rescue__20260507
   underlying_symbol: SPY
@@ -450,8 +419,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0024
   min_range_pct: 0.0012
   max_range_pct: 0.01
@@ -500,8 +469,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0024
   min_range_pct: 0.0012
   max_range_pct: 0.01
@@ -550,8 +519,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
 - name: spy__governed__bear__put__single_leg_repair__bear_confirmed_break_35__aa5af72cedd0e8__spy_regime_rescue__20260507
   underlying_symbol: SPY
   regime: bear
@@ -594,8 +563,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: spy__governed__bear__put__single_leg_repair__bear_confirmed_break_35__98e1c246765263__spy_regime_rescue__20260507
   underlying_symbol: SPY
@@ -639,8 +608,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: qqq__governed__bear__put__single_leg_repair__bear_confirmed_break_35__055209d25ec8fb__qqq_regime_rescue__20260507
   underlying_symbol: QQQ
@@ -684,8 +653,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0009
 - name: spy__governed__bear__put__single_leg_repair__bear_confirmed_break_35__1b25bb90e378ea__spy_regime_rescue__20260507
   underlying_symbol: SPY
@@ -729,8 +698,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0014
 - name: qqq__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__0b97e891d87486__qqq_regime_rescue__20260507
   underlying_symbol: QQQ
@@ -774,8 +743,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0014
 - name: spy__governed__bear__put__single_leg_repair__bear_confirmed_break_35__960c985114b405__spy_regime_rescue__20260507
   underlying_symbol: SPY
@@ -819,8 +788,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0009
 - name: spy__governed__choppy__call__single_leg_repair__iwm_choppy_midday_bands__6c6f01b4d34e9a__spy_regime_rescue__20260507
   underlying_symbol: SPY
@@ -864,8 +833,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0024
   min_range_pct: 0.0012
   max_range_pct: 0.01
@@ -914,8 +883,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
 - name: spy__governed__bull__call__single_leg_repair__qqq_spy_ff_spy_20260505__cbf97bbd739774__qqq_spy_ff_spy_202__20260507
   underlying_symbol: SPY
   regime: bull
@@ -958,8 +927,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
 - name: amzn__governed__bull__call__single_leg_repair__strong_trend_patient__f766ec10ed5724__amzn_regime_rescue__20260507
   underlying_symbol: AMZN
   regime: bull
@@ -1002,8 +971,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0012
 - name: amzn__governed__bull__call__single_leg_repair__midday_continuation__a09e811fc20989__amzn_regime_rescue__20260507
   underlying_symbol: AMZN
@@ -1047,8 +1016,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0008
 - name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c043_0__00b41e327e528a__amd_regime_rescue__20260507
   underlying_symbol: AMD
@@ -1092,8 +1061,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -1142,8 +1111,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -1192,8 +1161,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -1242,8 +1211,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -1292,8 +1261,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -1342,8 +1311,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c043_0__443e3a943783a5__amd_regime_rescue__20260507
   underlying_symbol: AMD
@@ -1387,8 +1356,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -1437,8 +1406,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c043_0__d127813808face__amd_regime_rescue__20260507
   underlying_symbol: AMD
@@ -1482,8 +1451,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -1532,8 +1501,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -1582,8 +1551,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -1632,8 +1601,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0006
 - name: amd__governed__choppy__call__single_leg_repair__amd_regime_rescue_c127_1__f66de52fe0904d__amd_regime_rescue__20260507
   underlying_symbol: AMD
@@ -1677,8 +1646,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -1727,8 +1696,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -1777,8 +1746,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -1827,8 +1796,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -1877,8 +1846,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -1927,8 +1896,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -1977,8 +1946,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0014
 - name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__e3fa4bf9f5f1d5__msft_regime_rescue__20260507
   underlying_symbol: MSFT
@@ -2022,8 +1991,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0014
 - name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__d211dcfeb10414__msft_regime_rescue__20260507
   underlying_symbol: MSFT
@@ -2067,8 +2036,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__322b803bb266b9__msft_regime_rescue__20260507
   underlying_symbol: MSFT
@@ -2112,8 +2081,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0009
 - name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__7fc876d6787792__msft_regime_rescue__20260507
   underlying_symbol: MSFT
@@ -2157,8 +2126,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0014
 - name: msft__governed__bear__put__single_leg_repair__bear_confirmed_break_35__a0d4e81d115472__msft_regime_rescue__20260507
   underlying_symbol: MSFT
@@ -2202,8 +2171,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: msft__governed__choppy__call__single_leg_repair__msft_regime_rescue_c148__90e66bc6811249__msft_regime_rescue__20260507
   underlying_symbol: MSFT
@@ -2247,8 +2216,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -2297,8 +2266,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0009
 - name: msft__governed__choppy__call__single_leg_repair__msft_regime_rescue_c148__d820628c7fca3f__msft_regime_rescue__20260507
   underlying_symbol: MSFT
@@ -2342,8 +2311,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -2392,8 +2361,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.002
   max_range_pct: 0.006
@@ -2442,8 +2411,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0008
 - name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__99ee7a6372ab46__msft_regime_rescue__20260507
   underlying_symbol: MSFT
@@ -2487,8 +2456,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0014
 - name: msft__governed__choppy__call__single_leg_repair__msft_regime_rescue_c148__56cc9804241e9d__msft_regime_rescue__20260507
   underlying_symbol: MSFT
@@ -2532,8 +2501,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.002
   max_range_pct: 0.006
@@ -2582,8 +2551,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.002
   max_range_pct: 0.006
@@ -2632,8 +2601,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0014
 - name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__c47903981bbf0f__msft_regime_rescue__20260507
   underlying_symbol: MSFT
@@ -2677,8 +2646,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__a797623f6e3720__msft_regime_rescue__20260507
   underlying_symbol: MSFT
@@ -2722,8 +2691,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0014
 - name: msft__governed__choppy__call__single_leg_repair__msft_regime_rescue_c148__9f79acd2c5cdb2__msft_regime_rescue__20260507
   underlying_symbol: MSFT
@@ -2767,8 +2736,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.002
   max_range_pct: 0.006
@@ -2817,8 +2786,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: msft__governed__bear__put__single_leg_repair__bear_late_continuation_2__4fd345dcc51a26__msft_regime_rescue__20260507
   underlying_symbol: MSFT
@@ -2862,8 +2831,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: tsla__governed__bear__put__single_leg_repair__bear_late_continuation_2__de76a34198d366__tsla_regime_rescue__20260507
   underlying_symbol: TSLA
@@ -2907,8 +2876,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0009
 - name: tsla__governed__bear__put__single_leg_repair__bear_late_continuation_2__f975795ca88dd7__tsla_regime_rescue__20260507
   underlying_symbol: TSLA
@@ -2952,8 +2921,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0009
 - name: avgo__governed__bull__call__single_leg_repair__morning_trend__45037483cb1a7a__avgo_regime_rescue__20260507
   underlying_symbol: AVGO
@@ -2997,8 +2966,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0006
 - name: avgo__governed__bear__put__single_leg_repair__bear_late_continuation_2__e8c8eee646f863__avgo_regime_rescue__20260507
   underlying_symbol: AVGO
@@ -3042,8 +3011,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0014
 - name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c064__236e16f2bc846f__avgo_regime_rescue__20260507
   underlying_symbol: AVGO
@@ -3087,8 +3056,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.002
   max_range_pct: 0.006
@@ -3137,8 +3106,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -3187,8 +3156,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -3237,8 +3206,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.002
   max_range_pct: 0.006
@@ -3287,8 +3256,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -3337,8 +3306,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -3387,8 +3356,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -3437,8 +3406,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -3487,8 +3456,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.002
   max_range_pct: 0.006
@@ -3537,8 +3506,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -3587,8 +3556,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.002
   max_range_pct: 0.006
@@ -3637,8 +3606,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.002
   max_range_pct: 0.006
@@ -3687,8 +3656,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0009
 - name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c085__07debc8bdbe346__avgo_regime_rescue__20260507
   underlying_symbol: AVGO
@@ -3732,8 +3701,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -3782,8 +3751,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.002
   max_range_pct: 0.006
@@ -3832,8 +3801,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -3882,8 +3851,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -3932,8 +3901,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0009
 - name: googl__governed__bull__call__single_leg_repair__midday_continuation__a1e361fb997d95__googl_regime_rescu__20260507
   underlying_symbol: GOOGL
@@ -3977,8 +3946,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0008
 - name: googl__governed__bear__put__single_leg_repair__bear_late_continuation_2__e96230d2172625__googl_regime_rescu__20260507
   underlying_symbol: GOOGL
@@ -4022,8 +3991,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0009
 - name: googl__governed__choppy__call__single_leg_repair__googl_regime_rescue_c043__68f8fa31eefd3e__googl_regime_rescu__20260507
   underlying_symbol: GOOGL
@@ -4067,8 +4036,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -4117,8 +4086,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0012
 - name: googl__governed__choppy__call__single_leg_repair__googl_regime_rescue_c106__c4cbbe8e31b03a__googl_regime_rescu__20260507
   underlying_symbol: GOOGL
@@ -4162,8 +4131,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -4212,8 +4181,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -4262,8 +4231,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -4312,8 +4281,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -4362,8 +4331,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -4412,8 +4381,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: googl__governed__bear__put__single_leg_repair__bear_late_continuation_2__73dea1ef94effd__googl_regime_rescu__20260507
   underlying_symbol: GOOGL
@@ -4457,8 +4426,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0009
 - name: googl__governed__choppy__call__single_leg_repair__googl_regime_rescue_c127__b0307832953a09__googl_regime_rescu__20260507
   underlying_symbol: GOOGL
@@ -4502,8 +4471,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -4552,8 +4521,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -4602,8 +4571,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -4652,8 +4621,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -4702,8 +4671,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -4752,8 +4721,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
@@ -4802,8 +4771,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -4852,8 +4821,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -4902,14 +4871,64 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
   max_midpoint_distance_pct: 0.0035
   range_edge_pct: 0.0012
   range_entry_side: lower_band
+- name: tsm__governed__bull__call__debit_call_vertical__morning_trend__1fa3d8a43e2aad__tsm_regime_rescue__20260507
+  underlying_symbol: TSM
+  regime: bull
+  family: debit_call_vertical
+  description: TSM governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 75
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 3
+  profit_target_multiple: 0.26
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__tsm__bull__call__debit_call_vertical__1fa3d8a43e2aad__profile_tsm-regime-rescue-c001-021-tsm-e30-x120-entry-liquidity-first-research-only
+  source_strategy_id: tsm__bull__call__debit_call_vertical
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/tsm_full_regime_rescue_20260506T0540Z/aggregate/combined_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9175
+  min_data_foundation_coverage: 0.9272
+  min_option_trade_count: 189
+  min_net_pnl: 10423.577
+  min_test_net_pnl: 1271.037
+  research_profile: tsm_regime_rescue_c001_021_tsm_e30_x120_entry_liquidity_first_research_only
+  research_entry_timing_mode: daily_first
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: daily_first
+  min_minutes_since_open: 15
+  max_minutes_since_open: 105
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target26_stop10
+  option_profit_target_pct: 0.26
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
+  - option_type: call
+    side: short
+    target_delta: 0.37000000000000005
+    min_abs_delta: 0.17000000000000004
+    max_abs_delta: 0.5700000000000001
+  min_trend_gap_pct: 0.0006
 - name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__0be2cae951c7f6__tsm_regime_rescue__20260507
   underlying_symbol: TSM
   regime: bear
@@ -4952,8 +4971,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: tsm__governed__choppy__call__single_leg_repair__tsm_regime_rescue_c085_1__358167277c7300__tsm_regime_rescue__20260507
   underlying_symbol: TSM
@@ -4997,8 +5016,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -5047,8 +5066,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0012
 - name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__32c072062047d6__tsm_regime_rescue__20260507
   underlying_symbol: TSM
@@ -5092,8 +5111,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0014
 - name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__82812e84160b39__tsm_regime_rescue__20260507
   underlying_symbol: TSM
@@ -5137,8 +5156,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__5d93db6348bcbb__tsm_regime_rescue__20260507
   underlying_symbol: TSM
@@ -5182,8 +5201,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0014
 - name: tsm__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__9585c7714dcf36__tsm_regime_rescue__20260507
   underlying_symbol: TSM
@@ -5227,8 +5246,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0014
 - name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__46dedb95746592__tsm_regime_rescue__20260507
   underlying_symbol: TSM
@@ -5272,8 +5291,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0009
 - name: tsm__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__c9c9a69dc374d1__tsm_regime_rescue__20260507
   underlying_symbol: TSM
@@ -5317,8 +5336,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: tsm__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__3b529701e49a14__tsm_regime_rescue__20260507
   underlying_symbol: TSM
@@ -5362,8 +5381,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0009
 - name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__5f7d7ebf46202c__tsm_regime_rescue__20260507
   underlying_symbol: TSM
@@ -5407,8 +5426,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__f1e5e1fce09ed0__tsm_regime_rescue__20260507
   underlying_symbol: TSM
@@ -5452,8 +5471,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__5b3d471da030ac__tsm_regime_rescue__20260507
   underlying_symbol: TSM
@@ -5497,8 +5516,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__20ad9f6315f466__tsm_regime_rescue__20260507
   underlying_symbol: TSM
@@ -5542,8 +5561,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0009
 - name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__17c36dfeba4f5e__tsm_regime_rescue__20260507
   underlying_symbol: TSM
@@ -5587,8 +5606,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0014
 - name: tsm__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__615d1ad8f873ec__tsm_regime_rescue__20260507
   underlying_symbol: TSM
@@ -5632,8 +5651,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0014
 - name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__25a24501ecc68c__tsm_regime_rescue__20260507
   underlying_symbol: TSM
@@ -5677,8 +5696,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: tsm__governed__bear__put__single_leg_repair__bear_confirmed_break_35__9dfc8e388dda4c__tsm_regime_rescue__20260507
   underlying_symbol: TSM
@@ -5722,8 +5741,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0009
 - name: tsm__governed__bull__call__single_leg_repair__morning_trend__5142edf8dd3bc5__tsm_regime_rescue__20260507
   underlying_symbol: TSM
@@ -5767,9 +5786,59 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0006
+- name: iwm__governed__bull__put__bull_put_credit_spread__bull_opening_drive_20_95__8173040a700d44__iwm_regime_rescue__20260507
+  underlying_symbol: IWM
+  regime: bull
+  family: bull_put_credit_spread
+  description: IWM governed bull put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.025
+  max_contracts: 3
+  profit_target_multiple: 0.48
+  stop_loss_multiple: 0.15
+  candidate_variant_id: portfolio12h__iwm__bull__put__bull_put_credit_spread__8173040a700d44__profile_iwm-regime-rescue-c217-288-iwm-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: iwm__bull__put__bull_put_credit_spread
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_strategy_expansion_v1_20260506T1945Z/aggregate_final/aggregate_final_20260506T164345/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9114
+  min_data_foundation_coverage: 0.9114
+  min_option_trade_count: 72
+  min_net_pnl: 3218.285
+  min_test_net_pnl: 5719.042
+  research_profile: iwm_regime_rescue_c217_288_iwm_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 20
+  max_minutes_since_open: 95
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target48_stop15
+  option_profit_target_pct: 0.48
+  option_stop_loss_pct: 0.15
+  min_option_hold_minutes: 3
+  legs:
+  - option_type: put
+    side: short
+    target_delta: -0.55
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
+  - option_type: put
+    side: long
+    target_delta: -0.37000000000000005
+    min_abs_delta: 0.17000000000000004
+    max_abs_delta: 0.5700000000000001
+  min_trend_gap_pct: 0.0012
 - name: qqq__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__06ea81e50c1090__qqq_regime_rescue__20260507
   underlying_symbol: QQQ
   regime: bear
@@ -5812,8 +5881,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: spy__governed__choppy__call__single_leg_repair__spy_regime_rescue_c289_3__cb28fd0e40b7f1__spy_regime_rescue__20260507
   underlying_symbol: SPY
@@ -5857,8 +5926,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -5907,9 +5976,59 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
+- name: iwm__governed__bull__put__bull_put_credit_spread__bull_opening_drive_20_95__560a5693a2049d__iwm_regime_rescue__20260507
+  underlying_symbol: IWM
+  regime: bull
+  family: bull_put_credit_spread
+  description: IWM governed bull put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.025
+  max_contracts: 3
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.11
+  candidate_variant_id: portfolio12h__iwm__bull__put__bull_put_credit_spread__560a5693a2049d__profile_iwm-regime-rescue-c217-288-iwm-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: iwm__bull__put__bull_put_credit_spread
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_strategy_expansion_v1_20260506T1945Z/aggregate_final/aggregate_final_20260506T164345/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9114
+  min_data_foundation_coverage: 0.9114
+  min_option_trade_count: 72
+  min_net_pnl: 714.522
+  min_test_net_pnl: 3234.703
+  research_profile: iwm_regime_rescue_c217_288_iwm_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 20
+  max_minutes_since_open: 95
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop11
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.11
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: short
+    target_delta: -0.55
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
+  - option_type: put
+    side: long
+    target_delta: -0.37000000000000005
+    min_abs_delta: 0.17000000000000004
+    max_abs_delta: 0.5700000000000001
+  min_trend_gap_pct: 0.0012
 - name: spy__governed__bear__put__single_leg_repair__bear_confirmed_break_35__aa5af72cedd0e8__spy_regime_rescue__20260507
   underlying_symbol: SPY
   regime: bear
@@ -5952,8 +6071,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: spy__governed__bear__put__single_leg_repair__bear_confirmed_break_35__98e1c246765263__spy_regime_rescue__20260507
   underlying_symbol: SPY
@@ -5997,8 +6116,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: spy__governed__choppy__call__single_leg_repair__spy_regime_rescue_c289_3__a07896cad08b7c__spy_regime_rescue__20260507
   underlying_symbol: SPY
@@ -6042,8 +6161,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -6092,8 +6211,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: qqq__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__ada15439c33735__qqq_regime_rescue__20260507
   underlying_symbol: QQQ
@@ -6137,8 +6256,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: qqq__governed__bear__put__single_leg_repair__bear_confirmed_break_35__c6c17eac79afc8__qqq_regime_rescue__20260507
   underlying_symbol: QQQ
@@ -6182,8 +6301,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: spy__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__fa0f11e3d1a2b8__spy_regime_rescue__20260507
   underlying_symbol: SPY
@@ -6227,8 +6346,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0009
 - name: spy__governed__choppy__call__single_leg_repair__spy_regime_rescue_c289_3__9e6160246c13e7__spy_regime_rescue__20260507
   underlying_symbol: SPY
@@ -6272,14 +6391,64 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.0008
   min_range_pct: 0.0015
   max_range_pct: 0.004
   max_midpoint_distance_pct: 0.003
   range_edge_pct: 0.0012
   range_entry_side: lower_band
+- name: iwm__governed__bull__put__bull_put_credit_spread__bull_opening_drive_20_95__a6c4ec21dacf6c__iwm_regime_rescue__20260507
+  underlying_symbol: IWM
+  regime: bull
+  family: bull_put_credit_spread
+  description: IWM governed bull put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.025
+  max_contracts: 3
+  profit_target_multiple: 0.22
+  stop_loss_multiple: 0.08
+  candidate_variant_id: portfolio12h__iwm__bull__put__bull_put_credit_spread__a6c4ec21dacf6c__profile_iwm-regime-rescue-c217-288-iwm-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: iwm__bull__put__bull_put_credit_spread
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_strategy_expansion_v1_20260506T1945Z/aggregate_final/aggregate_final_20260506T164345/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9114
+  min_data_foundation_coverage: 0.9114
+  min_option_trade_count: 72
+  min_net_pnl: 70.032
+  min_test_net_pnl: 1837.4
+  research_profile: iwm_regime_rescue_c217_288_iwm_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 20
+  max_minutes_since_open: 95
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target22_stop8
+  option_profit_target_pct: 0.22
+  option_stop_loss_pct: 0.08
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: short
+    target_delta: -0.55
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
+  - option_type: put
+    side: long
+    target_delta: -0.37000000000000005
+    min_abs_delta: 0.17000000000000004
+    max_abs_delta: 0.5700000000000001
+  min_trend_gap_pct: 0.0012
 - name: spy__governed__choppy__call__single_leg_repair__spy_regime_rescue_c001_0__12d5cf8142b8f1__spy_regime_rescue__20260507
   underlying_symbol: SPY
   regime: choppy
@@ -6322,8 +6491,8 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   max_trend_gap_pct: 0.001
   min_range_pct: 0.0015
   max_range_pct: 0.005
@@ -6372,8 +6541,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0014
 - name: spy__governed__bear__put__single_leg_repair__bear_confirmed_break_35__e1b27ce2da9221__spy_regime_rescue__20260507
   underlying_symbol: SPY
@@ -6417,8 +6586,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0014
 - name: qqq__governed__bear__put__single_leg_repair__bear_midday_follow_105_2__c0136b5d527ca4__qqq_regime_rescue__20260507
   underlying_symbol: QQQ
@@ -6462,8 +6631,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.0014
 - name: qqq__governed__bear__put__single_leg_repair__bear_confirmed_break_35__e383bc4d5937cb__qqq_regime_rescue__20260507
   underlying_symbol: QQQ
@@ -6507,8 +6676,8 @@ strategies:
   - option_type: put
     side: long
     target_delta: -0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
   min_trend_gap_pct: 0.002
 - name: spy__governed__bull__call__single_leg_repair__bull_opening_drive_20_95__1feb836da9e782__spy_regime_rescue__20260507
   underlying_symbol: SPY
@@ -6552,8 +6721,378 @@ strategies:
   - option_type: call
     side: long
     target_delta: 0.55
-    min_abs_delta: 0.05
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
+  min_trend_gap_pct: 0.0012
+- name: iwm__governed__bull__call__broken_wing_call_butterf__greek_morning_momentum__7107b7c20a3541__iwm_greek_c257_320__20260507
+  underlying_symbol: IWM
+  regime: bull
+  family: broken_wing_call_butterfly
+  description: IWM governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 55
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.025
+  max_contracts: 3
+  profit_target_multiple: 0.24
+  stop_loss_multiple: 0.09
+  candidate_variant_id: portfolio12h__iwm__bull__call__broken_wing_call_butterfly__7107b7c20a3541__profile_iwm-greek-c257-320-iwm-e30-x120-entry-delta-target-research-only
+  source_strategy_id: iwm__bull__call__broken_wing_call_butterfly
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9471
+  min_data_foundation_coverage: 0.9529
+  min_option_trade_count: 161
+  min_net_pnl: 26370.249
+  min_test_net_pnl: 362.493
+  research_profile: iwm_greek_c257_320_iwm_e30_x120_entry_delta_target_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 20
+  max_minutes_since_open: 105
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target24_stop9
+  option_profit_target_pct: 0.24
+  option_stop_loss_pct: 0.09
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.92
+    min_abs_delta: 0.72
     max_abs_delta: 0.95
+  - option_type: call
+    side: short
+    target_delta: 0.8
+    min_abs_delta: 0.6000000000000001
+    max_abs_delta: 0.95
+  - option_type: call
+    side: short
+    target_delta: 0.7200000000000001
+    min_abs_delta: 0.52
+    max_abs_delta: 0.9200000000000002
+  - option_type: call
+    side: long
+    target_delta: 0.56
+    min_abs_delta: 0.36000000000000004
+    max_abs_delta: 0.76
+  min_trend_gap_pct: 0.0007
+- name: iwm__governed__bear__put__debit_put_vertical__greek_opening_drive__a20928999d5db0__iwm_greek_c577_640__20260507
+  underlying_symbol: IWM
+  regime: bear
+  family: debit_put_vertical
+  description: IWM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 3
+  profit_target_multiple: 0.38
+  stop_loss_multiple: 0.13
+  candidate_variant_id: portfolio12h__iwm__bear__put__debit_put_vertical__a20928999d5db0__profile_iwm-greek-c577-640-iwm-e30-x120-entry-delta-target-research-only
+  source_strategy_id: iwm__bear__put__debit_put_vertical
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9086
+  min_data_foundation_coverage: 0.9391
+  min_option_trade_count: 179
+  min_net_pnl: 27341.452
+  min_test_net_pnl: 7015.793
+  research_profile: iwm_greek_c577_640_iwm_e30_x120_entry_delta_target_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 10
+  max_minutes_since_open: 75
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target38_stop13
+  option_profit_target_pct: 0.38
+  option_stop_loss_pct: 0.13
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.8
+    min_abs_delta: 0.6000000000000001
+    max_abs_delta: 0.95
+  - option_type: put
+    side: short
+    target_delta: -0.6200000000000001
+    min_abs_delta: 0.4200000000000001
+    max_abs_delta: 0.8200000000000001
+  min_trend_gap_pct: 0.0005
+- name: iwm__governed__bear__put__debit_put_vertical__greek_opening_drive__20ebc9cc1cfb6a__iwm_greek_c513_576__20260507
+  underlying_symbol: IWM
+  regime: bear
+  family: debit_put_vertical
+  description: IWM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 3
+  profit_target_multiple: 0.24
+  stop_loss_multiple: 0.09
+  candidate_variant_id: portfolio12h__iwm__bear__put__debit_put_vertical__20ebc9cc1cfb6a__profile_iwm-greek-c513-576-iwm-e30-x120-entry-delta-target-research-only
+  source_strategy_id: iwm__bear__put__debit_put_vertical
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9137
+  min_data_foundation_coverage: 0.9391
+  min_option_trade_count: 180
+  min_net_pnl: 26855.241
+  min_test_net_pnl: 6699.595
+  research_profile: iwm_greek_c513_576_iwm_e30_x120_entry_delta_target_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 10
+  max_minutes_since_open: 75
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target24_stop9
+  option_profit_target_pct: 0.24
+  option_stop_loss_pct: 0.09
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.8
+    min_abs_delta: 0.6000000000000001
+    max_abs_delta: 0.95
+  - option_type: put
+    side: short
+    target_delta: -0.6200000000000001
+    min_abs_delta: 0.4200000000000001
+    max_abs_delta: 0.8200000000000001
+  min_trend_gap_pct: 0.0005
+- name: iwm__governed__bear__put__debit_put_vertical__greek_midday_continuatio__1f844a7b701591__iwm_greek_c641_704__20260507
+  underlying_symbol: IWM
+  regime: bear
+  family: debit_put_vertical
+  description: IWM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 85
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 3
+  profit_target_multiple: 0.24
+  stop_loss_multiple: 0.09
+  candidate_variant_id: portfolio12h__iwm__bear__put__debit_put_vertical__1f844a7b701591__profile_iwm-greek-c641-704-iwm-e30-x120-entry-delta-target-research-only
+  source_strategy_id: iwm__bear__put__debit_put_vertical
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9138
+  min_data_foundation_coverage: 0.9224
+  min_option_trade_count: 106
+  min_net_pnl: 7226.746
+  min_test_net_pnl: 5704.19
+  research_profile: iwm_greek_c641_704_iwm_e30_x120_entry_delta_target_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 90
+  max_minutes_since_open: 240
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target24_stop9
+  option_profit_target_pct: 0.24
+  option_stop_loss_pct: 0.09
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.8
+    min_abs_delta: 0.6000000000000001
+    max_abs_delta: 0.95
+  - option_type: put
+    side: short
+    target_delta: -0.6200000000000001
+    min_abs_delta: 0.4200000000000001
+    max_abs_delta: 0.8200000000000001
+  min_trend_gap_pct: 0.0012
+- name: iwm__governed__bear__put__debit_put_vertical__greek_morning_momentum__42fac45a539050__iwm_greek_c641_704__20260507
+  underlying_symbol: IWM
+  regime: bear
+  family: debit_put_vertical
+  description: IWM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 55
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 3
+  profit_target_multiple: 0.6
+  stop_loss_multiple: 0.22
+  candidate_variant_id: portfolio12h__iwm__bear__put__debit_put_vertical__42fac45a539050__profile_iwm-greek-c641-704-iwm-e30-x120-entry-delta-target-research-only
+  source_strategy_id: iwm__bear__put__debit_put_vertical
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9136
+  min_data_foundation_coverage: 0.9444
+  min_option_trade_count: 148
+  min_net_pnl: 9912.755
+  min_test_net_pnl: 3110.917
+  research_profile: iwm_greek_c641_704_iwm_e30_x120_entry_delta_target_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 20
+  max_minutes_since_open: 105
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target60_stop22
+  option_profit_target_pct: 0.6
+  option_stop_loss_pct: 0.22
+  min_option_hold_minutes: 5
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.8
+    min_abs_delta: 0.6000000000000001
+    max_abs_delta: 0.95
+  - option_type: put
+    side: short
+    target_delta: -0.6200000000000001
+    min_abs_delta: 0.4200000000000001
+    max_abs_delta: 0.8200000000000001
+  min_trend_gap_pct: 0.0007
+- name: spy__governed__bear__put__broken_wing_put_butterfl__greek_morning_momentum__289ba326358885__spy_greek_c577_640__20260507
+  underlying_symbol: SPY
+  regime: bear
+  family: broken_wing_put_butterfly
+  description: SPY governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 55
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 4
+  profit_target_multiple: 0.24
+  stop_loss_multiple: 0.09
+  candidate_variant_id: portfolio12h__spy__bear__put__broken_wing_put_butterfly__289ba326358885__profile_spy-greek-c577-640-spy-e0-x60-entry-delta-target-research-only
+  source_strategy_id: spy__bear__put__broken_wing_put_butterfly
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9
+  min_data_foundation_coverage: 0.9
+  min_option_trade_count: 108
+  min_net_pnl: 6476.189
+  min_test_net_pnl: 2186.98
+  research_profile: spy_greek_c577_640_spy_e0_x60_entry_delta_target_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 20
+  max_minutes_since_open: 105
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target24_stop9
+  option_profit_target_pct: 0.24
+  option_stop_loss_pct: 0.09
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.92
+    min_abs_delta: 0.72
+    max_abs_delta: 0.95
+  - option_type: put
+    side: short
+    target_delta: -0.8
+    min_abs_delta: 0.6000000000000001
+    max_abs_delta: 0.95
+  - option_type: put
+    side: short
+    target_delta: -0.7200000000000001
+    min_abs_delta: 0.52
+    max_abs_delta: 0.9200000000000002
+  - option_type: put
+    side: long
+    target_delta: -0.56
+    min_abs_delta: 0.36000000000000004
+    max_abs_delta: 0.76
+  min_trend_gap_pct: 0.0007
+- name: iwm__governed__bear__put__debit_put_vertical__greek_midday_continuatio__6f41d65b7a2323__iwm_greek_c705_768__20260507
+  underlying_symbol: IWM
+  regime: bear
+  family: debit_put_vertical
+  description: IWM governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 85
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 3
+  profit_target_multiple: 0.6
+  stop_loss_multiple: 0.22
+  candidate_variant_id: portfolio12h__iwm__bear__put__debit_put_vertical__6f41d65b7a2323__profile_iwm-greek-c705-768-iwm-e30-x120-entry-delta-target-research-only
+  source_strategy_id: iwm__bear__put__debit_put_vertical
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9052
+  min_data_foundation_coverage: 0.9224
+  min_option_trade_count: 105
+  min_net_pnl: 2231.58
+  min_test_net_pnl: 4242.284
+  research_profile: iwm_greek_c705_768_iwm_e30_x120_entry_delta_target_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 90
+  max_minutes_since_open: 240
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target60_stop22
+  option_profit_target_pct: 0.6
+  option_stop_loss_pct: 0.22
+  min_option_hold_minutes: 5
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.8
+    min_abs_delta: 0.6000000000000001
+    max_abs_delta: 0.95
+  - option_type: put
+    side: short
+    target_delta: -0.6200000000000001
+    min_abs_delta: 0.4200000000000001
+    max_abs_delta: 0.8200000000000001
   min_trend_gap_pct: 0.0012
 - name: qqq__governed__bull__call__single_leg_repair__greek_opening_drive__5308d8aaffb74f__qqq_greek_c193_256__20260507
   underlying_symbol: QQQ
@@ -6573,7 +7112,7 @@ strategies:
   candidate_variant_id: portfolio12h__qqq__bull__call__single_leg_repair__5308d8aaffb74f__profile_qqq-greek-c193-256-qqq-e0-x60-entry-delta-target-research-only
   source_strategy_id: qqq__bull__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_bull_bear_scoped_20260507T0915/promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9231
   min_data_foundation_coverage: 0.9231
@@ -6596,9 +7135,9 @@ strategies:
   legs:
   - option_type: call
     side: long
-    target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    target_delta: 0.65
+    min_abs_delta: 0.45
+    max_abs_delta: 0.8500000000000001
   min_trend_gap_pct: 0.0005
 - name: qqq__governed__bull__call__single_leg_repair__greek_opening_drive__ef8ba11b3618af__qqq_greek_c193_256__20260507
   underlying_symbol: QQQ
@@ -6618,7 +7157,7 @@ strategies:
   candidate_variant_id: portfolio12h__qqq__bull__call__single_leg_repair__ef8ba11b3618af__profile_qqq-greek-c193-256-qqq-e0-x60-entry-delta-target-research-only
   source_strategy_id: qqq__bull__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_bull_bear_scoped_20260507T0915/promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9487
   min_data_foundation_coverage: 0.9487
@@ -6641,9 +7180,59 @@ strategies:
   legs:
   - option_type: call
     side: long
-    target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    target_delta: 0.5
+    min_abs_delta: 0.3
+    max_abs_delta: 0.7
+  min_trend_gap_pct: 0.0005
+- name: iwm__governed__bull__call__bull_put_credit_spread__greek_opening_drive__6e0c4e8c330c90__iwm_greek_c129_192__20260507
+  underlying_symbol: IWM
+  regime: bull
+  family: bull_put_credit_spread
+  description: IWM governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.025
+  max_contracts: 3
+  profit_target_multiple: 0.24
+  stop_loss_multiple: 0.09
+  candidate_variant_id: portfolio12h__iwm__bull__call__bull_put_credit_spread__6e0c4e8c330c90__profile_iwm-greek-c129-192-iwm-e0-x60-entry-delta-target-research-only
+  source_strategy_id: iwm__bull__call__bull_put_credit_spread
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9179
+  min_data_foundation_coverage: 0.9385
+  min_option_trade_count: 179
+  min_net_pnl: 5248.434
+  min_test_net_pnl: 922.849
+  research_profile: iwm_greek_c129_192_iwm_e0_x60_entry_delta_target_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 10
+  max_minutes_since_open: 75
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target24_stop9
+  option_profit_target_pct: 0.24
+  option_stop_loss_pct: 0.09
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: short
+    target_delta: -0.5
+    min_abs_delta: 0.3
+    max_abs_delta: 0.7
+  - option_type: put
+    side: long
+    target_delta: -0.32
+    min_abs_delta: 0.12
+    max_abs_delta: 0.52
   min_trend_gap_pct: 0.0005
 - name: iwm__governed__bull__call__single_leg_repair__greek_opening_drive__0f16a08713f4bd__iwm_greek_c193_256__20260507
   underlying_symbol: IWM
@@ -6663,7 +7252,7 @@ strategies:
   candidate_variant_id: portfolio12h__iwm__bull__call__single_leg_repair__0f16a08713f4bd__profile_iwm-greek-c193-256-iwm-e0-x60-entry-delta-target-research-only
   source_strategy_id: iwm__bull__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_bull_bear_scoped_20260507T0915/promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9846
   min_data_foundation_coverage: 0.9846
@@ -6686,10 +7275,130 @@ strategies:
   legs:
   - option_type: call
     side: long
-    target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    target_delta: 0.65
+    min_abs_delta: 0.45
+    max_abs_delta: 0.8500000000000001
   min_trend_gap_pct: 0.0005
+- name: spy__governed__bear__put__broken_wing_put_butterfl__greek_morning_momentum__6d2a6005ac41bb__spy_greek_c641_704__20260507
+  underlying_symbol: SPY
+  regime: bear
+  family: broken_wing_put_butterfly
+  description: SPY governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 55
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 4
+  profit_target_multiple: 0.6
+  stop_loss_multiple: 0.22
+  candidate_variant_id: portfolio12h__spy__bear__put__broken_wing_put_butterfly__6d2a6005ac41bb__profile_spy-greek-c641-704-spy-e0-x60-entry-delta-target-research-only
+  source_strategy_id: spy__bear__put__broken_wing_put_butterfly
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9
+  min_data_foundation_coverage: 0.9
+  min_option_trade_count: 108
+  min_net_pnl: 4902.865
+  min_test_net_pnl: 1366.126
+  research_profile: spy_greek_c641_704_spy_e0_x60_entry_delta_target_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 20
+  max_minutes_since_open: 105
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target60_stop22
+  option_profit_target_pct: 0.6
+  option_stop_loss_pct: 0.22
+  min_option_hold_minutes: 5
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.92
+    min_abs_delta: 0.72
+    max_abs_delta: 0.95
+  - option_type: put
+    side: short
+    target_delta: -0.8
+    min_abs_delta: 0.6000000000000001
+    max_abs_delta: 0.95
+  - option_type: put
+    side: short
+    target_delta: -0.7200000000000001
+    min_abs_delta: 0.52
+    max_abs_delta: 0.9200000000000002
+  - option_type: put
+    side: long
+    target_delta: -0.56
+    min_abs_delta: 0.36000000000000004
+    max_abs_delta: 0.76
+  min_trend_gap_pct: 0.0007
+- name: spy__governed__bear__put__broken_wing_put_butterfl__greek_morning_momentum__e838288159fe16__spy_greek_c577_640__20260507
+  underlying_symbol: SPY
+  regime: bear
+  family: broken_wing_put_butterfly
+  description: SPY governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 55
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 4
+  profit_target_multiple: 0.38
+  stop_loss_multiple: 0.13
+  candidate_variant_id: portfolio12h__spy__bear__put__broken_wing_put_butterfly__e838288159fe16__profile_spy-greek-c577-640-spy-e0-x60-entry-delta-target-research-only
+  source_strategy_id: spy__bear__put__broken_wing_put_butterfly
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9
+  min_data_foundation_coverage: 0.9
+  min_option_trade_count: 108
+  min_net_pnl: 3551.554
+  min_test_net_pnl: 1718.832
+  research_profile: spy_greek_c577_640_spy_e0_x60_entry_delta_target_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 20
+  max_minutes_since_open: 105
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target38_stop13
+  option_profit_target_pct: 0.38
+  option_stop_loss_pct: 0.13
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.92
+    min_abs_delta: 0.72
+    max_abs_delta: 0.95
+  - option_type: put
+    side: short
+    target_delta: -0.8
+    min_abs_delta: 0.6000000000000001
+    max_abs_delta: 0.95
+  - option_type: put
+    side: short
+    target_delta: -0.7200000000000001
+    min_abs_delta: 0.52
+    max_abs_delta: 0.9200000000000002
+  - option_type: put
+    side: long
+    target_delta: -0.56
+    min_abs_delta: 0.36000000000000004
+    max_abs_delta: 0.76
+  min_trend_gap_pct: 0.0007
 - name: spy__governed__bear__put__single_leg_repair__greek_morning_momentum__b19b50c613ad69__spy_greek_c641_704__20260507
   underlying_symbol: SPY
   regime: bear
@@ -6708,7 +7417,7 @@ strategies:
   candidate_variant_id: portfolio12h__spy__bear__put__single_leg_repair__b19b50c613ad69__profile_spy-greek-c641-704-spy-e0-x60-entry-delta-target-research-only
   source_strategy_id: spy__bear__put__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_bull_bear_scoped_20260507T0915/promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9
   min_data_foundation_coverage: 0.9
@@ -6731,10 +7440,70 @@ strategies:
   legs:
   - option_type: put
     side: long
-    target_delta: -0.55
-    min_abs_delta: 0.05
+    target_delta: -0.8
+    min_abs_delta: 0.6000000000000001
     max_abs_delta: 0.95
   min_trend_gap_pct: 0.0007
+- name: qqq__governed__bear__put__broken_wing_put_butterfl__greek_opening_drive__ef6b02bb230b83__qqq_greek_c513_576__20260507
+  underlying_symbol: QQQ
+  regime: bear
+  family: broken_wing_put_butterfly
+  description: QQQ governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 4
+  profit_target_multiple: 0.38
+  stop_loss_multiple: 0.13
+  candidate_variant_id: portfolio12h__qqq__bear__put__broken_wing_put_butterfly__ef6b02bb230b83__profile_qqq-greek-c513-576-qqq-e0-x60-entry-delta-target-research-only
+  source_strategy_id: qqq__bear__put__broken_wing_put_butterfly
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9312
+  min_data_foundation_coverage: 0.9312
+  min_option_trade_count: 176
+  min_net_pnl: 4013.407
+  min_test_net_pnl: 1158.088
+  research_profile: qqq_greek_c513_576_qqq_e0_x60_entry_delta_target_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 10
+  max_minutes_since_open: 75
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target38_stop13
+  option_profit_target_pct: 0.38
+  option_stop_loss_pct: 0.13
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.77
+    min_abs_delta: 0.5700000000000001
+    max_abs_delta: 0.95
+  - option_type: put
+    side: short
+    target_delta: -0.65
+    min_abs_delta: 0.45
+    max_abs_delta: 0.8500000000000001
+  - option_type: put
+    side: short
+    target_delta: -0.5700000000000001
+    min_abs_delta: 0.37000000000000005
+    max_abs_delta: 0.77
+  - option_type: put
+    side: long
+    target_delta: -0.41000000000000003
+    min_abs_delta: 0.21000000000000002
+    max_abs_delta: 0.6100000000000001
+  min_trend_gap_pct: 0.0005
 - name: iwm__governed__bull__call__single_leg_repair__greek_opening_drive__cec35c152898ae__iwm_greek_c193_256__20260507
   underlying_symbol: IWM
   regime: bull
@@ -6753,7 +7522,7 @@ strategies:
   candidate_variant_id: portfolio12h__iwm__bull__call__single_leg_repair__cec35c152898ae__profile_iwm-greek-c193-256-iwm-e0-x60-entry-delta-target-research-only
   source_strategy_id: iwm__bull__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_bull_bear_scoped_20260507T0915/promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9846
   min_data_foundation_coverage: 0.9846
@@ -6776,9 +7545,9 @@ strategies:
   legs:
   - option_type: call
     side: long
-    target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    target_delta: 0.65
+    min_abs_delta: 0.45
+    max_abs_delta: 0.8500000000000001
   min_trend_gap_pct: 0.0005
 - name: spy__governed__bull__call__single_leg_repair__greek_midday_continuatio__aae965da4b7bb4__spy_greek_c321_384__20260507
   underlying_symbol: SPY
@@ -6798,7 +7567,7 @@ strategies:
   candidate_variant_id: portfolio12h__spy__bull__call__single_leg_repair__aae965da4b7bb4__profile_spy-greek-c321-384-spy-e0-x60-entry-delta-target-research-only
   source_strategy_id: spy__bull__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_bull_bear_scoped_20260507T0915/promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9
   min_data_foundation_coverage: 0.9
@@ -6821,10 +7590,70 @@ strategies:
   legs:
   - option_type: call
     side: long
-    target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    target_delta: 0.5
+    min_abs_delta: 0.3
+    max_abs_delta: 0.7
   min_trend_gap_pct: 0.0012
+- name: qqq__governed__bear__put__broken_wing_put_butterfl__greek_opening_drive__2f1c6cf01e114a__qqq_greek_c513_576__20260507
+  underlying_symbol: QQQ
+  regime: bear
+  family: broken_wing_put_butterfly
+  description: QQQ governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 4
+  profit_target_multiple: 0.24
+  stop_loss_multiple: 0.09
+  candidate_variant_id: portfolio12h__qqq__bear__put__broken_wing_put_butterfly__2f1c6cf01e114a__profile_qqq-greek-c513-576-qqq-e0-x60-entry-delta-target-research-only
+  source_strategy_id: qqq__bear__put__broken_wing_put_butterfly
+  promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9312
+  min_data_foundation_coverage: 0.9312
+  min_option_trade_count: 176
+  min_net_pnl: 4713.904
+  min_test_net_pnl: 196.061
+  research_profile: qqq_greek_c513_576_qqq_e0_x60_entry_delta_target_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 10
+  max_minutes_since_open: 75
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target24_stop9
+  option_profit_target_pct: 0.24
+  option_stop_loss_pct: 0.09
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.77
+    min_abs_delta: 0.5700000000000001
+    max_abs_delta: 0.95
+  - option_type: put
+    side: short
+    target_delta: -0.65
+    min_abs_delta: 0.45
+    max_abs_delta: 0.8500000000000001
+  - option_type: put
+    side: short
+    target_delta: -0.5700000000000001
+    min_abs_delta: 0.37000000000000005
+    max_abs_delta: 0.77
+  - option_type: put
+    side: long
+    target_delta: -0.41000000000000003
+    min_abs_delta: 0.21000000000000002
+    max_abs_delta: 0.6100000000000001
+  min_trend_gap_pct: 0.0005
 - name: iwm__governed__bull__call__single_leg_repair__greek_opening_drive__57e038c5e12f36__iwm_greek_c193_256__20260507
   underlying_symbol: IWM
   regime: bull
@@ -6843,7 +7672,7 @@ strategies:
   candidate_variant_id: portfolio12h__iwm__bull__call__single_leg_repair__57e038c5e12f36__profile_iwm-greek-c193-256-iwm-e0-x60-entry-delta-target-research-only
   source_strategy_id: iwm__bull__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_bull_bear_scoped_20260507T0915/promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9949
   min_data_foundation_coverage: 0.9949
@@ -6866,9 +7695,9 @@ strategies:
   legs:
   - option_type: call
     side: long
-    target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    target_delta: 0.5
+    min_abs_delta: 0.3
+    max_abs_delta: 0.7
   min_trend_gap_pct: 0.0005
 - name: spy__governed__bull__call__single_leg_repair__greek_midday_continuatio__26e9f9abbc4dc2__spy_greek_c321_384__20260507
   underlying_symbol: SPY
@@ -6888,7 +7717,7 @@ strategies:
   candidate_variant_id: portfolio12h__spy__bull__call__single_leg_repair__26e9f9abbc4dc2__profile_spy-greek-c321-384-spy-e0-x60-entry-delta-target-research-only
   source_strategy_id: spy__bull__call__single_leg_repair
   promotion_manifest_path: config/promotion_manifests/multi_symbol_governed_validation_20260507.yaml
-  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_bull_bear_scoped_20260507T0915/promotion_packet/research_promotion_review_packet.json
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_final_20260507T054014/promotion_packet/research_promotion_review_packet.json
   promotion_status: eligible_for_promotion_review
   min_fill_coverage: 0.9
   min_data_foundation_coverage: 0.9
@@ -6911,9 +7740,9 @@ strategies:
   legs:
   - option_type: call
     side: long
-    target_delta: 0.55
-    min_abs_delta: 0.05
-    max_abs_delta: 0.95
+    target_delta: 0.5
+    min_abs_delta: 0.3
+    max_abs_delta: 0.7
   min_trend_gap_pct: 0.0012
 hard_rules:
 - This manifest does not modify the live strategy manifest.
