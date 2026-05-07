@@ -92,7 +92,7 @@ Only terminated worker VMs should be deleted, and only after worker artifacts ex
 - Symbols: `AAPL, AMD, AMZN, INTC, IWM, META, MSFT, NVDA, SPY, TSLA, AVGO, GOOGL, MU, NFLX, ORCL, PLTR, QQQ, TSM, XLE, XOM`
 - Local root: `reports/gcp_research/traditional_20ticker_realtime_compatible_overnight_20260507T2045ET/`
 - GCS root: `gs://codexalpaca-control-us/research_results/traditional_20ticker_realtime_compatible_overnight_20260507T2045ET/`
-- Prepared launch rows observed for 19 symbols; the local prepare-only process was still running while XOM preparation was pending.
+- Prepared launch rows observed for all 20 symbols. The original 20-symbol prepare-only process hung after the source archive upload completed; it was stopped and XOM was prepared separately.
 
 Traditional launches should wait until the microstructure tranche frees quota, then run in small batches to avoid starving microstructure continuation.
 
@@ -102,4 +102,3 @@ Traditional launches should wait until the microstructure tranche frees quota, t
 - If the operator wants at least three microstructure strategies in PAPER tomorrow before full historical evidence exists, create a separate operator-approved PAPER experiment manifest with explicit labels, reduced risk, and realtime telemetry requirements.
 - Do not use the May 7 strategy-attributed ledger for per-strategy promotion until broker-fill reconciliation is complete.
 - PAPER trader startup still requires fresh RTH preflight, PAPER endpoint, no duplicate trader, no unexpected PAPER orders/positions, and active heartbeat/log preservation.
-
