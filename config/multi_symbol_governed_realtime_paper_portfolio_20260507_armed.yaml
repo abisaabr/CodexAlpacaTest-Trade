@@ -1,7 +1,7 @@
 name: multi_symbol_governed_realtime_paper_trader_20260507_armed
 description: PAPER-only armed May 7 governed-validation portfolio for QQQ, SPY, IWM, AMD, AMZN, MSFT, TSLA, AVGO, GOOGL, and TSM. This config may submit PAPER orders only because execution.paper_order_arming_mode is config_explicit.
 strategy_manifest_paths:
-  - promotion_manifests/multi_symbol_governed_validation_20260506.yaml
+  - promotion_manifests/multi_symbol_governed_validation_20260507.yaml
 
 ownership:
   enabled: true
@@ -41,7 +41,7 @@ risk:
   daily_loss_gate_pct: 0.02
   delever_drawdown_pct: 8.0
   delever_risk_scale: 0.5
-  max_open_positions: 8
+  max_open_positions: 999
   max_positions_per_regime: 3
   max_positions_per_symbol: 3
   entry_cluster_window_minutes: 15
