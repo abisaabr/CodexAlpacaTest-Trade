@@ -93,3 +93,14 @@ gcloud storage cp --recursive $out "$gcs/aggregate_rt2/" --project codexalpaca
 - No promotion by manual override.
 - No lowering of `fill_coverage >= 0.90`.
 - No strategy is eligible for future paper activation unless a generated promotion-review packet clears gates and runtime compatibility is documented.
+
+## Cleanup Update
+
+Updated: 2026-05-07 13:20 ET
+
+Terminated rt2 research VMs with visible GCS worker directories were deleted to free capacity. The remaining rt2 workers at this checkpoint are:
+
+- `meta-rescue-c109-144-20260507rt2`
+- `meta-rescue-c181-216-20260507rt2`
+
+The `meta-rescue-c145-180-20260507rt2` worker reached `TERMINATED` after artifacts were visible and was deleted. No broker-facing process or paper runtime state was changed.
