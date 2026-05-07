@@ -6,6 +6,7 @@ param(
     [string]$Profile = "liquid_exhaustive_v1",
     [string]$InstanceSuffix = "20260507m1",
     [int]$ChunkSize = 128,
+    [int]$StartGridIndex = 1,
     [int]$MaxLaunches = 8,
     [int]$MaxContracts = 160,
     [int]$MaxContractsPerUnderlying = 0,
@@ -36,6 +37,9 @@ $MetadataUnderlyings = $Underlyings.Replace(",", ";")
 Set-Location $RepoRoot
 New-Item -ItemType Directory -Path $InputsDir -Force | Out-Null
 $env:GOOGLE_CLOUD_PROJECT = $Project
+if ($StartGridIndex -lt 1) {
+    throw "StartGridIndex must be >= 1"
+}
 
 function Invoke-Gcloud {
     param([string[]]$Arguments)
@@ -128,6 +132,10 @@ if ($LASTEXITCODE -ne 0) {
 $GridPath = Join-Path $InputsDir "microstructure_research_grid.jsonl"
 $ManifestPath = Join-Path $InputsDir "microstructure_research_grid_manifest.json"
 $Manifest = Get-Content -Raw -Path $ManifestPath | ConvertFrom-Json
+$selectedChunks = @($Manifest.chunks | Where-Object { [int]$_.grid_start_index -ge $StartGridIndex })
+if ($selectedChunks.Count -eq 0) {
+    throw "no chunks found at or after StartGridIndex=$StartGridIndex"
+}
 
 git archive --format=tar.gz --output $SourceArchivePath HEAD
 Invoke-Gcloud @("storage", "cp", $SourceArchivePath, $SourceArchiveUri, "--project", $Project)
@@ -135,7 +143,7 @@ Invoke-Gcloud @("storage", "cp", $GridPath, $GridJsonlUri, "--project", $Project
 Invoke-Gcloud @("storage", "cp", $ManifestPath, $GridManifestUri, "--project", $Project)
 
 $launchRows = @()
-foreach ($chunk in $Manifest.chunks) {
+foreach ($chunk in $selectedChunks) {
     $startSlug = "{0:D5}" -f [int]$chunk.grid_start_index
     $endSlug = "{0:D5}" -f ([int]$chunk.grid_start_index + [int]$chunk.grid_count - 1)
     $workerId = "micro_event_c${startSlug}_${endSlug}"
@@ -166,6 +174,8 @@ Write-Output "wave_id=$WaveId"
 Write-Output "profile=$Profile"
 Write-Output "grid_count=$($Manifest.grid_count)"
 Write-Output "chunk_count=$($Manifest.chunks.Count)"
+Write-Output "start_grid_index=$StartGridIndex"
+Write-Output "selected_chunk_count=$($selectedChunks.Count)"
 Write-Output "gcs_prefix=$GcsPrefix"
 Write-Output "launch_rows=$LaunchRowsPath"
 Write-Output "research_only=true"
