@@ -3371,7 +3371,7 @@ def test_close_unexpected_broker_positions_closes_short_option_legs_first(tmp_pa
                 },
                 {
                     "symbol": "QQQ260424P00659000",
-                    "qty": "6",
+                    "qty": "-6",
                     "side": "short",
                     "asset_class": "us_option",
                 },

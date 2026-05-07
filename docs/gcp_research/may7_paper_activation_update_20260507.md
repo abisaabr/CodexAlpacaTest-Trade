@@ -153,6 +153,33 @@ Initial post-launch state:
 - Completed trades: 0
 - Signals fired: 0
 
+## Midday Runtime Recovery
+
+At approximately 12:13 ET, the original PAPER trader process (`PID 58520`) was no longer running. The stderr trace showed an Alpaca PAPER order rejection during unexpected-position cleanup:
+
+- Error: `position intent mismatch, inferred: sell_to_open, specified: sell_to_close`
+- Root cause: Alpaca can report short option positions with both `side=short` and a negative `qty`; the runner double-negated that payload and treated the short leg as long.
+- Fix: `_signed_broker_position_qty` now normalizes short positions to `-abs(qty)` and long positions to `abs(qty)`.
+- Regression coverage: `tests\test_multi_ticker_portfolio.py` now covers the negative-quantity short payload case.
+
+Validation after the fix:
+
+- `python -m pytest tests\test_multi_ticker_portfolio.py -q` passed: 67 tests.
+- `python -m py_compile alpaca_lab\multi_ticker_portfolio\trader.py` passed.
+
+The crash logs were preserved under:
+
+- `D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260507\paper_trader_stdout_before_recovery_20260507T121706.txt`
+- `D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260507\paper_trader_stderr_before_recovery_20260507T121706.txt`
+
+The PAPER trader was restarted after confirming no duplicate broker-facing process and PAPER broker mode:
+
+- Recovery PID: 42628
+- Command: `python scripts\run_multi_ticker_portfolio_paper_trader.py --portfolio-config config\multi_symbol_governed_realtime_paper_portfolio_20260507_armed.yaml --submit-paper-orders`
+- Broker mode: paper
+- Open orders immediately after recovery: 1 SPY `sell_to_close` order
+- Broker positions immediately after recovery: 7 option positions
+
 ## Launch Rule
 
 Do not start live trading.

@@ -644,7 +644,11 @@ class MultiTickerPortfolioPaperTrader:
     def _signed_broker_position_qty(self, position_payload: dict[str, Any]) -> float:
         qty = float(position_payload.get("qty") or 0.0)
         side = str(position_payload.get("side") or "long").lower()
-        return -qty if side == "short" else qty
+        if side == "short":
+            return -abs(qty)
+        if side == "long":
+            return abs(qty)
+        return qty
 
     def _normalized_broker_asset_class(self, position_payload: dict[str, Any]) -> str:
         raw_asset_class = str(position_payload.get("asset_class") or "").lower()
