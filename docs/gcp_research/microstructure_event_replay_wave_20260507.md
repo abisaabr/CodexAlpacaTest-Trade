@@ -105,6 +105,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\launch_gcp_microstru
   -ChunkSize 256 `
   -MaxLaunches 8 `
   -MaxContracts 240 `
+  -MaxContractsPerUnderlying 0 `
   -MachineType e2-standard-4 `
   -InstanceSuffix 20260507m2
 ```

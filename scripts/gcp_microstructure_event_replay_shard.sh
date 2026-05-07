@@ -23,6 +23,7 @@ GRID_COUNT="$(metadata_value grid_count 128)"
 UNDERLYINGS="$(metadata_value underlyings QQQ,SPY,IWM)"
 UNDERLYINGS="${UNDERLYINGS//;/,}"
 MAX_CONTRACTS="$(metadata_value max_contracts 0)"
+MAX_CONTRACTS_PER_UNDERLYING="$(metadata_value max_contracts_per_underlying 0)"
 FEE_PER_CONTRACT="$(metadata_value fee_per_contract 0.65)"
 PROCESSES="$(metadata_value processes "$(nproc)")"
 
@@ -66,6 +67,7 @@ print(json.dumps({
     "grid_count": "__GRID_COUNT__",
     "underlyings": "__UNDERLYINGS__",
     "max_contracts": "__MAX_CONTRACTS__",
+    "max_contracts_per_underlying": "__MAX_CONTRACTS_PER_UNDERLYING__",
     "processes": "__PROCESSES__",
     "broker_facing": False,
     "paper_orders": False,
@@ -84,6 +86,7 @@ PY
     -e "s|__GRID_COUNT__|${GRID_COUNT}|g" \
     -e "s|__UNDERLYINGS__|${UNDERLYINGS}|g" \
     -e "s|__MAX_CONTRACTS__|${MAX_CONTRACTS}|g" \
+    -e "s|__MAX_CONTRACTS_PER_UNDERLYING__|${MAX_CONTRACTS_PER_UNDERLYING}|g" \
     -e "s|__PROCESSES__|${PROCESSES}|g" \
     "${WORKROOT}/microstructure_status.json"
   gcloud storage cp "${WORKROOT}/microstructure_status.json" "${WORKER_PREFIX}/microstructure_status.json" || true
@@ -106,7 +109,7 @@ python -m pip install --upgrade pip
 
 write_status "running_replay" "grid_start=${GRID_START_INDEX} grid_count=${GRID_COUNT}"
 cat > "${WORKROOT}/command.txt" <<EOF
-python scripts/run_microstructure_event_replay_shard.py --events-jsonl "${EVENTS_JSONL_URI}" --grid-jsonl "${GRID_JSONL_URI}" --output-dir "${OUTPUT_DIR}" --wave-id "${WAVE_ID}" --worker-id "${WORKER_ID}" --grid-start-index "${GRID_START_INDEX}" --grid-count "${GRID_COUNT}" --underlyings "${UNDERLYINGS}" --max-contracts "${MAX_CONTRACTS}" --fee-per-contract "${FEE_PER_CONTRACT}" --processes "${PROCESSES}"
+python scripts/run_microstructure_event_replay_shard.py --events-jsonl "${EVENTS_JSONL_URI}" --grid-jsonl "${GRID_JSONL_URI}" --output-dir "${OUTPUT_DIR}" --wave-id "${WAVE_ID}" --worker-id "${WORKER_ID}" --grid-start-index "${GRID_START_INDEX}" --grid-count "${GRID_COUNT}" --underlyings "${UNDERLYINGS}" --max-contracts "${MAX_CONTRACTS}" --max-contracts-per-underlying "${MAX_CONTRACTS_PER_UNDERLYING}" --fee-per-contract "${FEE_PER_CONTRACT}" --processes "${PROCESSES}"
 EOF
 
 python scripts/run_microstructure_event_replay_shard.py \
@@ -119,6 +122,7 @@ python scripts/run_microstructure_event_replay_shard.py \
   --grid-count "${GRID_COUNT}" \
   --underlyings "${UNDERLYINGS}" \
   --max-contracts "${MAX_CONTRACTS}" \
+  --max-contracts-per-underlying "${MAX_CONTRACTS_PER_UNDERLYING}" \
   --fee-per-contract "${FEE_PER_CONTRACT}" \
   --processes "${PROCESSES}"
 
