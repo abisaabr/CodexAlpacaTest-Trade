@@ -70,6 +70,18 @@ Second-tranche packets `c065-128` are also present for QQQ, SPY, and IWM. All th
 
 Third-tranche workers `c129-192` were launched after commit `5a24bc0` so their worker status and candidate summaries should record `runtime_parity_mode=paper_snapshot_greeks` directly. Use these workers as the first explicit paper-runtime-parity Greek tranche for downstream diagnostics.
 
+Partial aggregate `aggregate_partial_20260506T224725` covers expanded workers through `c129-192`:
+
+- GCS: `gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_partial_20260506T224725/aggregate_partial_20260506T224725/`
+- Candidate profiles aggregated: 1,728
+- Portfolio-gate eligible profiles: 6
+- Promotion packet decision: `research_only_blocked_regime_incomplete`
+- Review candidates in packet: 2
+- New lead cluster: IWM bull only, specifically `iwm__bull__call__bull_put_credit_spread` and `iwm__bull__call__single_leg_repair`
+- Do not add these to PAPER yet because the generated packet is not `eligible_for_promotion_review`; it is blocked until regime context is complete or a separate governed packet explicitly scopes an IWM bull-only validation review.
+
+Fourth-tranche workers `c193-256` were launched after this aggregate with source commit `f8a9c20`.
+
 ## Commands
 
 Prepare-only smoke:
