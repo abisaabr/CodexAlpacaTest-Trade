@@ -38,6 +38,33 @@ The current May 7 PAPER trader is not a sub-minute scalper:
 
 This means a 15- to 45-second scalp cannot be fairly promoted by the current minute-bar backtester. It would be overfit or mismeasured unless we add a microstructure replay contract.
 
+## May 7 Shadow Bootstrap Check
+
+I ran the existing no-submit realtime shadow monitor in plan-only mode against the active May 7 armed portfolio. This did not open websocket streams and did not submit orders.
+
+Command:
+
+```powershell
+python scripts\run_multi_ticker_realtime_shadow_monitor.py `
+  --portfolio-config config\multi_symbol_governed_realtime_paper_portfolio_20260507_armed.yaml `
+  --output-dir reports\gcp_research\microstructure_shadow_plan_20260507 `
+  --max-option-symbols 900 `
+  --include-option-trades
+```
+
+Result:
+
+- Status: `plan_only`
+- Underlyings: `10`
+- Stock feed: `sip`
+- Option feed: `opra`
+- Option subscription universe: `364` contracts
+- Option symbol cap used for plan: `900`
+- Local output: `reports\gcp_research\microstructure_shadow_plan_20260507\`
+- GCS mirror: `gs://codexalpaca-control-us/research_results/multi_symbol_governed_realtime_20260507/microstructure_shadow_plan_20260507/`
+
+Interpretation: the selected-contract universe for the currently armed 10-ticker portfolio is small enough for a focused OPRA quote/trade shadow run. The limiting issue is not subscription count; it is runtime architecture, replay accuracy, and whether the active account/SDK permits an additional stream connection without starving the order-submitting paper trader.
+
 ## Research Lane
 
 ### Phase 0: Live Shadow Recorder
