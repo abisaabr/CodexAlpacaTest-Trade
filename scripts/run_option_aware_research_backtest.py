@@ -58,6 +58,8 @@ OPTION_EXIT_STOCK_PROXY = "stock_proxy_exit"
 OPTION_EXIT_PREMIUM_TARGET_STOP = "premium_target_stop"
 STOCK_SESSION_FILTER_NONE = "none"
 STOCK_SESSION_FILTER_OPTION_RTH_SAME_DAY = "option_rth_same_day"
+RUNTIME_PARITY_NONE = "none"
+RUNTIME_PARITY_PAPER_SNAPSHOT_GREEKS = "paper_snapshot_greeks"
 OPTION_SESSION_TIMEZONE = "America/New_York"
 OPTION_SESSION_START = "09:35"
 OPTION_SESSION_END = "15:55"
@@ -195,7 +197,33 @@ def parse_args() -> argparse.Namespace:
             "and are not broker-facing."
         ),
     )
+    parser.add_argument(
+        "--runtime-parity-mode",
+        choices=[RUNTIME_PARITY_NONE, RUNTIME_PARITY_PAPER_SNAPSHOT_GREEKS],
+        default=RUNTIME_PARITY_NONE,
+        help=(
+            "Apply a named backtest contract that mirrors production paper execution "
+            "semantics. paper_snapshot_greeks uses at-or-after option bars, disables "
+            "prior/as-of entry staleness, keeps option RTH same-day source trades, and "
+            "defaults nearest-contract requests to the delta-target selector."
+        ),
+    )
     return parser.parse_args()
+
+
+def apply_runtime_parity_mode(args: argparse.Namespace) -> argparse.Namespace:
+    if args.runtime_parity_mode == RUNTIME_PARITY_NONE:
+        return args
+    if args.runtime_parity_mode != RUNTIME_PARITY_PAPER_SNAPSHOT_GREEKS:
+        raise ValueError(f"Unsupported runtime_parity_mode={args.runtime_parity_mode}")
+
+    args.entry_bar_lookup_mode = ENTRY_LOOKUP_AT_OR_AFTER
+    args.exit_bar_lookup_mode = EXIT_LOOKUP_AT_OR_AFTER
+    args.max_entry_staleness_minutes = 0.0
+    args.stock_session_filter = STOCK_SESSION_FILTER_OPTION_RTH_SAME_DAY
+    if args.contract_selection_method == CONTRACT_SELECTION_NEAREST:
+        args.contract_selection_method = CONTRACT_SELECTION_DELTA_TARGET
+    return args
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -2372,6 +2400,7 @@ def build_option_aware_backtest(
     candidate_count: int | None = None,
     candidate_selection_mode: str = CANDIDATE_SELECTION_PRIORITY_ORDER,
     regime_balance_order: tuple[str, ...] = DEFAULT_REGIME_BALANCE_ORDER,
+    runtime_parity_mode: str = RUNTIME_PARITY_NONE,
     progress_dir: Path | None = None,
 ) -> dict[str, Any]:
     if max_entry_staleness is None:
@@ -2572,6 +2601,7 @@ def build_option_aware_backtest(
             "max_entry_staleness_minutes": round(max_entry_staleness.total_seconds() / 60.0, 4),
             "exit_lookup_mode": exit_lookup_mode,
             "max_exit_lag_minutes": round(max_exit_lag.total_seconds() / 60.0, 4),
+            "runtime_parity_mode": runtime_parity_mode,
             **economics,
             **split,
             "promotion_allowed": False,
@@ -2639,6 +2669,7 @@ def build_option_aware_backtest(
         "symbol_filter": sorted(symbol_filter) if symbol_filter else [],
         "skip_blocked_queue_items": bool(skip_blocked_queue_items),
         "test_date_count": int(test_date_count),
+        "runtime_parity_mode": runtime_parity_mode,
         "stock_session_filter": stock_session_filter,
         "stock_session_filter_window": {
             "timezone": OPTION_SESSION_TIMEZONE,
@@ -2662,7 +2693,8 @@ def build_option_aware_backtest(
         },
         "contract_selection_lookahead": (
             "entry_window_only"
-            if contract_selection_method == CONTRACT_SELECTION_LIQUIDITY_FIRST
+            if contract_selection_method
+            in {CONTRACT_SELECTION_LIQUIDITY_FIRST, CONTRACT_SELECTION_DELTA_TARGET}
             else "none"
         ),
         "candidate_count": len(candidate_summaries),
@@ -2724,6 +2756,7 @@ def write_markdown(path: Path, payload: dict[str, Any]) -> None:
         f"- Option trade count: `{payload['option_trade_count']}`",
         f"- Promotion allowed: `{payload['promotion_allowed']}`",
         f"- Broker facing: `{payload['broker_facing']}`",
+        f"- Runtime parity mode: `{payload.get('runtime_parity_mode')}`",
         f"- Contract selection method: `{payload.get('contract_selection_method')}`",
         f"- Contract selection lookahead: `{payload.get('contract_selection_lookahead')}`",
         f"- Fill coverage unit: `{payload.get('fill_coverage_unit')}`",
@@ -2801,7 +2834,7 @@ def write_artifacts(output_dir: Path, run_id: str, payload: dict[str, Any]) -> d
 
 
 def main() -> None:
-    args = parse_args()
+    args = apply_runtime_parity_mode(parse_args())
     run_id = (
         args.run_id
         or f"option_aware_research_{datetime.now().astimezone().strftime('%Y%m%d_%H%M%S')}"
@@ -2834,6 +2867,7 @@ def main() -> None:
         stock_session_filter=args.stock_session_filter,
         test_date_count=args.test_date_count,
         contract_selection_method=args.contract_selection_method,
+        runtime_parity_mode=args.runtime_parity_mode,
         progress_dir=Path(args.progress_dir) if args.progress_dir else None,
     )
     payload["run_id"] = run_id

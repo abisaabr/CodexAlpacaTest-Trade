@@ -39,6 +39,7 @@ ENTRY_BAR_LOOKUP_MODE="$(metadata_value entry_bar_lookup_mode "first_bar_at_or_a
 MAX_ENTRY_STALENESS_MINUTES="$(metadata_value max_entry_staleness_minutes 5)"
 EXIT_BAR_LOOKUP_MODE="$(metadata_value exit_bar_lookup_mode "first_bar_at_or_after_exit_within_lag")"
 STOCK_SESSION_FILTER="$(metadata_value stock_session_filter "option_rth_same_day")"
+RUNTIME_PARITY_MODE="$(metadata_value runtime_parity_mode "none")"
 SELECTORS_CSV="${SELECTORS_CSV//;/,}"
 LAG_PROFILES_CSV="${LAG_PROFILES_CSV//;/,}"
 REGIME_BALANCE_ORDER="${REGIME_BALANCE_ORDER//;/,}"
@@ -102,6 +103,7 @@ print(json.dumps({
     "max_entry_staleness_minutes": "__MAX_ENTRY_STALENESS_MINUTES__",
     "exit_bar_lookup_mode": "__EXIT_BAR_LOOKUP_MODE__",
     "stock_session_filter": "__STOCK_SESSION_FILTER__",
+    "runtime_parity_mode": "__RUNTIME_PARITY_MODE__",
     "candidate_start_index": "__CANDIDATE_START_INDEX__",
     "candidate_count": "__CANDIDATE_COUNT__",
     "candidate_selection_mode": "__CANDIDATE_SELECTION_MODE__",
@@ -126,6 +128,7 @@ PY
     -e "s|__MAX_ENTRY_STALENESS_MINUTES__|${MAX_ENTRY_STALENESS_MINUTES}|g" \
     -e "s|__EXIT_BAR_LOOKUP_MODE__|${EXIT_BAR_LOOKUP_MODE}|g" \
     -e "s|__STOCK_SESSION_FILTER__|${STOCK_SESSION_FILTER}|g" \
+    -e "s|__RUNTIME_PARITY_MODE__|${RUNTIME_PARITY_MODE}|g" \
     -e "s|__CANDIDATE_START_INDEX__|${CANDIDATE_START_INDEX}|g" \
     -e "s|__CANDIDATE_COUNT__|${CANDIDATE_COUNT}|g" \
     -e "s|__CANDIDATE_SELECTION_MODE__|${CANDIDATE_SELECTION_MODE}|g" \
@@ -281,6 +284,7 @@ run_selector() {
     --max-exit-lag-minutes "${exit_lag}"
     --exit-bar-lookup-mode "${EXIT_BAR_LOOKUP_MODE}"
     --stock-session-filter "${STOCK_SESSION_FILTER}"
+    --runtime-parity-mode "${RUNTIME_PARITY_MODE}"
     --test-date-count "${TEST_DATE_COUNT}"
     --initial-cash "${INITIAL_CASH}"
     --allocation-fraction "${ALLOCATION_FRACTION}"
@@ -319,6 +323,7 @@ echo "entry_bar_lookup_mode=${ENTRY_BAR_LOOKUP_MODE}"
 echo "max_entry_staleness_minutes=${MAX_ENTRY_STALENESS_MINUTES}"
 echo "exit_bar_lookup_mode=${EXIT_BAR_LOOKUP_MODE}"
 echo "stock_session_filter=${STOCK_SESSION_FILTER}"
+echo "runtime_parity_mode=${RUNTIME_PARITY_MODE}"
 start_runtime_monitor
 write_status "startup" "installing_dependencies"
 

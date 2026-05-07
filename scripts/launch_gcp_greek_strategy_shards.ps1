@@ -183,6 +183,7 @@ foreach ($Symbol in $SelectedSymbols) {
             max_entry_staleness_minutes = "0"
             profile_name = "$($Symbol.ToLowerInvariant())-greek-delta-target"
             regime_balance_order = "bull;bear;choppy;unclassified"
+            runtime_parity_mode = "paper_snapshot_greeks"
             selectors = $metadataSelectors
             slippage_bps = "10"
             source_archive_uri = $SourceArchiveUri

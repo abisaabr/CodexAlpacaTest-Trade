@@ -44,6 +44,28 @@ Directional variants test target deltas 0.35, 0.50, and 0.65 with bounded min/ma
 
 Expanded builder status: after the first compact wave, `scripts/build_greek_strategy_research_inputs.py` was expanded to generate 2,304 QQQ/SPY/IWM variants. The expanded grid adds target deltas 0.25 and 0.80, same-day DTE, credit call/put verticals, broken-wing call/put butterflies, premium-defense spreads, and wider neutral theta structures. Launch expanded waves under a new wave id so they do not mix with the compact `T0215Z` artifacts.
 
+## Runtime-Parity Contract
+
+`scripts/run_option_aware_research_backtest.py` now accepts `--runtime-parity-mode paper_snapshot_greeks`. This mode makes the historical replay contract explicit for realtime/PAPER compatibility:
+
+- entry option bars must be at or after the stock signal;
+- exit option bars must be at or after the stock exit signal;
+- prior/as-of entry staleness is disabled with `max_entry_staleness_minutes=0`;
+- source stock trades are filtered to option RTH same-day windows;
+- nearest-contract requests are promoted to the entry-time delta-target selector.
+
+`scripts/launch_gcp_greek_strategy_shards.ps1` passes this mode for new Greek shard launches, and worker status JSON plus candidate summaries record `runtime_parity_mode`. Already-running workers launched before this source commit still used equivalent explicit metadata for entry/exit lookup, but future waves should prefer the named mode so promotion packets prove the replay was paper-parity rather than research-diagnostic.
+
+## First Expanded-Tranche Status
+
+Expanded wave `qqq_spy_iwm_greek_expanded_20260507T0315Z` has first-tranche packets for QQQ, SPY, and IWM under:
+
+- `gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/workers/qqq_greek_c001_064/`
+- `gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/workers/spy_greek_c001_064/`
+- `gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/workers/iwm_greek_c001_064/`
+
+All three first-tranche packets are `research_only_blocked` with zero review candidates. Dominant blockers are `fill_coverage_below_0.90`, `option_trades_below_20`, `min_net_pnl_not_positive`, and `test_net_pnl_not_above_0`. These results should not be added to the PAPER runner.
+
 ## Commands
 
 Prepare-only smoke:
