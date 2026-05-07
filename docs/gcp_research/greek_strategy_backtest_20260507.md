@@ -66,6 +66,10 @@ Expanded wave `qqq_spy_iwm_greek_expanded_20260507T0315Z` has first-tranche pack
 
 All three first-tranche packets are `research_only_blocked` with zero review candidates. Dominant blockers are `fill_coverage_below_0.90`, `option_trades_below_20`, `min_net_pnl_not_positive`, and `test_net_pnl_not_above_0`. These results should not be added to the PAPER runner.
 
+Second-tranche packets `c065-128` are also present for QQQ, SPY, and IWM. All three are `research_only_blocked` with zero review candidates and the same dominant blocker stack: fill coverage, trade count, full-period PnL, and test PnL. These results should not be added to the PAPER runner.
+
+Third-tranche workers `c129-192` were launched after commit `5a24bc0` so their worker status and candidate summaries should record `runtime_parity_mode=paper_snapshot_greeks` directly. Use these workers as the first explicit paper-runtime-parity Greek tranche for downstream diagnostics.
+
 ## Commands
 
 Prepare-only smoke:
