@@ -35,6 +35,20 @@ def build_rows(*, symbols: list[str], wave_id: str) -> list[dict]:
     rows: list[dict] = []
     directional_profiles = [
         {
+            "timing_profile": "greek_opening_drive",
+            "hard_exit_minute": 45,
+            "min_minutes_since_open": 10,
+            "max_minutes_since_open": 75,
+            "entry_signal_mode": "rising_edge",
+            "cooldown_bars": 180,
+            "max_signals_per_day": 1,
+            "fast_window": 3,
+            "slow_window": 13,
+            "breakout_window": 13,
+            "min_volume_ratio": 1.05,
+            "min_trend_gap_pct": 0.0005,
+        },
+        {
             "timing_profile": "greek_morning_momentum",
             "hard_exit_minute": 55,
             "min_minutes_since_open": 20,
@@ -82,55 +96,85 @@ def build_rows(*, symbols: list[str], wave_id: str) -> list[dict]:
             "profit_target_multiple": 0.38,
             "stop_loss_multiple": 0.13,
         },
+        {
+            "option_exit_mode": "premium_target_stop",
+            "option_exit_profile": "greek_trend_hold_55_20",
+            "option_profit_target_pct": 0.55,
+            "option_stop_loss_pct": 0.20,
+            "min_option_hold_minutes": 5,
+            "profit_target_multiple": 0.60,
+            "stop_loss_multiple": 0.22,
+        },
     ]
     delta_profiles = [
+        {"target_delta": 0.25, "min_abs_delta": 0.18, "max_abs_delta": 0.34, "label": "d25"},
         {"target_delta": 0.35, "min_abs_delta": 0.25, "max_abs_delta": 0.45, "label": "d35"},
         {"target_delta": 0.50, "min_abs_delta": 0.40, "max_abs_delta": 0.60, "label": "d50"},
         {"target_delta": 0.65, "min_abs_delta": 0.55, "max_abs_delta": 0.78, "label": "d65"},
+        {"target_delta": 0.80, "min_abs_delta": 0.70, "max_abs_delta": 0.90, "label": "d80"},
     ]
     for symbol in symbols:
         for regime, direction in (("bull", "call"), ("bear", "put")):
             sign = -1.0 if direction == "put" else 1.0
-            for timing_profile in directional_profiles:
-                for exit_profile in exit_profiles:
-                    for delta_profile in delta_profiles:
-                        signed_delta = sign * float(delta_profile["target_delta"])
-                        base_params = {
-                            **timing_profile,
-                            **exit_profile,
-                            "dte_mode": "next_expiry",
-                            "stock_proxy_mode": "breakout",
-                            "liquidity_gate": "tight",
-                            "target_delta": signed_delta,
-                            "min_abs_delta": delta_profile["min_abs_delta"],
-                            "max_abs_delta": delta_profile["max_abs_delta"],
-                        }
-                        rows.append(
-                            _variant(
-                                symbol=symbol,
-                                regime=regime,
-                                direction=direction,
-                                family="single_leg_repair",
-                                parameters={**base_params, "family_template": "single_leg_repair"},
-                                priority=1,
-                                wave_id=wave_id,
+            for dte_mode in ("same_day", "next_expiry"):
+                for timing_profile in directional_profiles:
+                    for exit_profile in exit_profiles:
+                        for delta_profile in delta_profiles:
+                            signed_delta = sign * float(delta_profile["target_delta"])
+                            base_params = {
+                                **timing_profile,
+                                **exit_profile,
+                                "dte_mode": dte_mode,
+                                "stock_proxy_mode": "breakout",
+                                "liquidity_gate": "tight",
+                                "target_delta": signed_delta,
+                                "min_abs_delta": delta_profile["min_abs_delta"],
+                                "max_abs_delta": delta_profile["max_abs_delta"],
+                            }
+                            family_specs = [
+                                ("single_leg_repair", 1, {"family_template": "single_leg_repair"}),
+                                (
+                                    f"debit_{direction}_vertical",
+                                    2,
+                                    {"family_template": f"debit_{direction}_vertical", "wing_width_steps": 1},
+                                ),
+                                (
+                                    f"broken_wing_{direction}_butterfly",
+                                    3,
+                                    {
+                                        "family_template": f"broken_wing_{direction}_butterfly",
+                                        "wing_width_steps": 1,
+                                        "far_wing_width_steps": 3,
+                                    },
+                                ),
+                            ]
+                            credit_family = (
+                                "bull_put_credit_spread" if regime == "bull" else "bear_call_credit_spread"
                             )
-                        )
-                        rows.append(
-                            _variant(
-                                symbol=symbol,
-                                regime=regime,
-                                direction=direction,
-                                family=f"debit_{direction}_vertical",
-                                parameters={
-                                    **base_params,
-                                    "family_template": f"debit_{direction}_vertical",
-                                    "wing_width_steps": 1,
-                                },
-                                priority=2,
-                                wave_id=wave_id,
+                            family_specs.append(
+                                (
+                                    credit_family,
+                                    3,
+                                    {
+                                        "family_template": credit_family,
+                                        "short_width_steps": 1,
+                                        "wing_width_steps": 1,
+                                        "option_stop_loss_credit_multiple": 1.60,
+                                    },
+                                )
                             )
-                        )
+                            for family, priority, family_params in family_specs:
+                                rows.append(
+                                    _variant(
+                                        symbol=symbol,
+                                        regime=regime,
+                                        direction=direction,
+                                        family=family,
+                                        parameters={**base_params, **family_params},
+                                        priority=priority,
+                                        wave_id=wave_id,
+                                    )
+                                )
 
         choppy_profiles = [
             {
@@ -154,39 +198,42 @@ def build_rows(*, symbols: list[str], wave_id: str) -> list[dict]:
         ]
         for profile in choppy_profiles:
             for body_delta in (0.45, 0.55):
-                for family in ("iron_butterfly", "iron_condor"):
-                    params = {
-                        **profile,
-                        "dte_mode": "next_expiry",
-                        "family_template": family,
-                        "stock_proxy_mode": "range_bound",
-                        "timeout_only_stock_proxy": True,
-                        "entry_signal_mode": "daily_first",
-                        "cooldown_bars": 240,
-                        "max_signals_per_day": 1,
-                        "min_range_pct": 0.0015,
-                        "short_width_steps": 1,
-                        "wing_width_steps": 1,
-                        "target_delta": body_delta,
-                        "min_abs_delta": 0.25,
-                        "max_abs_delta": 0.70,
-                        "option_exit_mode": "premium_target_stop",
-                        "option_exit_profile": "short_theta_50_35",
-                        "option_profit_target_pct": 0.50,
-                        "option_stop_loss_pct": 0.35,
-                        "min_option_hold_minutes": 5,
-                    }
-                    rows.append(
-                        _variant(
-                            symbol=symbol,
-                            regime="choppy",
-                            direction="call",
-                            family=family,
-                            parameters=params,
-                            priority=3,
-                            wave_id=wave_id,
-                        )
-                    )
+                for dte_mode in ("same_day", "next_expiry"):
+                    for family in ("iron_butterfly", "iron_condor", "premium_defense_spread"):
+                        for wing_width in (1, 2):
+                            params = {
+                                **profile,
+                                "dte_mode": dte_mode,
+                                "family_template": family,
+                                "stock_proxy_mode": "range_bound",
+                                "timeout_only_stock_proxy": True,
+                                "entry_signal_mode": "daily_first",
+                                "cooldown_bars": 240,
+                                "max_signals_per_day": 1,
+                                "min_range_pct": 0.0015,
+                                "short_width_steps": 1,
+                                "wing_width_steps": wing_width,
+                                "target_delta": body_delta,
+                                "min_abs_delta": 0.25,
+                                "max_abs_delta": 0.70,
+                                "option_exit_mode": "premium_target_stop",
+                                "option_exit_profile": f"short_theta_50_35_w{wing_width}_{dte_mode}",
+                                "option_profit_target_pct": 0.50,
+                                "option_stop_loss_pct": 0.35,
+                                "option_stop_loss_credit_multiple": 1.65,
+                                "min_option_hold_minutes": 5,
+                            }
+                            rows.append(
+                                _variant(
+                                    symbol=symbol,
+                                    regime="choppy",
+                                    direction="call",
+                                    family=family,
+                                    parameters=params,
+                                    priority=3,
+                                    wave_id=wave_id,
+                                )
+                            )
     return rows
 
 

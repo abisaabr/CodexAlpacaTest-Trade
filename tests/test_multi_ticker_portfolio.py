@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from dataclasses import asdict
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -321,6 +321,50 @@ def test_governed_candidate_identity_survives_trade_event_base() -> None:
     assert event["research_entry_offset_minutes"] == trade.research_entry_offset_minutes
     assert event["research_exit_offset_minutes"] == trade.research_exit_offset_minutes
     assert event["runner_semantics_status"] == trade.runner_semantics_status
+
+
+def test_strategy_performance_ledgers_track_daily_and_cumulative(tmp_path: Path) -> None:
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.run_root = tmp_path / "runs"
+    completed_df = pd.DataFrame(
+        [
+            {
+                "strategy_name": "qqq_greek_delta_call",
+                "underlying_symbol": "QQQ",
+                "regime": "bull",
+                "net_pnl": 120.0,
+            },
+            {
+                "strategy_name": "qqq_greek_delta_call",
+                "underlying_symbol": "QQQ",
+                "regime": "bull",
+                "net_pnl": -30.0,
+            },
+            {
+                "strategy_name": "spy_greek_delta_put",
+                "underlying_symbol": "SPY",
+                "regime": "bear",
+                "net_pnl": 50.0,
+            },
+        ]
+    )
+
+    summary = trader._update_strategy_performance_ledgers(
+        trade_date=date(2026, 5, 7),
+        completed_df=completed_df,
+    )
+
+    daily = pd.read_csv(summary["strategy_daily_performance_ledger_path"])
+    cumulative = pd.read_csv(summary["strategy_cumulative_performance_path"])
+    qqq_daily = daily.loc[daily["strategy_name"] == "qqq_greek_delta_call"].iloc[0]
+    qqq_cumulative = cumulative.loc[cumulative["strategy_name"] == "qqq_greek_delta_call"].iloc[0]
+
+    assert qqq_daily["trade_count"] == 2
+    assert qqq_daily["win_count"] == 1
+    assert qqq_daily["net_pnl"] == 90.0
+    assert qqq_daily["win_rate_pct"] == 50.0
+    assert qqq_cumulative["trade_count"] == 2
+    assert qqq_cumulative["net_pnl"] == 90.0
 
 
 def test_governed_qqq_candidate_order_shapes_are_broker_safe(monkeypatch) -> None:

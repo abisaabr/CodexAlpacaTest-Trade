@@ -2072,19 +2072,33 @@ class MultiTickerPortfolioPaperTrader:
         run_dir = self._session_run_dir(trade_date)
         event_base = self._event_base_for_trade(trade, phase=phase)
         for request_index, request in enumerate(requests, start=1):
+            serialized_request = self._serialize_order_request(request)
             response = self.broker.submit_order(
                 request,
                 dry_run=not self.submit_paper_orders,
                 explicitly_requested=self.submit_paper_orders,
             )
-            append_journal_entry(run_dir / "order_journal.json", {"journal": journal_name, "response": response})
+            append_journal_entry(
+                run_dir / "order_journal.json",
+                {
+                    **event_base,
+                    "journal": journal_name,
+                    "event_type": "order_submission",
+                    "request_index": request_index,
+                    "request": serialized_request,
+                    "response": response,
+                    "response_status": response.get("status"),
+                    "order_id": response.get("id"),
+                    "client_order_id": request.client_order_id,
+                },
+            )
             self._append_trade_event(
                 trade_date,
                 {
                     **event_base,
                     "event_type": "order_submission",
                     "request_index": request_index,
-                    "request": self._serialize_order_request(request),
+                    "request": serialized_request,
                     "response_status": response.get("status"),
                     "order_id": response.get("id"),
                     "client_order_id": request.client_order_id,
@@ -2092,6 +2106,20 @@ class MultiTickerPortfolioPaperTrader:
             )
             if response.get("status") == "dry_run":
                 fallback_price = 0.0 if request.order_type == "market" else float(request.limit_price or 0.0)
+                append_journal_entry(
+                    run_dir / "order_journal.json",
+                    {
+                        **event_base,
+                        "journal": journal_name,
+                        "event_type": "order_terminal",
+                        "request_index": request_index,
+                        "request": serialized_request,
+                        "status": "dry_run",
+                        "order_id": response.get("id"),
+                        "client_order_id": request.client_order_id,
+                        "filled_avg_price": fallback_price,
+                    },
+                )
                 self._append_trade_event(
                     trade_date,
                     {
@@ -2107,7 +2135,23 @@ class MultiTickerPortfolioPaperTrader:
                 return response, fallback_price
             order_id = str(response.get("id") or "")
             terminal = self._wait_for_terminal_order(order_id)
-            append_journal_entry(run_dir / "order_journal.json", {"journal": journal_name, "terminal": terminal})
+            append_journal_entry(
+                run_dir / "order_journal.json",
+                {
+                    **event_base,
+                    "journal": journal_name,
+                    "event_type": "order_terminal",
+                    "request_index": request_index,
+                    "request": serialized_request,
+                    "terminal": terminal,
+                    "status": terminal.get("status"),
+                    "order_id": order_id,
+                    "client_order_id": request.client_order_id,
+                    "filled_qty": terminal.get("filled_qty"),
+                    "qty": terminal.get("qty"),
+                    "filled_avg_price": terminal.get("filled_avg_price"),
+                },
+            )
             self._append_trade_event(
                 trade_date,
                 {
@@ -4214,6 +4258,125 @@ class MultiTickerPortfolioPaperTrader:
         }
         return events_df, reconciliation_df, ticker_df, strategy_df, summary
 
+    def _update_strategy_performance_ledgers(
+        self,
+        *,
+        trade_date: date,
+        completed_df: pd.DataFrame,
+    ) -> dict[str, Any]:
+        daily_path = self.run_root / "strategy_daily_performance_ledger.csv"
+        cumulative_path = self.run_root / "strategy_cumulative_performance.csv"
+        daily_columns = [
+            "trade_date",
+            "strategy_name",
+            "underlying_symbol",
+            "regime",
+            "trade_count",
+            "win_count",
+            "loss_count",
+            "flat_count",
+            "net_pnl",
+            "avg_pnl",
+            "win_rate_pct",
+        ]
+        cumulative_columns = [
+            "strategy_name",
+            "underlying_symbol",
+            "regime",
+            "first_trade_date",
+            "last_trade_date",
+            "trade_count",
+            "win_count",
+            "loss_count",
+            "flat_count",
+            "net_pnl",
+            "avg_pnl",
+            "win_rate_pct",
+        ]
+        if completed_df.empty:
+            daily_path.parent.mkdir(parents=True, exist_ok=True)
+            if not daily_path.exists():
+                pd.DataFrame(columns=daily_columns).to_csv(daily_path, index=False)
+            if not cumulative_path.exists():
+                pd.DataFrame(columns=cumulative_columns).to_csv(cumulative_path, index=False)
+            return {
+                "strategy_daily_performance_ledger_path": str(daily_path),
+                "strategy_cumulative_performance_path": str(cumulative_path),
+                "strategy_daily_rows_written": 0,
+                "strategy_cumulative_rows": 0,
+            }
+
+        frame = completed_df.copy()
+        for column in ("strategy_name", "underlying_symbol", "regime"):
+            if column not in frame.columns:
+                frame[column] = "unknown"
+        frame["net_pnl"] = pd.to_numeric(frame.get("net_pnl", 0.0), errors="coerce").fillna(0.0)
+        frame["trade_date"] = trade_date.isoformat()
+        grouping_columns = ["trade_date", "strategy_name", "underlying_symbol", "regime"]
+        grouped = frame.groupby(grouping_columns, dropna=False)
+        daily = grouped["net_pnl"].agg(["count", "sum", "mean"]).reset_index()
+        daily = daily.merge(
+            grouped["net_pnl"].apply(lambda series: int((series > 0.0).sum())).reset_index(name="win_count"),
+            on=grouping_columns,
+        )
+        daily = daily.merge(
+            grouped["net_pnl"].apply(lambda series: int((series < 0.0).sum())).reset_index(name="loss_count"),
+            on=grouping_columns,
+        )
+        daily = daily.merge(
+            grouped["net_pnl"].apply(lambda series: int((series == 0.0).sum())).reset_index(name="flat_count"),
+            on=grouping_columns,
+        )
+        daily = daily.rename(columns={"count": "trade_count", "sum": "net_pnl", "mean": "avg_pnl"})
+        daily["win_rate_pct"] = (daily["win_count"] / daily["trade_count"].clip(lower=1) * 100.0).round(2)
+        daily["net_pnl"] = daily["net_pnl"].round(4)
+        daily["avg_pnl"] = daily["avg_pnl"].round(4)
+        daily = daily[daily_columns].sort_values(
+            ["trade_date", "net_pnl", "strategy_name"],
+            ascending=[True, False, True],
+        )
+
+        if daily_path.exists():
+            existing_daily = pd.read_csv(daily_path)
+            existing_daily = existing_daily.loc[
+                existing_daily["trade_date"].astype(str) != trade_date.isoformat()
+            ].copy()
+            daily_all = pd.concat([existing_daily, daily], ignore_index=True)
+        else:
+            daily_all = daily
+        daily_path.parent.mkdir(parents=True, exist_ok=True)
+        daily_all.to_csv(daily_path, index=False)
+
+        cumulative_grouped = daily_all.groupby(
+            ["strategy_name", "underlying_symbol", "regime"],
+            dropna=False,
+        )
+        cumulative = cumulative_grouped.agg(
+            first_trade_date=("trade_date", "min"),
+            last_trade_date=("trade_date", "max"),
+            trade_count=("trade_count", "sum"),
+            win_count=("win_count", "sum"),
+            loss_count=("loss_count", "sum"),
+            flat_count=("flat_count", "sum"),
+            net_pnl=("net_pnl", "sum"),
+        ).reset_index()
+        cumulative["avg_pnl"] = (cumulative["net_pnl"] / cumulative["trade_count"].clip(lower=1)).round(4)
+        cumulative["win_rate_pct"] = (
+            cumulative["win_count"] / cumulative["trade_count"].clip(lower=1) * 100.0
+        ).round(2)
+        cumulative["net_pnl"] = cumulative["net_pnl"].round(4)
+        cumulative = cumulative.sort_values(
+            ["net_pnl", "trade_count", "strategy_name"],
+            ascending=[False, False, True],
+        )
+        cumulative.to_csv(cumulative_path, index=False)
+        return {
+            "strategy_daily_performance_ledger_path": str(daily_path),
+            "strategy_cumulative_performance_path": str(cumulative_path),
+            "strategy_daily_rows_written": int(len(daily)),
+            "strategy_cumulative_rows": int(len(cumulative)),
+        }
+
     def _classify_guardrail_reason(self, reason: str | None) -> str | None:
         if reason is None:
             return None
@@ -4630,6 +4793,10 @@ class MultiTickerPortfolioPaperTrader:
         self.save_session(session)
         run_dir = self._session_run_dir(date.fromisoformat(session.trade_date))
         completed_df = pd.DataFrame(session.completed_trades)
+        strategy_ledger_summary = self._update_strategy_performance_ledgers(
+            trade_date=trade_date,
+            completed_df=completed_df,
+        )
         (
             reconciliation_events_df,
             reconciliation_df,
@@ -4667,6 +4834,7 @@ class MultiTickerPortfolioPaperTrader:
         if cleanup_summary:
             summary["end_of_day_cleanup"] = cleanup_summary
         summary["shutdown_reconciled"] = shutdown_reconciled
+        summary.update(strategy_ledger_summary)
         summary.update(reconciliation_summary)
         summary.update(broker_order_audit_summary)
         summary.update(broker_activity_summary)

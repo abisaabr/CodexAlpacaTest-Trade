@@ -1,6 +1,6 @@
 # Greek Strategy Backtest Lane - 2026-05-07
 
-Updated: 2026-05-06 22:20 ET / 2026-05-07T02:20Z
+Updated: 2026-05-06 22:55 ET / 2026-05-07T02:55Z
 
 ## Status
 
@@ -14,6 +14,7 @@ Greek-aware historical replay is now supported as a research-only lane.
 - Launcher: `scripts/launch_gcp_greek_strategy_shards.ps1`
 - Backtester selector: `entry_delta_target_research_only`
 - Active first tranche launched: QQQ/SPY/IWM c001-028 with suffix `20260507g2`
+- Active second tranche launched: QQQ/SPY/IWM c029-056 with suffix `20260507g3`
 
 The first `20260507g1` workers under `qqq_spy_iwm_greek_research_20260507T0145Z` were stopped and must not be used for promotion review because they were launched before the Greek selector patch was present in the worker source archive. Aggregate only the active `T0215Z` wave unless a later handoff supersedes it.
 
@@ -40,6 +41,8 @@ The Greek input builder creates 168 QQQ/SPY/IWM variants:
 - Choppy: theta/vega-aware iron butterfly and iron condor templates.
 
 Directional variants test target deltas 0.35, 0.50, and 0.65 with bounded min/max absolute-delta filters. Choppy variants carry theta/vega intent in the parameter metadata but still require native multi-leg runtime support before broker-facing activation.
+
+Expanded builder status: after the first compact wave, `scripts/build_greek_strategy_research_inputs.py` was expanded to generate 2,304 QQQ/SPY/IWM variants. The expanded grid adds target deltas 0.25 and 0.80, same-day DTE, credit call/put verticals, broken-wing call/put butterflies, premium-defense spreads, and wider neutral theta structures. Launch expanded waves under a new wave id so they do not mix with the compact `T0215Z` artifacts.
 
 ## Commands
 
@@ -80,6 +83,21 @@ powershell -ExecutionPolicy Bypass -File .\scripts\launch_gcp_greek_strategy_sha
   -MaxLaunchesPerSymbol 1 `
   -InstanceSuffix 20260507g3
 ```
+
+Daily paper postmortem after the May 7 session:
+
+```powershell
+python scripts\build_multi_ticker_paper_postmortem.py `
+  --portfolio-config config\multi_symbol_governed_realtime_paper_portfolio_20260507_armed.yaml `
+  --trade-date 2026-05-07
+```
+
+The paper runner also writes cumulative strategy scoreboards during normal session finalization:
+
+- `D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260507\strategy_daily_performance_ledger.csv`
+- `D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260507\strategy_cumulative_performance.csv`
+
+Order journals and trade reconciliation events include strategy name, source strategy id, candidate variant id, phase, request, response, and terminal order status for every PAPER buy/sell attempt. The standalone postmortem builder can be rerun from session artifacts if the runner exits before normal finalization.
 
 ## Aggregation
 
