@@ -36,6 +36,29 @@ Broker activity reconciliation artifacts:
 
 Broker fill count: `30`
 
+Direct broker-fill strategy join:
+
+- Matched fills by `order_id`: `22/30`
+- Matched fill rate: `0.733333`
+- Direct matched signed cash ex-fees: `-1615.00`
+- Unmatched signed cash ex-fees: `984.00`
+
+Inferred stale-exit attribution:
+
+- Inferred allocations by symbol balance: `5`
+- Inferred allocated signed cash ex-fees: `978.00`
+- Still-unmatched fills: `4`
+- Still-unmatched signed cash ex-fees: `6.00`
+- Inference type: `inferred_symbol_balance`, not authoritative broker identity
+
+Additional reconciliation artifacts:
+
+- `reports/gcp_research/may7_negative_session_postmortem_20260507/broker_fill_strategy_reconciliation_summary_2026-05-07.json`
+- `reports/gcp_research/may7_negative_session_postmortem_20260507/broker_fill_strategy_matches_2026-05-07.csv`
+- `reports/gcp_research/may7_negative_session_postmortem_20260507/broker_strategy_cash_summary_2026-05-07.csv`
+- `reports/gcp_research/may7_negative_session_postmortem_20260507/broker_fill_inferred_allocations_2026-05-07.csv`
+- `reports/gcp_research/may7_negative_session_postmortem_20260507/broker_strategy_cash_summary_inferred_2026-05-07.csv`
+
 Largest broker symbol cash contributors, excluding fees:
 
 - `SPY260508C00735000`: `-723.00`
@@ -63,10 +86,10 @@ Known stale-exit strategy IDs from the broker-flat reconciliation:
 - Broker-flat stale exits are reconciled without submitting invalid `sell_to_close` orders.
 - Postmortem accounting now separates session net PnL from strategy-attributed PnL and flags `needs_broker_fill_reconciliation`.
 - Microstructure shadow telemetry was added so websocket strategy candidates can be replayed against observed spread, quote age, and short-horizon move behavior.
+- `scripts/build_broker_fill_strategy_reconciliation.py` now joins broker fills to local strategy identity by `order_id` and emits a separate inferred stale-exit view by symbol balance.
 
 ## Required Next Fix Before Trusting Strategy Scoreboards
 
-Build a broker-fill joiner that maps Alpaca order activities back to strategy IDs, attempt IDs, option symbols, and local order intents. The daily strategy scoreboard should use broker-fill-realized economics when local terminal events are missing.
+The broker-fill joiner exists, but the daily strategy scoreboard should not automatically use inferred stale-exit rows until they are reviewed. The next production hardening step is to integrate direct `order_id` matches into the official daily scoreboard and keep inferred rows in an audit-only section unless an order-level or client-order-id-level match is recovered.
 
-Until that is complete, the May 7 session is valid for paper-runtime hardening and broker/account-level risk analysis, but not valid as clean per-strategy PnL evidence.
-
+Until direct broker-fill scoreboard integration is complete, the May 7 session is valid for paper-runtime hardening and broker/account-level risk analysis, but not valid as clean per-strategy PnL evidence.
