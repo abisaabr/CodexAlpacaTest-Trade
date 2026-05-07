@@ -239,3 +239,47 @@ Smoke result:
 - Blockers: `fill_coverage_below_gate=16`, `net_pnl_not_positive=16`, `avg_net_pnl_not_positive=16`, `trade_count_below_gate=8`
 
 Interpretation: the short websocket capture still does not produce an executable micro-scalping candidate under realistic spread/latency economics. The useful next search direction is rarer event-driven entries with larger target moves and strict quote/spread gates, not higher-frequency 1% scalps.
+
+## V2 GCP Tranche - 2026-05-07
+
+After deleting only terminated research VMs to free instance quota, a bounded v2 executable replay tranche was launched.
+
+- Wave ID: `microstructure_event_replay_v2_executable_20260507T1935Z`
+- GCS root: `gs://codexalpaca-control-us/research_results/microstructure_event_replay_v2_executable_20260507T1935Z/`
+- Source commit staged: `8d6d480`
+- Profile: `liquid_exhaustive_v1`
+- Grid rows: `496800`
+- Chunk size: `256`
+- First tranche: `8` workers
+- Contract cap: `80` contracts per underlying, balanced across QQQ/SPY/IWM
+- Execution profiles included: `zero_latency_baseline`, `low_latency_realistic`, `strict_latency_realistic`
+- Research only: `true`
+- Broker facing: `false`
+
+Active workers at launch:
+
+- `micro_event_c00001_00256`
+- `micro_event_c00257_00512`
+- `micro_event_c00513_00768`
+- `micro_event_c00769_01024`
+- `micro_event_c01025_01280`
+- `micro_event_c01281_01536`
+- `micro_event_c01537_01792`
+- `micro_event_c01793_02048`
+
+When workers complete, aggregate with:
+
+```powershell
+gcloud storage rsync -r `
+  gs://codexalpaca-control-us/research_results/microstructure_event_replay_v2_executable_20260507T1935Z/workers `
+  reports\gcp_research\microstructure_event_replay_v2_executable_20260507T1935Z\workers
+
+python scripts\aggregate_microstructure_event_replay.py `
+  --workers-root reports\gcp_research\microstructure_event_replay_v2_executable_20260507T1935Z\workers `
+  --output-dir reports\gcp_research\microstructure_event_replay_v2_executable_20260507T1935Z\aggregate `
+  --wave-id microstructure_event_replay_v2_executable_20260507T1935Z `
+  --min-fill-coverage 0.90 `
+  --min-trades 20 `
+  --min-net-pnl 0 `
+  --max-avg-spread-cost-to-target 0.65
+```
