@@ -101,6 +101,26 @@ The generated packet still does not authorize PAPER activation. A no-required-re
 
 Fifth-tranche workers `c257-320` are now running under suffix `20260507gx5`.
 
+Fifth-tranche `c257-320` completed for QQQ, SPY, and IWM with `runtime_parity_mode=paper_snapshot_greeks`:
+
+- QQQ `c257-320`: `research_only_blocked`, 0 review candidates.
+- SPY `c257-320`: `research_only_blocked_regime_incomplete`, 1 review candidate.
+- IWM `c257-320`: `research_only_blocked_regime_incomplete`, 6 review candidates.
+
+Partial aggregate `aggregate_partial_20260506T235727` covers completed expanded workers through `c257-320`:
+
+- GCS: `gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_partial_20260506T235727/`
+- Candidate profiles aggregated: 2,816
+- Portfolio-gate eligible profiles: 69
+- Promotion packet decision: `research_only_blocked_regime_incomplete`
+- Review candidates in packet: 20
+- Lead cluster remains bull-only.
+- New notable lead: IWM `broken_wing_call_butterfly` with `min_net_pnl=26370.25`, `min_test_net_pnl=362.49`, and fill gate clear inside a blocked/regime-incomplete packet.
+
+The generated packet still does not authorize PAPER activation. The current blocker is not lack of bull leads; it is missing eligible bear/choppy regime coverage under the governed packet rule.
+
+Sixth-tranche workers `c321-384` are now running under suffix `20260507gx6`.
+
 ## Commands
 
 Prepare-only smoke:
