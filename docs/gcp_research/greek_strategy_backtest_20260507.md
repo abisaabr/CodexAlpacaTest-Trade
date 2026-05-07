@@ -121,6 +121,25 @@ The generated packet still does not authorize PAPER activation. The current bloc
 
 Sixth-tranche workers `c321-384` are now running under suffix `20260507gx6`.
 
+Sixth-tranche `c321-384` completed for QQQ, SPY, and IWM with `runtime_parity_mode=paper_snapshot_greeks`:
+
+- QQQ `c321-384`: `research_only_blocked`, 0 review candidates.
+- SPY `c321-384`: `research_only_blocked_regime_incomplete`, 2 review candidates.
+- IWM `c321-384`: `research_only_blocked_regime_incomplete`, 1 review candidate.
+
+Partial aggregate `aggregate_partial_20260507T003221` covers completed expanded workers through `c321-384`:
+
+- GCS: `gs://codexalpaca-control-us/research_results/qqq_spy_iwm_greek_expanded_20260507T0315Z/aggregate_partial_20260507T003221/`
+- Candidate profiles aggregated: 3,456
+- Portfolio-gate eligible profiles: 80
+- Promotion packet decision: `research_only_blocked_regime_incomplete`
+- Review candidates in packet: 20
+- Lead cluster remains bull-only despite added SPY/IWM candidates.
+
+No new PAPER activation is authorized. The remaining gap is still eligible bear/choppy regime coverage, not bull-candidate quality.
+
+Seventh-tranche workers `c385-448` are now running under suffix `20260507gx7`.
+
 ## Commands
 
 Prepare-only smoke:
