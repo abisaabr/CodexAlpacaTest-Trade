@@ -380,3 +380,40 @@ Next rerun:
 - Launch a small GCP rerun for the affected AVGO/IWM non-single candidate shards under a new wave ID.
 - Rebuild strict portfolio reports and promotion-review packets after that rerun.
 - Do not add any repaired candidate to the paper runner unless the generated packet clears the applicable governed review gate.
+
+## Structure-Aware Rerun Launch
+
+Research-only rerun launched:
+
+- Wave ID: `bear_choppy_structure_aware_rerun_20260508T1745ET`
+- GCS root: `gs://codexalpaca-control-us/research_results/bear_choppy_structure_aware_rerun_20260508T1745ET/`
+- Source commit: `1261e69`
+- Broker-facing: `false`
+- Paper orders: `false`
+- Live manifest effect: `none`
+- Risk policy effect: `none`
+- Fill gate: unchanged at `0.90`
+
+Workers launched:
+
+- `avgo-rescue-c097-120-20260508sa1`, zone `us-central1-a`, range `AVGO` candidates `97-120`
+- `avgo-rescue-c121-144-20260508sa1`, zone `us-west1-a`, range `AVGO` candidates `121-144`
+- `iwm-rescue-c121-144-20260508sa1`, zone `us-central1-a`, range `IWM` candidates `121-144`
+
+Launch commands used the canonical dense 365d data roots:
+
+- AVGO stock: `gs://codexalpaca-data-us/research_stock_data/option_fill_ladder_next10_20260429/AVGO/365d_5x5/stock_ref_silver/stock_bars/symbol=AVGO`
+- AVGO selected contracts: `gs://codexalpaca-control-us/research_results/option_fill_ladder_next10_20260429/AVGO/365d_5x5/research_wave/dense_universe/selected_option_contracts/underlying=AVGO`
+- AVGO option bars: `gs://codexalpaca-data-us/research_option_data/option_fill_ladder_next10_20260429/AVGO/365d_5x5/option_bars_silver/option_bars/underlying=AVGO`
+- IWM stock: `gs://codexalpaca-data-us/research_stock_data/option_fill_ladder_20260429/IWM/365d_5x5/stock_ref_silver/stock_bars/symbol=IWM`
+- IWM selected contracts: `gs://codexalpaca-control-us/research_results/option_fill_ladder_20260429/IWM/365d_5x5/research_wave/dense_universe/selected_option_contracts/underlying=IWM`
+- IWM option bars: `gs://codexalpaca-data-us/research_option_data/option_fill_ladder_20260429/IWM/365d_5x5/option_bars_silver/option_bars/underlying=IWM`
+
+Expected next action:
+
+- Monitor until all three workers terminate.
+- Sync worker artifacts from GCS.
+- Aggregate strict reports and generated promotion-review packets.
+- Compare any surviving candidates against `tt_top2_bull_choppy_up`.
+- Delete only synced `TERMINATED` research VMs.
+- No paper-runner strategy changes are allowed from this rerun until generated packets are reviewed.
