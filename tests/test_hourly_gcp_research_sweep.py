@@ -4,6 +4,7 @@ from pathlib import Path
 
 from scripts.hourly_gcp_research_sweep import (
     DEFAULT_GCS_RESULTS_ROOT,
+    _build_status_note,
     extract_worker_instance,
     summarize_promotion_packet,
 )
@@ -67,3 +68,29 @@ def test_summarize_promotion_packet_counts_eligible_and_blocked() -> None:
     assert summary.eligible_candidates == 2
     assert summary.blocked_candidates == 1
 
+
+def test_build_status_note_renders_concise_summary() -> None:
+    packet = {
+        "generated_at_utc": "2026-05-08T00:00:00+00:00",
+        "project": "codexalpaca",
+        "run_id": "run123",
+        "dry_run": False,
+        "delete_synced_terminated": True,
+        "instance_scan": {
+            "instance_count": 10,
+            "terminated_research_worker_count": 2,
+            "running_research_worker_count": 1,
+        },
+        "sync_summary": {"jobs": 2, "synced": 1, "empty": 1, "errors": 0},
+        "promotion_summary": {
+            "packets_scanned": 1,
+            "packets_with_eligible_count_gt_0": 0,
+            "eligible_review_candidates": 0,
+            "blocked_review_candidates": 3,
+        },
+        "cleanup_summary": {"deleted": 1, "skipped": 1, "errors": 0},
+    }
+    note = _build_status_note(packet)
+    assert "# Hourly GCP Research Sweep" in note
+    assert "Jobs: `2` (synced `1`, empty `1`, errors `0`)" in note
+    assert "Skipped (not synced / dry-run / no delete flag): `1`" in note

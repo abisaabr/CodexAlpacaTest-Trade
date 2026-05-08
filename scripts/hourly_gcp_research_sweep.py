@@ -364,40 +364,67 @@ def _write_text(path: Path, content: str) -> None:
 
 
 def _build_status_note(packet: dict[str, Any]) -> str:
+    generated_at = packet.get("generated_at_utc", "unknown")
+    project = packet.get("project", "unknown")
+    run_id = packet.get("run_id", "unknown")
+    dry_run = str(bool(packet.get("dry_run"))).lower()
+    delete_synced_terminated = str(bool(packet.get("delete_synced_terminated"))).lower()
+
+    instance_scan = packet.get("instance_scan") if isinstance(packet.get("instance_scan"), dict) else {}
+    instance_count = _int(instance_scan.get("instance_count"))
+    terminated_count = _int(instance_scan.get("terminated_research_worker_count"))
+    running_count = _int(instance_scan.get("running_research_worker_count"))
+
+    sync_summary = packet.get("sync_summary") if isinstance(packet.get("sync_summary"), dict) else {}
+    sync_jobs = _int(sync_summary.get("jobs"))
+    sync_synced = _int(sync_summary.get("synced"))
+    sync_empty = _int(sync_summary.get("empty"))
+    sync_errors = _int(sync_summary.get("errors"))
+
+    promotion_summary = (
+        packet.get("promotion_summary") if isinstance(packet.get("promotion_summary"), dict) else {}
+    )
+    packets_scanned = _int(promotion_summary.get("packets_scanned"))
+    packets_with_eligible = _int(promotion_summary.get("packets_with_eligible_count_gt_0"))
+    eligible_candidates = _int(promotion_summary.get("eligible_review_candidates"))
+    blocked_candidates = _int(promotion_summary.get("blocked_review_candidates"))
+
+    cleanup_summary = packet.get("cleanup_summary") if isinstance(packet.get("cleanup_summary"), dict) else {}
+    deleted = _int(cleanup_summary.get("deleted"))
+    skipped = _int(cleanup_summary.get("skipped"))
+    errors = _int(cleanup_summary.get("errors"))
+
     lines = [
         "# Hourly GCP Research Sweep",
         "",
-        f"- Generated UTC: `{packet['generated_at_utc']}`",
-        f"- Project: `{packet['project']}`",
-        f"- Run id: `{packet['run_id']}`",
-        f"- Dry run: `{str(packet['dry_run']).lower()}`",
-        f"- Delete synced terminated: `{str(packet['delete_synced_terminated']).lower()}`",
+        f"- Generated UTC: `{generated_at}`",
+        f"- Project: `{project}`",
+        f"- Run id: `{run_id}`",
+        f"- Dry run: `{dry_run}`",
+        f"- Delete synced terminated: `{delete_synced_terminated}`",
         "",
         "## Instance Scan",
         "",
-        f"- Total instances described: `{packet['instance_scan']['instance_count']}`",
-        f"- Research worker TERMINATED: `{packet['instance_scan']['terminated_research_worker_count']}`",
-        f"- Research worker RUNNING: `{packet['instance_scan']['running_research_worker_count']}`",
+        f"- Total instances described: `{instance_count}`",
+        f"- Research worker TERMINATED: `{terminated_count}`",
+        f"- Research worker RUNNING: `{running_count}`",
         "",
         "## Artifact Sync",
         "",
-        f"- Jobs: `{packet['sync_summary']['jobs']}`",
-        f"- Synced: `{packet['sync_summary']['synced']}`",
-        f"- Empty: `{packet['sync_summary']['empty']}`",
-        f"- Errors: `{packet['sync_summary']['errors']}`",
+        f"- Jobs: `{sync_jobs}` (synced `{sync_synced}`, empty `{sync_empty}`, errors `{sync_errors}`)",
         "",
         "## Promotion Packets",
         "",
-        f"- Packets scanned: `{packet['promotion_summary']['packets_scanned']}`",
-        f"- Packets w/ eligible_for_promotion_review_count > 0: `{packet['promotion_summary']['packets_with_eligible_count_gt_0']}`",
-        f"- Eligible review candidates (rows): `{packet['promotion_summary']['eligible_review_candidates']}`",
-        f"- Blocked candidates (rows): `{packet['promotion_summary']['blocked_review_candidates']}`",
+        f"- Packets scanned: `{packets_scanned}`",
+        f"- Packets w/ eligible_for_promotion_review_count > 0: `{packets_with_eligible}`",
+        f"- Eligible review candidates (rows): `{eligible_candidates}`",
+        f"- Blocked candidates (rows): `{blocked_candidates}`",
         "",
         "## Cleanup",
         "",
-        f"- Deleted instances: `{packet['cleanup_summary']['deleted']}`",
-        f"- Skipped (not synced or not terminated): `{packet['cleanup_summary']['skipped']}`",
-        f"- Errors: `{packet['cleanup_summary']['errors']}`",
+        f"- Deleted instances: `{deleted}`",
+        f"- Skipped (not synced / dry-run / no delete flag): `{skipped}`",
+        f"- Errors: `{errors}`",
         "",
     ]
     return "\n".join(lines)
@@ -578,4 +605,3 @@ if __name__ == "__main__":
         if str(os.environ.get(key, "")).lower() == forbidden:
             raise SystemExit(f"Hard error: {key}={forbidden} is not allowed in this repo")
     main()
-
