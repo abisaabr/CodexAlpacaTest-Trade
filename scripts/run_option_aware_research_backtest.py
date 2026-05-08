@@ -509,6 +509,41 @@ def _choose_entry_liquidity_first_contract(
     max_entry_staleness: timedelta,
     dte_mode: str | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str]:
+    choices, status = _entry_liquidity_first_contract_choices(
+        contracts=contracts,
+        option_bars=option_bars,
+        option_trades=option_trades,
+        option_index=option_index,
+        symbol=symbol,
+        option_type=option_type,
+        trade_date=trade_date,
+        entry_time=entry_time,
+        max_lag=max_lag,
+        entry_lookup_mode=entry_lookup_mode,
+        max_entry_staleness=max_entry_staleness,
+        dte_mode=dte_mode,
+    )
+    if status != "selected" or not choices:
+        return None, None, status
+    contract, entry_bar = choices[0]
+    return contract, entry_bar, "selected"
+
+
+def _entry_liquidity_first_contract_choices(
+    *,
+    contracts: pd.DataFrame,
+    option_bars: pd.DataFrame,
+    option_trades: pd.DataFrame,
+    option_index: OptionResearchIndex | None = None,
+    symbol: str,
+    option_type: str,
+    trade_date: Any,
+    entry_time: pd.Timestamp,
+    max_lag: timedelta,
+    entry_lookup_mode: str,
+    max_entry_staleness: timedelta,
+    dte_mode: str | None = None,
+) -> tuple[list[tuple[dict[str, Any], dict[str, Any]]], str]:
     frame = (
         _candidate_contracts_from_index(
             option_index=option_index,
@@ -526,7 +561,7 @@ def _choose_entry_liquidity_first_contract(
     )
     frame = _filter_contracts_for_dte_mode(frame, dte_mode)
     if frame.empty:
-        return None, None, "no_selected_contract"
+        return [], "no_selected_contract"
 
     choices: list[tuple[tuple[float, ...], str, dict[str, Any], dict[str, Any]]] = []
     for contract in frame.to_dict("records"):
@@ -557,10 +592,9 @@ def _choose_entry_liquidity_first_contract(
         choices.append((rank_key, contract_symbol, contract, entry_bar))
 
     if not choices:
-        return None, None, "no_entry_bar"
+        return [], "no_entry_bar"
     choices.sort(key=lambda item: (item[0], item[1]))
-    _, _, contract, entry_bar = choices[0]
-    return contract, entry_bar, "selected"
+    return [(contract, entry_bar) for _, _, contract, entry_bar in choices], "selected"
 
 
 def _choose_entry_delta_target_contract(
@@ -597,7 +631,7 @@ def _choose_entry_delta_target_contract(
     )
     frame = _filter_contracts_for_dte_mode(frame, dte_mode)
     if frame.empty:
-        return None, None, "no_selected_contract"
+        return [], "no_selected_contract"
 
     default_target = -0.55 if option_type.lower() == "put" else 0.55
     target_delta = _float_parameter(parameters, "target_delta", default_target)
@@ -651,10 +685,9 @@ def _choose_entry_delta_target_contract(
             return None, None, "no_selected_contract"
         if saw_entry_bar:
             return None, None, "no_greek_snapshot"
-        return None, None, "no_entry_bar"
+        return [], "no_entry_bar"
     choices.sort(key=lambda item: (item[0], item[1]))
-    _, _, contract, entry_bar = choices[0]
-    return contract, entry_bar, "selected"
+    return [(contract, entry_bar) for _, _, contract, entry_bar in choices], "selected"
 
 
 def _variant_parameters(queue_item: dict[str, Any], variant: dict[str, Any]) -> dict[str, Any]:
@@ -1071,6 +1104,36 @@ def _option_structure_legs(
             dte_mode=dte_mode,
         )
 
+    def base_choices(
+        option_type_value: str,
+    ) -> tuple[list[tuple[dict[str, Any], dict[str, Any]]], str]:
+        if contract_selection_method != CONTRACT_SELECTION_LIQUIDITY_FIRST:
+            contract, entry_bar, status = base(option_type_value)
+            if status != "selected" or not contract or not entry_bar:
+                return [], status
+            return [(contract, entry_bar)], "selected"
+        return _entry_liquidity_first_contract_choices(
+            contracts=contracts,
+            option_bars=option_bars,
+            option_trades=option_trades,
+            option_index=option_index,
+            symbol=symbol,
+            option_type=option_type_value,
+            trade_date=trade_date,
+            entry_time=entry_time,
+            max_lag=max_entry_lag,
+            entry_lookup_mode=entry_lookup_mode,
+            max_entry_staleness=max_entry_staleness,
+            dte_mode=dte_mode,
+        )
+
+    def unresolved_structure_status(statuses: list[str]) -> str:
+        return (
+            "no_entry_bar"
+            if statuses and all(item == "no_entry_bar" for item in statuses)
+            else "no_selected_contract"
+        )
+
     def wing(
         option_type_value: str,
         base_contract: dict[str, Any],
@@ -1239,102 +1302,141 @@ def _option_structure_legs(
         return choices[0][2], "iron_condor", "selected"
 
     if "bull_put_credit_spread" in family or "credit_put_vertical" in family:
-        put_body, put_body_entry, status = base("put")
-        if status != "selected" or not put_body or not put_body_entry:
+        put_body_choices, status = base_choices("put")
+        if status != "selected" or not put_body_choices:
             return [], "credit_put_vertical", status
-        short_put, short_put_entry, status = wing(
-            "put", put_body, higher=False, width_steps=short_width
-        )
-        if status != "selected" or not short_put or not short_put_entry:
-            return [], "credit_put_vertical", status
-        long_put, long_put_entry, status = wing(
-            "put", short_put, higher=False, width_steps=vertical_width
-        )
-        if status != "selected" or not long_put or not long_put_entry:
-            return [], "credit_put_vertical", status
+        statuses: list[str] = []
+        for put_body, _put_body_entry in put_body_choices:
+            short_put, short_put_entry, status = wing(
+                "put", put_body, higher=False, width_steps=short_width
+            )
+            if status != "selected" or not short_put or not short_put_entry:
+                statuses.append(status)
+                continue
+            long_put, long_put_entry, status = wing(
+                "put", short_put, higher=False, width_steps=vertical_width
+            )
+            if status != "selected" or not long_put or not long_put_entry:
+                statuses.append(status)
+                continue
+            return (
+                [
+                    _leg(role="short_put", side=-1, ratio=1, contract=short_put, entry_bar=short_put_entry),
+                    _leg(role="long_put_wing", side=1, ratio=1, contract=long_put, entry_bar=long_put_entry),
+                ],
+                "credit_put_vertical",
+                "selected",
+            )
+        status = unresolved_structure_status(statuses)
         return (
-            [
-                _leg(role="short_put", side=-1, ratio=1, contract=short_put, entry_bar=short_put_entry),
-                _leg(role="long_put_wing", side=1, ratio=1, contract=long_put, entry_bar=long_put_entry),
-            ],
+            [],
             "credit_put_vertical",
-            "selected",
+            status,
         )
 
     if "bear_call_credit_spread" in family or "credit_call_vertical" in family:
-        call_body, call_body_entry, status = base("call")
-        if status != "selected" or not call_body or not call_body_entry:
+        call_body_choices, status = base_choices("call")
+        if status != "selected" or not call_body_choices:
             return [], "credit_call_vertical", status
-        short_call, short_call_entry, status = wing(
-            "call", call_body, higher=True, width_steps=short_width
-        )
-        if status != "selected" or not short_call or not short_call_entry:
-            return [], "credit_call_vertical", status
-        long_call, long_call_entry, status = wing(
-            "call", short_call, higher=True, width_steps=vertical_width
-        )
-        if status != "selected" or not long_call or not long_call_entry:
-            return [], "credit_call_vertical", status
+        statuses: list[str] = []
+        for call_body, _call_body_entry in call_body_choices:
+            short_call, short_call_entry, status = wing(
+                "call", call_body, higher=True, width_steps=short_width
+            )
+            if status != "selected" or not short_call or not short_call_entry:
+                statuses.append(status)
+                continue
+            long_call, long_call_entry, status = wing(
+                "call", short_call, higher=True, width_steps=vertical_width
+            )
+            if status != "selected" or not long_call or not long_call_entry:
+                statuses.append(status)
+                continue
+            return (
+                [
+                    _leg(role="short_call", side=-1, ratio=1, contract=short_call, entry_bar=short_call_entry),
+                    _leg(role="long_call_wing", side=1, ratio=1, contract=long_call, entry_bar=long_call_entry),
+                ],
+                "credit_call_vertical",
+                "selected",
+            )
+        status = unresolved_structure_status(statuses)
         return (
-            [
-                _leg(role="short_call", side=-1, ratio=1, contract=short_call, entry_bar=short_call_entry),
-                _leg(role="long_call_wing", side=1, ratio=1, contract=long_call, entry_bar=long_call_entry),
-            ],
+            [],
             "credit_call_vertical",
-            "selected",
+            status,
         )
 
     if "debit_call_vertical" in family or "debit_put_vertical" in family:
         option_type = "put" if "put" in family else "call"
-        long_contract, long_entry, status = base(option_type)
-        if status != "selected" or not long_contract or not long_entry:
+        long_choices, status = base_choices(option_type)
+        if status != "selected" or not long_choices:
             return [], f"debit_{option_type}_vertical", status
-        short_contract, short_entry, status = wing(
-            option_type,
-            long_contract,
-            higher=option_type == "call",
-            width_steps=vertical_width,
-        )
-        if status != "selected" or not short_contract or not short_entry:
-            return [], f"debit_{option_type}_vertical", status
+        statuses: list[str] = []
+        for long_contract, long_entry in long_choices:
+            short_contract, short_entry, status = wing(
+                option_type,
+                long_contract,
+                higher=option_type == "call",
+                width_steps=vertical_width,
+            )
+            if status != "selected" or not short_contract or not short_entry:
+                statuses.append(status)
+                continue
+            return (
+                [
+                    _leg(role=f"long_{option_type}", side=1, ratio=1, contract=long_contract, entry_bar=long_entry),
+                    _leg(role=f"short_{option_type}_wing", side=-1, ratio=1, contract=short_contract, entry_bar=short_entry),
+                ],
+                f"debit_{option_type}_vertical",
+                "selected",
+            )
+        status = unresolved_structure_status(statuses)
         return (
-            [
-                _leg(role=f"long_{option_type}", side=1, ratio=1, contract=long_contract, entry_bar=long_entry),
-                _leg(role=f"short_{option_type}_wing", side=-1, ratio=1, contract=short_contract, entry_bar=short_entry),
-            ],
+            [],
             f"debit_{option_type}_vertical",
-            "selected",
+            status,
         )
 
     if "broken_wing_call_butterfly" in family or "broken_wing_put_butterfly" in family:
         option_type = "put" if "put" in family else "call"
-        long_body, long_body_entry, status = base(option_type)
-        if status != "selected" or not long_body or not long_body_entry:
+        long_body_choices, status = base_choices(option_type)
+        if status != "selected" or not long_body_choices:
             return [], f"broken_wing_{option_type}_butterfly", status
-        short_mid, short_mid_entry, status = wing(
-            option_type,
-            long_body,
-            higher=option_type == "call",
-            width_steps=vertical_width,
-        )
-        if status != "selected" or not short_mid or not short_mid_entry:
-            return [], f"broken_wing_{option_type}_butterfly", status
-        long_far, long_far_entry, status = wing(
-            option_type,
-            long_body,
-            higher=option_type == "call",
-            width_steps=far_width,
-        )
-        if status != "selected" or not long_far or not long_far_entry:
-            return [], f"broken_wing_{option_type}_butterfly", status
+        statuses: list[str] = []
+        for long_body, long_body_entry in long_body_choices:
+            short_mid, short_mid_entry, status = wing(
+                option_type,
+                long_body,
+                higher=option_type == "call",
+                width_steps=vertical_width,
+            )
+            if status != "selected" or not short_mid or not short_mid_entry:
+                statuses.append(status)
+                continue
+            long_far, long_far_entry, status = wing(
+                option_type,
+                long_body,
+                higher=option_type == "call",
+                width_steps=far_width,
+            )
+            if status != "selected" or not long_far or not long_far_entry:
+                statuses.append(status)
+                continue
+            return (
+                [
+                    _leg(role=f"long_{option_type}_body", side=1, ratio=1, contract=long_body, entry_bar=long_body_entry),
+                    _leg(role=f"short_{option_type}_middle", side=-1, ratio=2, contract=short_mid, entry_bar=short_mid_entry),
+                    _leg(role=f"long_{option_type}_far_wing", side=1, ratio=1, contract=long_far, entry_bar=long_far_entry),
+                ],
+                f"broken_wing_{option_type}_butterfly",
+                "selected",
+            )
+        status = unresolved_structure_status(statuses)
         return (
-            [
-                _leg(role=f"long_{option_type}_body", side=1, ratio=1, contract=long_body, entry_bar=long_body_entry),
-                _leg(role=f"short_{option_type}_middle", side=-1, ratio=2, contract=short_mid, entry_bar=short_mid_entry),
-                _leg(role=f"long_{option_type}_far_wing", side=1, ratio=1, contract=long_far, entry_bar=long_far_entry),
-            ],
+            [],
             f"broken_wing_{option_type}_butterfly",
-            "selected",
+            status,
         )
 
     if not option_type:

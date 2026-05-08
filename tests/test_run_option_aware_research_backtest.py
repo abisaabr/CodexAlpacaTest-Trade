@@ -363,6 +363,71 @@ def test_family_aware_option_structure_builds_vertical_and_iron_butterfly_legs()
     ]
 
 
+def test_liquidity_first_vertical_uses_best_executable_leg_chain() -> None:
+    trade_date = pd.Timestamp("2026-04-21").date()
+    entry_time = pd.Timestamp("2026-04-21T13:35:00Z")
+    contracts = pd.DataFrame(
+        {
+            "trade_date": [trade_date] * 3,
+            "underlying_symbol": ["QQQ"] * 3,
+            "symbol": [
+                "QQQ260424C00100000",
+                "QQQ260424C00101000",
+                "QQQ260424C00102000",
+            ],
+            "option_type": ["call", "call", "call"],
+            "strike_price": [100.0, 101.0, 102.0],
+            "dte": [3, 3, 3],
+            "relative_strike_step": [0, 1, 2],
+        }
+    )
+    option_bars = pd.DataFrame(
+        {
+            "symbol": [
+                "QQQ260424C00100000",
+                "QQQ260424C00101000",
+                "QQQ260424C00102000",
+            ],
+            "timestamp": [entry_time] * 3,
+            "close": [2.0, 1.1, 0.5],
+            "volume": [5, 50, 100],
+        }
+    )
+    option_index = _build_option_research_index(
+        contracts=contracts,
+        option_bars=option_bars,
+        option_trades=pd.DataFrame(),
+    )
+
+    legs, structure, status = _option_structure_legs(
+        queue_item={
+            "candidate_variant_id": "qqq_vertical",
+            "symbol": "QQQ",
+            "directional_option_type": "call",
+            "family": "debit_call_vertical",
+        },
+        variant={"parameters": {"family_template": "debit_call_vertical"}},
+        contracts=contracts,
+        option_bars=option_bars,
+        option_trades=pd.DataFrame(),
+        option_index=option_index,
+        symbol="QQQ",
+        trade_date=trade_date,
+        entry_time=entry_time,
+        max_entry_lag=timedelta(minutes=1),
+        entry_lookup_mode="first_bar_at_or_after_entry_within_lag",
+        max_entry_staleness=timedelta(minutes=0),
+        contract_selection_method=CONTRACT_SELECTION_LIQUIDITY_FIRST,
+    )
+
+    assert status == "selected"
+    assert structure == "debit_call_vertical"
+    assert [(leg["role"], leg["contract"]["strike_price"]) for leg in legs] == [
+        ("long_call", 101.0),
+        ("short_call_wing", 102.0),
+    ]
+
+
 def test_iron_butterfly_pairs_body_strikes_under_liquidity_first_selection() -> None:
     trade_date = pd.Timestamp("2026-04-21").date()
     entry_time = pd.Timestamp("2026-04-21T13:35:00Z")

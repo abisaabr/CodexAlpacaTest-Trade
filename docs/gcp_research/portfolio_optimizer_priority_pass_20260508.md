@@ -358,3 +358,25 @@ Interpretation:
 - The dense selected-contract universe often includes the liquid base leg, but the liquidity-first selector can choose a base at the edge of the selected strike ladder, leaving no higher call wing or lower put wing for the vertical.
 - The next repair should expand selected-contract construction for multi-leg research so it preserves additional wing rows beyond the entry-liquidity-ranked base. This is a data/selector repair, not a reason to lower the `0.90` fill gate.
 - After repair, rerun only these three near-miss families and adjacent width/DTE variants before launching any broader GCP sweep.
+
+## Structure-Aware Liquidity-First Repair
+
+Backtester repair added after the selected-contract diagnostic:
+
+- File: `scripts/run_option_aware_research_backtest.py`
+- Test: `tests/test_run_option_aware_research_backtest.py`
+- Behavior: liquidity-first multi-leg builders now rank executable structures rather than accepting the first liquid base leg and failing if that base has no wing.
+- Affected structures: debit call/put verticals, credit call/put verticals, and broken-wing call/put butterflies.
+- Safety: this does not lower the fill gate, widen lag windows, permit stale entries, or change paper/live risk policy. It only makes research replay attempt the next entry-liquidity-ranked base when the top-ranked base cannot form the required wing chain.
+
+Local verification:
+
+- Command: `python -m pytest tests\test_run_option_aware_research_backtest.py tests\test_build_selected_contract_gap_diagnostic.py`
+- Result: `20 passed`
+- Spot check: `AVGO` choppy `debit_call_vertical` on `2025-06-18` changed from `no_selected_contract` to a selected two-leg chain using `AVGO250620C00255000` and `AVGO250620C00257500` under the same 10-minute entry-lag source data.
+
+Next rerun:
+
+- Launch a small GCP rerun for the affected AVGO/IWM non-single candidate shards under a new wave ID.
+- Rebuild strict portfolio reports and promotion-review packets after that rerun.
+- Do not add any repaired candidate to the paper runner unless the generated packet clears the applicable governed review gate.
