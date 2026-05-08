@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 from collections import Counter
 from datetime import UTC, datetime
@@ -38,6 +39,7 @@ def parse_args() -> argparse.Namespace:
         choices=["test_pnl", "total_pnl", "risk_adjusted"],
         default="risk_adjusted",
     )
+    parser.add_argument("--max-exact-candidates", type=int, default=20)
     return parser.parse_args()
 
 
@@ -195,16 +197,60 @@ def _objective_value(row: pd.Series, objective: str) -> float:
     return float(row["test_pnl"]) / (1.0 + drawdown)
 
 
-def optimize_portfolio_candidates(
+def _portfolio_objective(simulation: dict[str, Any], subset: pd.DataFrame, objective: str) -> float:
+    if objective == "test_pnl":
+        return float(pd.to_numeric(subset["test_pnl"], errors="coerce").fillna(0.0).sum())
+    if objective == "total_pnl":
+        return float(simulation.get("net_pnl") or 0.0)
+    drawdown = abs(float(simulation.get("max_drawdown") or 0.0))
+    if drawdown <= 0:
+        drawdown = 1.0
+    return float(simulation.get("net_pnl") or 0.0) / drawdown
+
+
+def _counter_from_frame(rows: pd.DataFrame, column: str) -> Counter[str]:
+    return Counter(str(value) for value in rows[column].tolist())
+
+
+def _subset_cap_failure(
+    rows: pd.DataFrame,
     *,
-    portfolio_report_json: Path,
-    scaled_trades_csv: Path,
-    output_dir: Path,
+    max_per_symbol: int,
+    max_per_regime: int,
+    max_per_family: int,
+) -> str | None:
+    if any(count > max_per_symbol for count in _counter_from_frame(rows, "symbol").values()):
+        return "max_per_symbol"
+    if any(count > max_per_regime for count in _counter_from_frame(rows, "intended_regime").values()):
+        return "max_per_regime"
+    if any(count > max_per_family for count in _counter_from_frame(rows, "family").values()):
+        return "max_per_family"
+    return None
+
+
+def _required_failures(
+    rows: pd.DataFrame,
+    *,
+    min_symbols: int,
+    min_regimes: int,
+    min_families: int,
+) -> list[str]:
+    failures = []
+    if rows["symbol"].astype(str).nunique() < min_symbols:
+        failures.append("min_symbols")
+    if rows["intended_regime"].astype(str).nunique() < min_regimes:
+        failures.append("min_regimes")
+    if rows["family"].astype(str).nunique() < min_families:
+        failures.append("min_families")
+    return failures
+
+
+def _select_exact_subset(
+    *,
+    trades: pd.DataFrame,
+    eligible: pd.DataFrame,
     initial_cash: float,
     backtest_allocation_fraction: float,
-    train_end_date: str | None,
-    min_train_trades: int,
-    min_test_trades: int,
     max_candidates: int,
     max_per_symbol: int,
     max_per_regime: int,
@@ -214,20 +260,84 @@ def optimize_portfolio_candidates(
     min_families: int,
     max_drawdown_pct: float,
     objective: str,
-) -> dict[str, Any]:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    plan = _load_plan(portfolio_report_json)
-    plan_by_key = {_key(row): row for row in plan}
-    trades = pd.read_csv(scaled_trades_csv, low_memory=False)
-    trades["_optimizer_key"] = trades.apply(_trade_key, axis=1)
-    stats = _candidate_stats(
-        trades,
-        train_end_date=train_end_date,
-        min_train_trades=min_train_trades,
-        min_test_trades=min_test_trades,
-    )
-    stats["_objective"] = stats.apply(lambda row: _objective_value(row, objective), axis=1)
-    eligible = stats[stats["eligible"].astype(bool)].sort_values("_objective", ascending=False)
+) -> tuple[set[tuple[str, str]], list[dict[str, Any]], dict[str, Any]]:
+    rows = eligible.reset_index(drop=True)
+    max_size = min(max_candidates, len(rows))
+    best_keys: set[tuple[str, str]] = set()
+    best_score: float | None = None
+    best_simulation: dict[str, Any] = {}
+    evaluated = 0
+    infeasible_reasons: Counter[str] = Counter()
+    for size in range(1, max_size + 1):
+        for indexes in itertools.combinations(range(len(rows)), size):
+            subset = rows.iloc[list(indexes)]
+            cap_failure = _subset_cap_failure(
+                subset,
+                max_per_symbol=max_per_symbol,
+                max_per_regime=max_per_regime,
+                max_per_family=max_per_family,
+            )
+            if cap_failure:
+                infeasible_reasons[cap_failure] += 1
+                continue
+            required = _required_failures(
+                subset,
+                min_symbols=min_symbols,
+                min_regimes=min_regimes,
+                min_families=min_families,
+            )
+            if required:
+                for reason in required:
+                    infeasible_reasons[reason] += 1
+                continue
+            keys = set(subset["_optimizer_key"].tolist())
+            simulated = _simulate_selected(
+                trades,
+                keys,
+                initial_cash=initial_cash,
+                backtest_allocation_fraction=backtest_allocation_fraction,
+            )
+            evaluated += 1
+            if abs(float(simulated["max_drawdown_pct"])) > max_drawdown_pct:
+                infeasible_reasons["max_drawdown_pct"] += 1
+                continue
+            score = _portfolio_objective(simulated, subset, objective)
+            if best_score is None or score > best_score:
+                best_score = score
+                best_keys = keys
+                best_simulation = simulated
+    rejected = []
+    for _, row in eligible.iterrows():
+        if row["_optimizer_key"] not in best_keys:
+            rejected.append(
+                {
+                    **row.drop(labels=["_optimizer_key"]).to_dict(),
+                    "reject_reason": "not_selected_by_exact_optimizer",
+                }
+            )
+    compact_best_simulation = dict(best_simulation)
+    compact_best_simulation.pop("daily_rows", None)
+    return best_keys, rejected, {
+        "search_mode": "exact_subset",
+        "evaluated_portfolios": evaluated,
+        "infeasible_reason_counts": dict(infeasible_reasons),
+        "best_objective_score": best_score,
+        "best_simulation": compact_best_simulation,
+    }
+
+
+def _select_greedy(
+    *,
+    trades: pd.DataFrame,
+    eligible: pd.DataFrame,
+    initial_cash: float,
+    backtest_allocation_fraction: float,
+    max_candidates: int,
+    max_per_symbol: int,
+    max_per_regime: int,
+    max_per_family: int,
+    max_drawdown_pct: float,
+) -> tuple[set[tuple[str, str]], list[dict[str, Any]], dict[str, Any]]:
     selected_keys: set[tuple[str, str]] = set()
     symbol_counts: Counter[str] = Counter()
     regime_counts: Counter[str] = Counter()
@@ -264,8 +374,76 @@ def optimize_portfolio_candidates(
         symbol_counts[symbol] += 1
         regime_counts[regime] += 1
         family_counts[family] += 1
+    return selected_keys, rejected, {"search_mode": "greedy_incremental"}
+
+
+def optimize_portfolio_candidates(
+    *,
+    portfolio_report_json: Path,
+    scaled_trades_csv: Path,
+    output_dir: Path,
+    initial_cash: float,
+    backtest_allocation_fraction: float,
+    train_end_date: str | None,
+    min_train_trades: int,
+    min_test_trades: int,
+    max_candidates: int,
+    max_per_symbol: int,
+    max_per_regime: int,
+    max_per_family: int,
+    min_symbols: int,
+    min_regimes: int,
+    min_families: int,
+    max_drawdown_pct: float,
+    objective: str,
+    max_exact_candidates: int = 20,
+) -> dict[str, Any]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    plan = _load_plan(portfolio_report_json)
+    plan_by_key = {_key(row): row for row in plan}
+    trades = pd.read_csv(scaled_trades_csv, low_memory=False)
+    trades["_optimizer_key"] = trades.apply(_trade_key, axis=1)
+    stats = _candidate_stats(
+        trades,
+        train_end_date=train_end_date,
+        min_train_trades=min_train_trades,
+        min_test_trades=min_test_trades,
+    )
+    stats["_objective"] = stats.apply(lambda row: _objective_value(row, objective), axis=1)
+    eligible = stats[stats["eligible"].astype(bool)].sort_values("_objective", ascending=False)
+    if len(eligible) <= max_exact_candidates:
+        selected_keys, rejected, optimizer_metadata = _select_exact_subset(
+            trades=trades,
+            eligible=eligible,
+            initial_cash=initial_cash,
+            backtest_allocation_fraction=backtest_allocation_fraction,
+            max_candidates=max_candidates,
+            max_per_symbol=max_per_symbol,
+            max_per_regime=max_per_regime,
+            max_per_family=max_per_family,
+            min_symbols=min_symbols,
+            min_regimes=min_regimes,
+            min_families=min_families,
+            max_drawdown_pct=max_drawdown_pct,
+            objective=objective,
+        )
+    else:
+        selected_keys, rejected, optimizer_metadata = _select_greedy(
+            trades=trades,
+            eligible=eligible,
+            initial_cash=initial_cash,
+            backtest_allocation_fraction=backtest_allocation_fraction,
+            max_candidates=max_candidates,
+            max_per_symbol=max_per_symbol,
+            max_per_regime=max_per_regime,
+            max_per_family=max_per_family,
+            max_drawdown_pct=max_drawdown_pct,
+        )
     selected_stats = stats[stats["_optimizer_key"].isin(selected_keys)].copy()
     selected_stats = selected_stats.sort_values("_objective", ascending=False)
+    symbol_counts = _counter_from_frame(selected_stats, "symbol")
+    regime_counts = _counter_from_frame(selected_stats, "intended_regime")
+    family_counts = _counter_from_frame(selected_stats, "family")
     final_simulation = _simulate_selected(
         trades,
         selected_keys,
@@ -306,7 +484,9 @@ def optimize_portfolio_candidates(
             "min_families": min_families,
             "max_drawdown_pct": max_drawdown_pct,
             "objective": objective,
+            "max_exact_candidates": max_exact_candidates,
         },
+        "optimizer_metadata": optimizer_metadata,
         "capital_plan": selected_plan,
     }
     report_path = output_dir / "optimized_portfolio_report.json"
@@ -334,6 +514,7 @@ def optimize_portfolio_candidates(
         "selected_symbol_counts": dict(symbol_counts),
         "selected_regime_counts": dict(regime_counts),
         "selected_family_counts": dict(family_counts),
+        "optimizer_metadata": optimizer_metadata,
         "simulation": final_simulation,
     }
     (output_dir / "optimizer_summary.json").write_text(
@@ -363,6 +544,7 @@ def main() -> None:
         min_families=args.min_families,
         max_drawdown_pct=args.max_drawdown_pct,
         objective=args.objective,
+        max_exact_candidates=args.max_exact_candidates,
     )
     print(json.dumps(summary, indent=2, sort_keys=True))
 

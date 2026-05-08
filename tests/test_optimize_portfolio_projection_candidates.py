@@ -72,4 +72,5 @@ def test_optimizer_selects_train_test_positive_candidates_under_constraints(tmp_
     assert summary["status"] == "passed"
     assert summary["selected_candidate_count"] == 2
     assert summary["selected_symbol_counts"] == {"QQQ": 1, "IWM": 1}
+    assert summary["optimizer_metadata"]["search_mode"] == "exact_subset"
     assert (tmp_path / "out" / "optimized_portfolio_report.json").exists()
