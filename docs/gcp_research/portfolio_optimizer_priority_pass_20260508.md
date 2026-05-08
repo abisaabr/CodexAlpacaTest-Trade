@@ -139,3 +139,100 @@ Expected active research VMs:
 - `avgo-rescue-c121-144-20260508ns1`
 
 When these workers terminate, sync artifacts, build strict portfolio reports and promotion-review packets, mirror aggregate outputs to GCS, delete only synced TERMINATED VMs, and compare any new eligible candidates against the `full_lineage_optimizer_tiers_exact_v3_scaled` benchmark.
+
+## Follow-On GCP Sweep Completion
+
+Aggregate output:
+
+- Local aggregate root: `reports/gcp_research/bear_choppy_non_single_refine_20260508T2005Z/aggregate/`
+- Portfolio rollup: `reports/gcp_research/bear_choppy_non_single_refine_20260508T2005Z/aggregate/portfolio_report/research_wave_portfolio_rollup.json`
+- Promotion packet: `reports/gcp_research/bear_choppy_non_single_refine_20260508T2005Z/aggregate/portfolio_report/promotion_review_packet/research_promotion_review_packet.json`
+- Source commit used for worker launch: `5c94b1c`
+- Current handoff source commit: `eddb88e`
+
+Aggregate command:
+
+```powershell
+python scripts\build_research_wave_portfolio_rollup.py `
+  --report-root reports\gcp_research\bear_choppy_non_single_refine_20260508T2005Z\workers `
+  --output-dir reports\gcp_research\bear_choppy_non_single_refine_20260508T2005Z\aggregate\portfolio_report `
+  --pattern research_portfolio_report.json `
+  --fill-coverage-gate 0.90 `
+  --min-option-trades 20 `
+  --min-test-net-pnl 0 `
+  --max-positions 12 `
+  --max-strategies-per-symbol 3 `
+  --max-symbol-weight 0.35 `
+  --initial-cash 25000 `
+  --max-review-candidates 50 `
+  --required-regimes bear,choppy
+```
+
+Results:
+
+- Decision: `ready_for_governed_validation_review`
+- Governance review scope: `per_regime_governed_validation_review`
+- Broker-facing: `false`
+- Live manifest effect: `none`
+- Risk policy effect: `none`
+- Source reports: `8`
+- Candidates: `400`
+- Eligible variant-profile candidates: `14`
+- Unique review candidates in packet: `6`
+- Eligible regimes: `bear`
+- Missing eligible regimes: `choppy`
+- Eligible candidate concentration: `QQQ` and `AVGO`, all `single_leg_repair`.
+
+Blockers:
+
+- `fill_coverage_below_0.90`: `258`
+- `min_net_pnl_not_positive`: `357`
+- `test_net_pnl_not_above_0`: `321`
+- Dominant fill issue: `selected_contract_universe_gap` with `197` occurrences.
+
+Important near misses:
+
+- `AVGO` bear `debit_put_vertical` had positive full/test PnL but remained blocked by fill coverage around `0.8242` to `0.8438`.
+- `IWM` bear `bear_call_credit_spread` had positive full/test PnL but remained blocked by fill coverage around `0.8696`.
+- `AVGO` choppy `debit_call_vertical` had positive full/test PnL but remained blocked by fill coverage around `0.8855`.
+
+This means the non-single-leg search did not fail mainly because of economics. It failed because multi-leg selected-contract availability and leg-pair construction still miss the `0.90` strategy fill gate.
+
+## Follow-On Projection Comparison
+
+Standalone projection for the new bear-only sleeve:
+
+- Output root: `reports/gcp_research/bear_choppy_non_single_refine_20260508T2005Z/aggregate/growth_projection/capital_plan_projection/`
+- Strategy match coverage: `5 / 5`, `100.0%`
+- Accepted production-risk simulated trades: `275`
+- Historical ending equity from `$25,000`: `$29,741.40`
+- Total return: `18.9656%`
+- Max drawdown: `-6.4166%`
+- Diversification status: `failed`
+- Diversification failure: only `2` symbols, `1` regime, and `1` family.
+- Train/test-positive candidates: `1 / 5`
+
+Benchmark-plus-new-bear projection:
+
+- Output root: `reports/gcp_research/bear_choppy_non_single_refine_20260508T2005Z/aggregate/growth_projection/benchmark_plus_bear_sweep/`
+- Benchmark: `tt_top2_bull_choppy_up`
+- Risk config: `reports/gcp_research/portfolio_projection_hardening_sweep_20260508T1640Z/risk_configs/bull_choppy_up.yaml`
+- Historical ending equity from `$25,000`: `$35,945.80`
+- Benchmark-only ending equity: `$35,949.02`
+- Combined max drawdown: `-19.7277%`
+- Benchmark-only max drawdown: `-18.2398%`
+- Diversification status: `passed`
+- Train/test-positive candidates: `6 / 19`
+
+Adding this sweep's bear sleeve to `tt_top2_bull_choppy_up` did not improve the benchmark. It slightly reduced ending equity and worsened drawdown, so these candidates should remain research/governed-review material rather than portfolio-optimizer additions.
+
+## Next Best Technical Step
+
+Do not launch another broad non-single-leg grid yet. The evidence points to selector/data repair:
+
+- Diagnose selected-contract universe gaps for AVGO debit put verticals, IWM bear call credit spreads, and AVGO choppy debit call verticals.
+- Compare lower-leg and upper-leg availability separately for each blocked multi-leg entry.
+- Test whether failures come from DTE selection, strike-width constraints, missing opposite leg bars, or entry timestamps landing outside option quote availability.
+- Only after a targeted fill diagnostic clears should another GCP tranche run.
+
+No new strategy should be added to the paper runner from this sweep. No paper-runner state changed.
