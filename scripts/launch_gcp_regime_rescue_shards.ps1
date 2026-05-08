@@ -84,6 +84,12 @@ function Invoke-Gcloud {
     }
 }
 
+function Test-GcsObject {
+    param([string]$Uri)
+    & gcloud storage ls $Uri --project $Project *> $null
+    return ($LASTEXITCODE -eq 0)
+}
+
 function Invoke-GcloudCreateInstance {
     param([string[]]$Arguments)
     $previousPreference = $ErrorActionPreference
@@ -195,8 +201,12 @@ if ($StartCandidateIndex -gt $TotalCandidates) {
     throw "StartCandidateIndex must be between 1 and TotalCandidates"
 }
 
-git archive --format=tar.gz --output $SourceArchivePath HEAD
-Invoke-Gcloud @("storage", "cp", $SourceArchivePath, $SourceArchiveUri, "--project", $Project)
+if (Test-GcsObject $SourceArchiveUri) {
+    Write-Output "source_archive_reused=$SourceArchiveUri"
+} else {
+    git archive --format=tar.gz --output $SourceArchivePath HEAD
+    Invoke-Gcloud @("storage", "cp", $SourceArchivePath, $SourceArchiveUri, "--project", $Project)
+}
 Invoke-Gcloud @("storage", "cp", $VariantPath, $InputVariantsUri, "--project", $Project)
 Invoke-Gcloud @("storage", "cp", $QueuePath, $InputQueueUri, "--project", $Project)
 Invoke-Gcloud @("storage", "cp", $ManifestPath, "$GcsPrefix/inputs/$OutputPrefix`_manifest.json", "--project", $Project)
