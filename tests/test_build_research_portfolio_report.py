@@ -403,7 +403,8 @@ def test_research_portfolio_report_tracks_iwm_regime_completeness(tmp_path: Path
     assert packet["eligible_regimes"] == ["bull"]
     assert packet["missing_eligible_regimes"] == ["bear", "choppy"]
     assert packet["regime_complete_for_promotion_review"] is False
-    assert packet["promotion_allowed_regime_complete"] is False
+    assert packet["promotion_allowed_regime_complete"] is True
+    assert packet["regime_completeness_policy"] == "informational_only_not_a_hard_promotion_gate"
     summary_by_regime = {row["intended_regime"]: row for row in packet["regime_summary"]}
     assert summary_by_regime["bull"]["eligible_for_promotion_review_count"] == 1
     assert summary_by_regime["bear"]["blocker_counts"] == {

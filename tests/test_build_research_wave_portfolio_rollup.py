@@ -105,7 +105,7 @@ def test_wave_rollup_builds_global_capital_plan_and_promotion_packet(tmp_path: P
     assert packet["source_report_count"] == 2
     assert packet["candidate_count"] == 3
     assert packet["eligible_for_promotion_review_count"] == 2
-    assert packet["decision"] == "research_only_blocked_regime_incomplete"
+    assert packet["decision"] == "ready_for_governed_validation_review"
     assert packet["candidate_level_decision"] == "ready_for_governed_validation_review"
     assert {row["candidate_variant_id"] for row in packet["capital_plan"]} == {
         "spy_a",
@@ -290,7 +290,9 @@ def test_wave_rollup_tracks_regime_completeness(tmp_path: Path) -> None:
     assert packet["eligible_regimes"] == ["bull"]
     assert packet["missing_eligible_regimes"] == ["bear", "choppy"]
     assert packet["regime_complete_for_promotion_review"] is False
-    assert packet["decision"] == "research_only_blocked_regime_incomplete"
+    assert packet["promotion_allowed_regime_complete"] is True
+    assert packet["regime_completeness_policy"] == "informational_only_not_a_hard_promotion_gate"
+    assert packet["decision"] == "ready_for_governed_validation_review"
     summary_by_regime = {row["intended_regime"]: row for row in packet["regime_summary"]}
     assert summary_by_regime["bull"]["eligible_for_promotion_review_count"] == 1
     assert summary_by_regime["bear"]["blocker_counts"] == {

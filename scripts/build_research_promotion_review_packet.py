@@ -170,18 +170,20 @@ def _repair_targets(
 
 def _next_actions(packet: dict[str, Any]) -> list[str]:
     missing_regimes = packet.get("gate_summary", {}).get("missing_eligible_regimes") or []
-    if missing_regimes:
-        return [
-            "Keep this packet research-only; it is not regime-complete for bull/bear/choppy paper-readiness.",
-            f"Continue targeted redesign for missing eligible regimes: {', '.join(str(item) for item in missing_regimes)}.",
-            "Do not modify live manifests, strategy selection, or risk policy from this packet alone.",
-        ]
     if packet["decision"] == "ready_for_governed_validation_review":
-        return [
+        actions = [
             "Review promotion-review candidates against the strategy-governance policy before any activation discussion.",
             "Require a clean broker-audited paper session before control-plane promotion beyond research review.",
             "Do not modify live manifests, strategy selection, or risk policy from this packet alone.",
         ]
+        if missing_regimes:
+            actions.insert(
+                1,
+                "Regime completeness is informational only for this policy version; promote only the eligible bull/bear/choppy sleeves present in the packet and continue targeted research for missing regimes: "
+                + ", ".join(str(item) for item in missing_regimes)
+                + ".",
+            )
+        return actions
     return [
         "Separate raw data repair from strategy/replay redesign before rerunning blocked candidates.",
         "For strong data-foundation but low strategy-fill candidates, redesign entry timing, exit timing, and option structure rather than downloading more raw bars first.",
@@ -206,6 +208,7 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         f"- Required regimes: `{', '.join(packet['gate_summary'].get('required_regimes') or [])}`",
         f"- Missing eligible regimes: `{', '.join(packet['gate_summary'].get('missing_eligible_regimes') or []) or 'none'}`",
         f"- Regime complete for promotion review: `{packet['gate_summary'].get('regime_complete_for_promotion_review')}`",
+        f"- Regime completeness policy: `{packet['gate_summary'].get('regime_completeness_policy')}`",
         f"- Fill coverage unit: `{packet['gate_summary'].get('fill_coverage_unit')}`",
         f"- Fill coverage semantics: {packet['gate_summary'].get('fill_coverage_semantics')}",
         f"- Capital allocated weight: `{packet['gate_summary']['capital_plan_allocated_weight']}`",
@@ -355,14 +358,7 @@ def build_research_promotion_review_packet(
         if unique_eligible_base_count > 0 and review_candidates
         else "research_only_blocked"
     )
-    regime_complete = source.get("regime_complete_for_promotion_review")
-    regime_incomplete = isinstance(regime_complete, bool) and not regime_complete
-    decision = (
-        "research_only_blocked_regime_incomplete"
-        if candidate_level_decision == "ready_for_governed_validation_review"
-        and regime_incomplete
-        else candidate_level_decision
-    )
+    decision = candidate_level_decision
     packet = {
         "generated_at": datetime.now(UTC).isoformat(),
         "status": "research_promotion_review_packet_complete",
@@ -408,6 +404,7 @@ def build_research_promotion_review_packet(
             "promotion_allowed_regime_complete": source.get(
                 "promotion_allowed_regime_complete"
             ),
+            "regime_completeness_policy": "informational_only_not_a_hard_promotion_gate",
         },
         "portfolio_constraints": {
             "initial_cash": source.get("initial_cash"),

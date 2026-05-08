@@ -975,13 +975,13 @@ def build_research_portfolio_report(
         "missing_eligible_regimes": missing_eligible_regimes,
         "eligible_regime_representatives": eligible_regime_representatives,
         "regime_complete_for_promotion_review": not missing_eligible_regimes,
-        "promotion_allowed_regime_complete": eligible_count > 0
-        and not missing_eligible_regimes,
+        "promotion_allowed_regime_complete": eligible_count > 0,
+        "regime_completeness_policy": "informational_only_not_a_hard_promotion_gate",
         "data_repair_priority_candidates": _data_repair_candidates(candidate_rows),
         "strategy_redesign_candidates": _strategy_redesign_candidates(candidate_rows),
         "next_step_contract": [
             "Treat the capital plan as research-only until fill coverage reaches the configured gate.",
-            "Treat a symbol as regime-complete only when bull, bear, and choppy required regimes each have at least one eligible governed-review candidate.",
+            "Treat missing bull/bear/choppy regimes as follow-up research targets, not as a hard blocker for otherwise eligible sleeves.",
             "Use dense daily option-universe builds when selected-contract gaps dominate otherwise positive candidates.",
             "Use strategy redesign when data foundation is strong but entry/exit bar timing still blocks fills.",
             "Use event-driven selected-contract repairs only for isolated missing entry/exit bars with weak data foundation.",

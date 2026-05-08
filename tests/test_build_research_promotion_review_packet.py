@@ -191,7 +191,7 @@ def test_promotion_review_packet_marks_eligible_research_candidates(
         max_review_candidates=10,
     )
 
-    assert packet["decision"] == "research_only_blocked_regime_incomplete"
+    assert packet["decision"] == "ready_for_governed_validation_review"
     assert packet["candidate_level_decision"] == "ready_for_governed_validation_review"
     assert packet["broker_facing"] is False
     assert packet["live_manifest_effect"] == "none"
@@ -203,6 +203,10 @@ def test_promotion_review_packet_marks_eligible_research_candidates(
     assert packet["gate_summary"]["blocker_count_scope"] == "top_candidates_only"
     assert packet["gate_summary"]["missing_eligible_regimes"] == ["bear", "choppy"]
     assert packet["gate_summary"]["regime_complete_for_promotion_review"] is False
+    assert (
+        packet["gate_summary"]["regime_completeness_policy"]
+        == "informational_only_not_a_hard_promotion_gate"
+    )
     assert packet["regime_summary"][0]["intended_regime"] == "bull"
     assert packet["review_candidates"][0]["base_candidate_variant_id"] == "amd_base"
     assert packet["review_candidates"][0]["aggregate_profile"] == "profile_a"
@@ -214,7 +218,7 @@ def test_promotion_review_packet_marks_eligible_research_candidates(
     assert packet["review_candidates"][0]["parameter_set"] == '{"hard_exit_minute":210}'
     assert packet["blocker_counts"] == {"fill_coverage_below_0.90": 1}
     assert packet["top_candidate_blocker_counts"] == {"fill_coverage_below_0.90": 1}
-    assert packet["next_actions"][0].startswith("Keep this packet research-only")
+    assert "informational only" in packet["next_actions"][1]
     assert packet["symbol_exposure"][0]["symbol"] == "AMD"
     assert packet["symbol_exposure"][0]["strategy_count"] == 2
     assert packet["symbol_exposure"][0]["research_only_weight"] == 0.5

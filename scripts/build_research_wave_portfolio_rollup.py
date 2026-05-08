@@ -340,12 +340,7 @@ def build_research_wave_portfolio_rollup(
         if eligible_count > 0
         else "research_only_blocked"
     )
-    decision = (
-        "research_only_blocked_regime_incomplete"
-        if candidate_level_decision == "ready_for_governed_validation_review"
-        and missing_eligible_regimes
-        else candidate_level_decision
-    )
+    decision = candidate_level_decision
     packet = {
         "generated_at": datetime.now(UTC).isoformat(),
         "status": "research_wave_portfolio_rollup_complete",
@@ -382,14 +377,14 @@ def build_research_wave_portfolio_rollup(
         "eligible_regimes": eligible_regimes,
         "missing_eligible_regimes": missing_eligible_regimes,
         "regime_complete_for_promotion_review": not missing_eligible_regimes,
-        "promotion_allowed_regime_complete": eligible_count > 0
-        and not missing_eligible_regimes,
+        "promotion_allowed_regime_complete": eligible_count > 0,
+        "regime_completeness_policy": "informational_only_not_a_hard_promotion_gate",
         "data_repair_priority_candidates": _data_repair_candidates(candidates, max_items=20),
         "strategy_redesign_candidates": _strategy_redesign_candidates(candidates, max_items=20),
         "next_step_contract": [
             "Treat this rollup as research-only until governed promotion review and broker-audited paper evidence are complete.",
             "Promote only candidates that keep fill coverage at or above 0.90 across the required replay stack.",
-            "Treat a symbol as regime-complete only when bull, bear, and choppy required regimes each have at least one eligible governed-review candidate.",
+            "Treat missing bull/bear/choppy regimes as follow-up research targets, not as a hard blocker for otherwise eligible sleeves.",
             "When selected-contract gaps dominate, rerun candidates through dense daily liquid-contract universes before strategy redesign.",
             "When entry/exit timing gaps dominate despite dense coverage, redesign exits or quarantine the strategy family.",
             "Do not modify live manifests, strategy selection, or risk policy from this rollup alone.",
