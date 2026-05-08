@@ -164,7 +164,7 @@ First-tranche constrained optimizer:
 
 Interpretation: the first tranche found strong bear/choppy candidates, but the strict institutional optimizer correctly rejects the basket because the train/test-positive subset is family-concentrated and still too volatile. This is a research breakthrough, not a paper-runner change by itself.
 
-Second active tranche:
+Second tranche:
 
 - Wave ID: `bear_choppy_train_test_refine_20260508T1745Z`
 - GCS root: `gs://codexalpaca-control-us/research_results/bear_choppy_train_test_refine_20260508T1745Z/`
@@ -172,7 +172,48 @@ Second active tranche:
 - Target regimes: `bear,choppy`
 - First candidate index: `49`
 - Candidate count per worker: `24`
-- Active ranges: `c049-072` and `c073-096` for `QQQ`, `SPY`, `IWM`, and `AVGO`
+- Completed ranges: `c049-072` and `c073-096` for `QQQ`, `SPY`, `IWM`, and `AVGO`
 - Instance suffix: `20260508bc2`
 
-Next monitor action: when second-tranche workers terminate, sync artifacts, build strict portfolio reports and promotion-review packets, compare against `tt_top2_bull_choppy_up`, delete only synced terminated VMs, and continue non-overlapping candidate ranges if capacity is available.
+Second-tranche aggregate:
+
+- Aggregate report: `reports/gcp_research/bear_choppy_train_test_refine_20260508T1745Z/aggregate/portfolio_report/research_wave_portfolio_rollup.json`
+- Decision: `ready_for_governed_validation_review`
+- Source reports: `8`
+- Candidate count: `400`
+- Eligible review candidates: `67`
+- Capital-plan count: `6`
+- Capital-plan symbols/regimes: `AVGO choppy 2`, `SPY choppy 1`, `SPY bear 1`, `QQQ bear 2`
+- IWM eligible count: `0`
+
+Second-tranche projection:
+
+- Projection: `reports/gcp_research/bear_choppy_train_test_refine_20260508T1745Z/aggregate/growth_projection/capital_plan_projection/portfolio_growth_projection.json`
+- Matched capital-plan coverage: `6/6`
+- Starting equity: `$25,000`
+- Ending equity: `$75,791.69`
+- Net PnL: `$50,791.69`
+- Average active-day PnL: about `$271.61/day` across `187` active days
+- Max drawdown: `-29.1642%`
+- Evidence grade: `not_institutional_expectation`
+- Evidence blockers: `missing_bull_strategy_coverage`, `diversification_constraints_failed`
+- Train/test-positive candidates: `4/6`
+
+Second-tranche constrained optimizer:
+
+- Strict output: `reports/gcp_research/bear_choppy_train_test_refine_20260508T1745Z/aggregate/constrained_optimizer/optimizer_summary.json`
+- Strict status: `failed`
+- Strict blocker: no train/test-positive subset met the required `3` symbols, `2` regimes, `2` families, and drawdown `<=22%` constraints.
+- Relaxed diagnostic output: `reports/gcp_research/bear_choppy_train_test_refine_20260508T1745Z/aggregate/constrained_optimizer_dd50_minfam1/optimizer_summary.json`
+- Relaxed diagnostic status: `passed`
+- Relaxed diagnostic selected candidates: `5`
+- Relaxed diagnostic symbols: `AVGO 2`, `QQQ 1`, `SPY 2`
+- Relaxed diagnostic regimes: `bear 2`, `choppy 3`
+- Relaxed diagnostic families: `single_leg_repair 5`
+- Relaxed diagnostic ending equity: `$107,294.58`
+- Relaxed diagnostic average daily PnL: `$481.25`
+- Relaxed diagnostic max drawdown: `-41.7396%`
+
+Current interpretation: the optimizer is functioning correctly and is rejecting high-PnL bear/choppy baskets when they are not diversified enough. Both tranches beat the `$200/day` research target on raw projection, but neither is institutional-ready under strict drawdown and diversification constraints.
+
+Next monitor action: recover or rerun missing replay lineage for the unmatched May 8 paper strategies, then launch targeted bear/choppy sweeps that deliberately add non-`single_leg_repair` families and additional symbols. The optimizer needs more train/test-positive family diversity, not weaker gates.
