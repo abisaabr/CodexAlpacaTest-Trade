@@ -49,6 +49,12 @@ function Invoke-Gcloud {
     }
 }
 
+function Test-GcsObject {
+    param([string]$Uri)
+    & gcloud storage ls $Uri --project $Project *> $null
+    return ($LASTEXITCODE -eq 0)
+}
+
 function Invoke-GcloudCreateInstance {
     param([string[]]$Arguments)
     $previousPreference = $ErrorActionPreference
@@ -137,8 +143,12 @@ if ($selectedChunks.Count -eq 0) {
     throw "no chunks found at or after StartGridIndex=$StartGridIndex"
 }
 
-git archive --format=tar.gz --output $SourceArchivePath HEAD
-Invoke-Gcloud @("storage", "cp", $SourceArchivePath, $SourceArchiveUri, "--project", $Project)
+if (Test-GcsObject $SourceArchiveUri) {
+    Write-Output "source_archive_reused=$SourceArchiveUri"
+} else {
+    git archive --format=tar.gz --output $SourceArchivePath HEAD
+    Invoke-Gcloud @("storage", "cp", $SourceArchivePath, $SourceArchiveUri, "--project", $Project)
+}
 Invoke-Gcloud @("storage", "cp", $GridPath, $GridJsonlUri, "--project", $Project)
 Invoke-Gcloud @("storage", "cp", $ManifestPath, $GridManifestUri, "--project", $Project)
 
