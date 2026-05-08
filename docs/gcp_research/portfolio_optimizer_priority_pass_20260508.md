@@ -236,3 +236,63 @@ Do not launch another broad non-single-leg grid yet. The evidence points to sele
 - Only after a targeted fill diagnostic clears should another GCP tranche run.
 
 No new strategy should be added to the paper runner from this sweep. No paper-runner state changed.
+
+## Selector And Fill Diagnostics
+
+Selector diagnostic output:
+
+- Local root: `reports/gcp_research/bear_choppy_non_single_refine_20260508T2005Z/aggregate/selector_diagnostic/`
+- GCS root: `gs://codexalpaca-control-us/research_results/bear_choppy_non_single_refine_20260508T2005Z/aggregate/selector_diagnostic/`
+- Command:
+
+```powershell
+python scripts\build_greek_selector_diagnostic.py `
+  --input-root reports\gcp_research\bear_choppy_non_single_refine_20260508T2005Z\workers `
+  --output-dir reports\gcp_research\bear_choppy_non_single_refine_20260508T2005Z\aggregate\selector_diagnostic `
+  --fill-coverage-gate 0.90 `
+  --min-trades 20
+```
+
+Diagnostic summary:
+
+- Candidate summary files: `24`
+- Candidate rows classified: `576`
+- Dominant causes:
+- `missing_option_price_count`: `328`
+- `bad_dte_or_strike_availability`: `204`
+- `bad_exits`: `38`
+- `passed_candidate_level_gates`: `6`
+- Overlapping cause flags:
+- `missing_option_price_count`: `532`
+- `selected_contract_universe_gap`: `504`
+- `bad_dte_or_strike_availability`: `504`
+- `too_strict_delta_targeting`: `504`
+- `entry_bar_gap_or_entry_timing_mismatch`: `270`
+- `bad_exits`: `181`
+- `exit_bar_gap_or_exit_policy_mismatch`: `71`
+
+Targeted fill diagnostics:
+
+- `AVGO` choppy `debit_call_vertical` `aa587aef25db42`
+- Local: `reports/gcp_research/bear_choppy_non_single_refine_20260508T2005Z/aggregate/fill_failure_diagnostic/avgo_choppy_debit_call_vertical_aa587a_e10x60/`
+- GCS: `gs://codexalpaca-control-us/research_results/bear_choppy_non_single_refine_20260508T2005Z/aggregate/fill_failure_diagnostic/avgo_choppy_debit_call_vertical_aa587a_e10x60/`
+- Metrics: fill `0.8855`, data foundation `0.8931`, entry `0.9915`, exit `1.0`, option trades `116`, net PnL `910.568`, test PnL `1539.36`.
+- Failures: `14` `no_selected_contract`, `1` `no_entry_bar`.
+
+- `IWM` bear `bear_call_credit_spread` `6f6e242f049e80`
+- Local: `reports/gcp_research/bear_choppy_non_single_refine_20260508T2005Z/aggregate/fill_failure_diagnostic/iwm_bear_call_credit_spread_6f6e_e10x60/`
+- GCS: `gs://codexalpaca-control-us/research_results/bear_choppy_non_single_refine_20260508T2005Z/aggregate/fill_failure_diagnostic/iwm_bear_call_credit_spread_6f6e_e10x60/`
+- Metrics: fill `0.8696`, data foundation `0.8696`, entry `1.0`, exit `1.0`, option trades `40`, net PnL `495.159`, test PnL `951.966`.
+- Failures: `6` `no_selected_contract`.
+
+- `AVGO` bear `debit_put_vertical` `bdd4792e98d95a`
+- Local: `reports/gcp_research/bear_choppy_non_single_refine_20260508T2005Z/aggregate/fill_failure_diagnostic/avgo_bear_debit_put_vertical_bdd479_e30x120/`
+- GCS: `gs://codexalpaca-control-us/research_results/bear_choppy_non_single_refine_20260508T2005Z/aggregate/fill_failure_diagnostic/avgo_bear_debit_put_vertical_bdd479_e30x120/`
+- Metrics: fill `0.8333`, data foundation `0.8542`, entry `0.9878`, exit `0.9877`, option trades `80`, net PnL `6228.555`, test PnL `9867.691`.
+- Failures: `14` `no_selected_contract`, `1` `no_entry_bar`, `1` `no_exit_bar`.
+
+Interpretation:
+
+- The best non-single-leg near misses are mostly contract-universe repair problems, not broad strategy problems.
+- For these candidates, entry and exit bar coverage is already high; selected-contract availability is the binding gate.
+- The next repair should produce a contract-date request list for the missing vertical legs, then rerun only these candidates and adjacent width/DTE variants.
