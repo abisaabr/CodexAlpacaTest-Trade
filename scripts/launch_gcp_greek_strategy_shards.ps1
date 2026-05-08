@@ -74,10 +74,14 @@ function ConvertTo-MetadataArg {
 function Get-DatasetUris {
     param([string]$Symbol)
     $Symbol = $Symbol.ToUpperInvariant()
-    if ($Symbol -eq "QQQ") {
+    $TopLadder = @("AAPL", "AMD", "AMZN", "INTC", "IWM", "META", "MSFT", "NVDA", "SPY", "TSLA")
+    $NextLadder = @("AVGO", "GOOGL", "MU", "NFLX", "ORCL", "PLTR", "QQQ", "TSM", "XLE", "XOM")
+    if ($TopLadder -contains $Symbol) {
+        $Root = "option_fill_ladder_20260429"
+    } elseif ($NextLadder -contains $Symbol) {
         $Root = "option_fill_ladder_next10_20260429"
     } else {
-        $Root = "option_fill_ladder_20260429"
+        throw "No 365d dense dataset root is configured for symbol=$Symbol"
     }
     return @{
         Stock = "gs://codexalpaca-data-us/research_stock_data/$Root/$Symbol/365d_5x5/stock_ref_silver/stock_bars/"
