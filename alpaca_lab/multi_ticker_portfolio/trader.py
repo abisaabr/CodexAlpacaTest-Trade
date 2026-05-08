@@ -165,6 +165,8 @@ class SelectedLeg:
     theta: float
     vega: float
     quote_time: str | None
+    spread_pct: float = 0.0
+    freshness_seconds: float | None = None
 
 
 @dataclass(slots=True)
@@ -1216,6 +1218,10 @@ class MultiTickerPortfolioPaperTrader:
                 theta=float(chosen["theta"]),
                 vega=float(chosen["vega"]),
                 quote_time=chosen["quote_time"] if pd.notna(chosen["quote_time"]) else None,
+                spread_pct=float(chosen["spread_pct"]),
+                freshness_seconds=float(chosen["freshness_seconds"])
+                if pd.notna(chosen["freshness_seconds"])
+                else None,
             )
             legs.append(selected_leg)
             used_symbols.add(selected_leg.symbol)
@@ -1229,6 +1235,10 @@ class MultiTickerPortfolioPaperTrader:
         if drawdown_pct >= self.portfolio_config.risk.delever_drawdown_pct:
             return self.portfolio_config.risk.delever_risk_scale
         return 1.0
+
+    def _regime_risk_scale(self, regime: str) -> float:
+        scale = self.portfolio_config.risk.regime_risk_scales.get(str(regime).lower(), 1.0)
+        return max(0.0, float(scale))
 
     def _regime_position_count(self, session: SessionState, regime: str) -> int:
         return sum(1 for trade in session.open_trades if trade["regime"] == regime)
@@ -1673,6 +1683,9 @@ class MultiTickerPortfolioPaperTrader:
                 "gamma": leg.gamma,
                 "theta": leg.theta,
                 "vega": leg.vega,
+                "quote_time": leg.quote_time,
+                "spread_pct": leg.spread_pct,
+                "freshness_seconds": leg.freshness_seconds,
             }
             for leg in legs
         ]
@@ -1680,7 +1693,9 @@ class MultiTickerPortfolioPaperTrader:
         if max_loss_per_combo <= 0.0:
             event["decision_reason"] = "invalid_max_loss"
             return None, event
-        risk_scale = self._effective_risk_scale(ledger, current_equity)
+        drawdown_risk_scale = self._effective_risk_scale(ledger, current_equity)
+        regime_risk_scale = self._regime_risk_scale(strategy.regime)
+        risk_scale = drawdown_risk_scale * regime_risk_scale
         reserved_risk = sum(
             float(trade["max_loss_per_combo"]) * int(trade["quantity"]) for trade in session.open_trades
         )
@@ -1738,6 +1753,8 @@ class MultiTickerPortfolioPaperTrader:
             else:
                 event["decision_reason"] = limiting_reason or "risk_budget_too_small"
             event["risk_scale"] = round(risk_scale, 6)
+            event["drawdown_risk_scale"] = round(drawdown_risk_scale, 6)
+            event["regime_risk_scale"] = round(regime_risk_scale, 6)
             event["reserved_risk"] = round(reserved_risk, 4)
             event["symbol_reserved_risk"] = round(symbol_reserved_risk, 4)
             event["remaining_risk"] = round(remaining_risk, 4)
@@ -1823,6 +1840,8 @@ class MultiTickerPortfolioPaperTrader:
                 "decision_reason": "eligible",
                 "quantity_planned": int(quantity),
                 "risk_scale": round(risk_scale, 6),
+                "drawdown_risk_scale": round(drawdown_risk_scale, 6),
+                "regime_risk_scale": round(regime_risk_scale, 6),
                 "reserved_risk": round(reserved_risk, 4),
                 "symbol_reserved_risk": round(symbol_reserved_risk, 4),
                 "remaining_risk": round(remaining_risk, 4),

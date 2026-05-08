@@ -298,6 +298,7 @@ def _production_risk_defaults() -> dict[str, Any]:
         "max_positions_per_regime_window": 3,
         "max_positions_per_bucket_regime_window": 2,
         "max_open_risk_fraction_per_symbol": 0.05,
+        "regime_risk_scales": {},
         "bucket_caps": [
             {
                 "name": "index_beta",
@@ -802,6 +803,14 @@ def _production_risk_scale(*, equity: float, peak: float, risk_config: dict[str,
     return 1.0
 
 
+def _production_regime_risk_scale(*, regime: str, risk_config: dict[str, Any]) -> float:
+    scales = risk_config.get("regime_risk_scales") or {}
+    if not isinstance(scales, dict):
+        return 1.0
+    scale = _float(scales.get(str(regime).lower()), 1.0)
+    return scale if scale > 0.0 else 1.0
+
+
 def _build_daily_equity_production_runtime(
     *,
     selected_trades: pd.DataFrame,
@@ -930,6 +939,11 @@ def _build_daily_equity_production_runtime(
                     "source_risk_per_combo": round(_float(position.get("risk_per_combo")), 6),
                     "production_risk_dollars": round(_float(position.get("risk_dollars")), 6),
                     "production_debit_cash": round(_float(position.get("debit_cash")), 6),
+                    "risk_scale": round(_float(position.get("risk_scale"), 1.0), 6),
+                    "drawdown_risk_scale": round(
+                        _float(position.get("drawdown_risk_scale"), 1.0), 6
+                    ),
+                    "regime_risk_scale": round(_float(position.get("regime_risk_scale"), 1.0), 6),
                     "source_option_pnl": round(_float(row.get("option_pnl")), 6),
                     "source_pnl_per_combo": round(pnl_per_combo, 6),
                     "dynamic_scale_factor": round(_int(position.get("quantity"), 0) / source_quantity, 8),
@@ -962,7 +976,9 @@ def _build_daily_equity_production_runtime(
         strategy_key = str(row.get("portfolio_candidate_variant_id") or row.get("base_candidate_variant_id") or "")
         risk_per_combo = _trade_risk_per_combo(row)
         debit_cash_per_combo = _trade_debit_cash_per_combo(row)
-        risk_scale = _production_risk_scale(equity=equity, peak=peak, risk_config=risk_config)
+        drawdown_risk_scale = _production_risk_scale(equity=equity, peak=peak, risk_config=risk_config)
+        regime_risk_scale = _production_regime_risk_scale(regime=regime, risk_config=risk_config)
+        risk_scale = drawdown_risk_scale * regime_risk_scale
         if enforce_broker_equity_floor:
             broker_floor = risk_config.get("broker_min_equity_to_trade")
             if broker_floor is not None and equity < _float(broker_floor):
@@ -1079,6 +1095,8 @@ def _build_daily_equity_production_runtime(
                 event_time=event_time,
                 details={
                     "risk_scale": round(risk_scale, 6),
+                    "drawdown_risk_scale": round(drawdown_risk_scale, 6),
+                    "regime_risk_scale": round(regime_risk_scale, 6),
                     "remaining_risk": round(remaining_risk, 6),
                     "per_trade_budget": round(per_trade_budget, 6),
                     "allocatable_risk": round(allocatable_risk, 6),
@@ -1100,6 +1118,9 @@ def _build_daily_equity_production_runtime(
             "risk_per_combo": risk_per_combo,
             "risk_dollars": risk_dollars,
             "debit_cash": debit_cash,
+            "risk_scale": risk_scale,
+            "drawdown_risk_scale": drawdown_risk_scale,
+            "regime_risk_scale": regime_risk_scale,
         }
         daily_trade_count[trade_date] += 1
         daily_regimes.setdefault(trade_date, set()).add(regime)
@@ -1122,6 +1143,8 @@ def _build_daily_equity_production_runtime(
                 "risk_dollars": round(risk_dollars, 6),
                 "debit_cash": round(debit_cash, 6),
                 "risk_scale": round(risk_scale, 6),
+                "drawdown_risk_scale": round(drawdown_risk_scale, 6),
+                "regime_risk_scale": round(regime_risk_scale, 6),
                 "equity": round(equity, 6),
                 "open_position_count": len(open_positions),
                 "reserved_risk_after_entry": round(_reserved_risk(open_positions), 6),

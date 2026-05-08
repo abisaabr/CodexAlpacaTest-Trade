@@ -865,6 +865,22 @@ def test_portfolio_config_loads_risk_controls_overlay(tmp_path: Path) -> None:
     assert config.execution.stock_feed == "iex"
 
 
+def test_portfolio_config_loads_regime_risk_scales(tmp_path: Path) -> None:
+    config_path = tmp_path / "portfolio.yaml"
+    config_path.write_text(
+        "risk:\n"
+        "  regime_risk_scales:\n"
+        "    bull: 1.0\n"
+        "    bear: 0.5\n"
+        "    choppy: 0.8\n",
+        encoding="utf-8",
+    )
+
+    config = load_portfolio_config(config_path)
+
+    assert config.risk.regime_risk_scales == {"bull": 1.0, "bear": 0.5, "choppy": 0.8}
+
+
 def test_portfolio_config_loads_strategies_from_manifest_path(tmp_path: Path) -> None:
     strategy = default_portfolio_config().strategies[0].model_dump(mode="python")
     strategy["timing_profile"] = "reactive"
@@ -1142,6 +1158,74 @@ def test_evaluate_entry_respects_bucket_risk_cap() -> None:
 
     assert open_trade is None
     assert event["decision_reason"] == "bucket_risk_cap:index_beta"
+
+
+def test_evaluate_entry_applies_regime_risk_scale() -> None:
+    base = default_portfolio_config()
+    strategy = _select_strategy(
+        base,
+        underlying_symbol="QQQ",
+        regime="bear",
+        family="Single-leg long put",
+        dte_mode="next_expiry",
+    )
+    config = base.model_copy(
+        update={
+            "execution": base.execution.model_copy(update={"underlying_symbols": ("QQQ",)}),
+            "risk": base.risk.model_copy(update={"regime_risk_scales": {"bear": 0.5}}),
+            "strategies": (strategy,),
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader._select_legs = lambda *_args, **_kwargs: [
+        SelectedLeg(
+            symbol="QQQ260417P00600000",
+            expiration_date="2026-04-17",
+            option_type="put",
+            side="long",
+            strike_price=600.0,
+            target_delta=-0.60,
+            bid=2.95,
+            ask=3.05,
+            mark=3.0,
+            delta=-0.58,
+            gamma=0.06,
+            theta=-0.09,
+            vega=0.12,
+            quote_time="2026-04-15T14:30:00Z",
+            spread_pct=0.03,
+            freshness_seconds=4.0,
+        )
+    ]
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+    )
+    ledger = PortfolioLedger(realized_equity=25_000.0, high_watermark=25_000.0)
+
+    open_trade, event = trader._evaluate_entry(
+        strategy=strategy,
+        session=session,
+        ledger=ledger,
+        option_chain=pd.DataFrame(),
+        spot_price=500.0,
+        current_minute=60,
+        current_equity=25_000.0,
+        broker_equity=30_000.0,
+        attempt_id="attempt-regime-risk-scale",
+    )
+
+    assert open_trade is not None
+    assert open_trade.quantity == 2
+    assert event["risk_scale"] == 0.5
+    assert event["drawdown_risk_scale"] == 1.0
+    assert event["regime_risk_scale"] == 0.5
+    assert event["quantity_by_risk"] == 2
+    assert open_trade.legs[0]["quote_time"] == "2026-04-15T14:30:00Z"
+    assert open_trade.legs[0]["spread_pct"] == 0.03
+    assert open_trade.legs[0]["freshness_seconds"] == 4.0
 
 
 def test_evaluate_entry_blocks_regime_entry_cluster_window() -> None:

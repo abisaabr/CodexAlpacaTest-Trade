@@ -163,6 +163,7 @@ class RiskConfig(BaseModel):
     max_positions_per_regime_window: int | None = 3
     max_positions_per_bucket_regime_window: int | None = 2
     max_open_risk_fraction_per_symbol: float | None = 0.05
+    regime_risk_scales: dict[str, float] = Field(default_factory=dict)
     bucket_caps: tuple[RiskBucketConfig, ...] = Field(
         default_factory=lambda: (
             RiskBucketConfig(
@@ -202,6 +203,26 @@ class RiskConfig(BaseModel):
     entry_cutoff_minute: int | None = 345
     same_day_entry_cutoff_minute: int | None = 300
     event_blackouts: tuple[EventBlackoutConfig, ...] = Field(default_factory=tuple)
+
+    @field_validator("regime_risk_scales", mode="before")
+    @classmethod
+    def normalize_regime_risk_scales(cls, value: object) -> dict[str, float]:
+        if value in (None, "", []):
+            return {}
+        if not isinstance(value, dict):
+            raise TypeError("regime_risk_scales must be a mapping of regime to positive scale")
+        normalized: dict[str, float] = {}
+        for raw_key, raw_value in value.items():
+            key = str(raw_key).strip().lower()
+            if not key:
+                continue
+            if key not in {"bull", "bear", "choppy"}:
+                raise ValueError("regime_risk_scales keys must be bull, bear, or choppy")
+            scale = float(raw_value)
+            if scale <= 0.0:
+                raise ValueError("regime_risk_scales values must be positive")
+            normalized[key] = scale
+        return normalized
 
 
 class ExecutionConfig(BaseModel):
