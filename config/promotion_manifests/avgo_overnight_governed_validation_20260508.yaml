@@ -1,0 +1,271 @@
+version: 1
+generated_at_utc: '2026-05-08T02:37:58+00:00'
+scope: research_governed_validation_review_only
+broker_facing: false
+live_manifest_effect: none
+risk_policy_effect: none
+source_packets:
+- path: reports/gcp_research/traditional_20ticker_realtime_compatible_overnight_20260507T2045ET/workers/avgo_regime_rescue_c073_108/promotion_packet/avgo_regime_rescue_c073_108_promotion_packet/research_promotion_review_packet.json
+  gcs_uri: gs://codexalpaca-control-us/research_results/traditional_20ticker_realtime_compatible_overnight_20260507T2045ET/workers/avgo_regime_rescue_c073_108/promotion_packet/avgo_regime_rescue_c073_108_promotion_packet/research_promotion_review_packet.json
+  decision: ready_for_governed_validation_review
+  candidate_level_decision: ready_for_governed_validation_review
+  eligible_for_promotion_review_count: 9
+  eligible_regimes:
+  - bull
+  - bear
+  - choppy
+  missing_eligible_regimes: []
+strategy_count: 5
+symbols:
+- AVGO
+regimes:
+- bear
+- bull
+- choppy
+skipped_candidates: []
+strategies:
+- name: avgo__governed__bull__call__single_leg_repair__bull_opening_drive_20_95__c9c3c80397578e__avgo_regime_rescue__overnight_20260508
+  underlying_symbol: AVGO
+  regime: bull
+  family: Single-leg long call
+  description: AVGO governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 3
+  profit_target_multiple: 0.48
+  stop_loss_multiple: 0.15
+  candidate_variant_id: portfolio12h__avgo__bull__call__single_leg_repair__c9c3c80397578e__profile_avgo-regime-rescue-c073-108-avgo-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__bull__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/avgo_overnight_governed_validation_20260508.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/traditional_20ticker_realtime_compatible_overnight_20260507T2045ET/workers/avgo_regime_rescue_c073_108/promotion_packet/avgo_regime_rescue_c073_108_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9308
+  min_data_foundation_coverage: 0.9937
+  min_option_trade_count: 148
+  min_net_pnl: 2012.179
+  min_test_net_pnl: 40.757
+  research_profile: avgo_regime_rescue_c073_108_avgo_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 20
+  max_minutes_since_open: 95
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target48_stop15
+  option_profit_target_pct: 0.48
+  option_stop_loss_pct: 0.15
+  min_option_hold_minutes: 3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
+  min_trend_gap_pct: 0.0018
+- name: avgo__governed__bear__put__single_leg_repair__bear_confirmed_break_35__6cc01ee253a8a3__avgo_regime_rescue__overnight_20260508
+  underlying_symbol: AVGO
+  regime: bear
+  family: Single-leg long put
+  description: AVGO governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.28
+  stop_loss_multiple: 0.1
+  candidate_variant_id: portfolio12h__avgo__bear__put__single_leg_repair__6cc01ee253a8a3__profile_avgo-regime-rescue-c073-108-avgo-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/avgo_overnight_governed_validation_20260508.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/traditional_20ticker_realtime_compatible_overnight_20260507T2045ET/workers/avgo_regime_rescue_c073_108/promotion_packet/avgo_regime_rescue_c073_108_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9286
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 117
+  min_net_pnl: 316.642
+  min_test_net_pnl: 903.539
+  research_profile: avgo_regime_rescue_c073_108_avgo_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target28_stop10
+  option_profit_target_pct: 0.28
+  option_stop_loss_pct: 0.1
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
+  min_trend_gap_pct: 0.0009
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c073__c4e77df6c41851__avgo_regime_rescue__overnight_20260508
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.08
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__c4e77df6c41851__profile_avgo-regime-rescue-c073-108-avgo-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/avgo_overnight_governed_validation_20260508.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/traditional_20ticker_realtime_compatible_overnight_20260507T2045ET/workers/avgo_regime_rescue_c073_108/promotion_packet/avgo_regime_rescue_c073_108_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9167
+  min_data_foundation_coverage: 0.9924
+  min_option_trade_count: 121
+  min_net_pnl: 1502.312
+  min_test_net_pnl: 1192.662
+  research_profile: avgo_regime_rescue_c073_108_avgo_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop8
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.08
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.002
+  max_range_pct: 0.006
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c073__ffba3b6601ee19__avgo_regime_rescue__overnight_20260508
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.08
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__ffba3b6601ee19__profile_avgo-regime-rescue-c073-108-avgo-e30-x120-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/avgo_overnight_governed_validation_20260508.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/traditional_20ticker_realtime_compatible_overnight_20260507T2045ET/workers/avgo_regime_rescue_c073_108/promotion_packet/avgo_regime_rescue_c073_108_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9043
+  min_data_foundation_coverage: 0.9913
+  min_option_trade_count: 104
+  min_net_pnl: 551.881
+  min_test_net_pnl: 1250.904
+  research_profile: avgo_regime_rescue_c073_108_avgo_e30_x120_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop8
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.08
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.002
+  max_range_pct: 0.006
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: avgo__governed__choppy__call__single_leg_repair__avgo_regime_rescue_c073__495ac8e7bd0854__avgo_regime_rescue__overnight_20260508
+  underlying_symbol: AVGO
+  regime: choppy
+  family: Single-leg long call
+  description: AVGO governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.018
+  max_contracts: 3
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.08
+  candidate_variant_id: portfolio12h__avgo__choppy__call__single_leg_repair__495ac8e7bd0854__profile_avgo-regime-rescue-c073-108-avgo-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: avgo__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/avgo_overnight_governed_validation_20260508.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/traditional_20ticker_realtime_compatible_overnight_20260507T2045ET/workers/avgo_regime_rescue_c073_108/promotion_packet/avgo_regime_rescue_c073_108_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9178
+  min_data_foundation_coverage: 0.9863
+  min_option_trade_count: 67
+  min_net_pnl: 1385.549
+  min_test_net_pnl: 210.622
+  research_profile: avgo_regime_rescue_c073_108_avgo_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop8
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.08
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
+  max_trend_gap_pct: 0.0008
+  min_range_pct: 0.0015
+  max_range_pct: 0.004
+  max_midpoint_distance_pct: 0.003
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+hard_rules:
+- This manifest does not modify the live strategy manifest.
+- This manifest does not lower promotion gates.
+- This manifest does not start trading by itself.
+- 'Broker-facing paper order submission requires explicit runner arming: either --submit-paper-orders or a config with paper_order_arming_mode=config_explicit.'

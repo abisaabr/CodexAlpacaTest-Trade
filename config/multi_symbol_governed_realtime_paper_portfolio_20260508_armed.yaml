@@ -1,8 +1,10 @@
 name: multi_symbol_governed_realtime_paper_trader_20260508_armed
-description: PAPER-only armed May 8 governed-validation portfolio using the May 7 broad governed set plus the May 8 TSM overnight governed-validation packet. This config may submit PAPER orders only because execution.paper_order_arming_mode is config_explicit.
+description: PAPER-only armed May 8 governed-validation portfolio using the May 7 broad governed set plus May 8 TSM, AVGO, and QQQ overnight governed-validation packets. This config may submit PAPER orders only because execution.paper_order_arming_mode is config_explicit.
 strategy_manifest_paths:
-  - promotion_manifests/multi_symbol_governed_validation_20260507.yaml
+  - promotion_manifests/multi_symbol_governed_validation_20260508_runtime_unique.yaml
   - promotion_manifests/tsm_overnight_governed_validation_20260508.yaml
+  - promotion_manifests/avgo_overnight_governed_validation_20260508.yaml
+  - promotion_manifests/qqq_overnight_governed_validation_20260508.yaml
 
 ownership:
   enabled: true

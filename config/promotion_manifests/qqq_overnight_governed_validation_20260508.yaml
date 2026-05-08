@@ -1,0 +1,311 @@
+version: 1
+generated_at_utc: '2026-05-08T02:43:52+00:00'
+scope: research_governed_validation_review_only
+broker_facing: false
+live_manifest_effect: none
+risk_policy_effect: none
+source_packets:
+- path: reports/gcp_research/traditional_20ticker_realtime_compatible_overnight_20260507T2045ET/workers/qqq_regime_rescue_c073_108/promotion_packet/qqq_regime_rescue_c073_108_promotion_packet/research_promotion_review_packet.json
+  gcs_uri: gs://codexalpaca-control-us/research_results/traditional_20ticker_realtime_compatible_overnight_20260507T2045ET/workers/qqq_regime_rescue_c073_108/promotion_packet/qqq_regime_rescue_c073_108_promotion_packet/research_promotion_review_packet.json
+  decision: ready_for_governed_validation_review
+  candidate_level_decision: ready_for_governed_validation_review
+  eligible_for_promotion_review_count: 18
+  eligible_regimes:
+  - bull
+  - bear
+  - choppy
+  missing_eligible_regimes: []
+strategy_count: 6
+symbols:
+- QQQ
+regimes:
+- bear
+- bull
+- choppy
+skipped_candidates: []
+strategies:
+- name: qqq__governed__bull__call__single_leg_repair__bull_opening_drive_20_95__281a74259f55cb__qqq_regime_rescue__overnight_20260508
+  underlying_symbol: QQQ
+  regime: bull
+  family: Single-leg long call
+  description: QQQ governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.025
+  max_contracts: 4
+  profit_target_multiple: 0.48
+  stop_loss_multiple: 0.15
+  candidate_variant_id: portfolio12h__qqq__bull__call__single_leg_repair__281a74259f55cb__profile_qqq-regime-rescue-c073-108-qqq-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: qqq__bull__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/qqq_overnight_governed_validation_20260508.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/traditional_20ticker_realtime_compatible_overnight_20260507T2045ET/workers/qqq_regime_rescue_c073_108/promotion_packet/qqq_regime_rescue_c073_108_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9773
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 43
+  min_net_pnl: 1671.72
+  min_test_net_pnl: 1973.283
+  research_profile: qqq_regime_rescue_c073_108_qqq_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 20
+  max_minutes_since_open: 95
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target48_stop15
+  option_profit_target_pct: 0.48
+  option_stop_loss_pct: 0.15
+  min_option_hold_minutes: 3
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
+  min_trend_gap_pct: 0.0018
+- name: qqq__governed__bear__put__single_leg_repair__bear_confirmed_break_35__2e706262e60b31__qqq_regime_rescue__overnight_20260508
+  underlying_symbol: QQQ
+  regime: bear
+  family: Single-leg long put
+  description: QQQ governed bear put candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_put
+  timing_profile: governed_late
+  hard_exit_minute: 40
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.02
+  max_contracts: 4
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.07
+  candidate_variant_id: portfolio12h__qqq__bear__put__single_leg_repair__2e706262e60b31__profile_qqq-regime-rescue-c073-108-qqq-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: qqq__bear__put__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/qqq_overnight_governed_validation_20260508.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/traditional_20ticker_realtime_compatible_overnight_20260507T2045ET/workers/qqq_regime_rescue_c073_108/promotion_packet/qqq_regime_rescue_c073_108_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9792
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 94
+  min_net_pnl: 317.432
+  min_test_net_pnl: 845.64
+  research_profile: qqq_regime_rescue_c073_108_qqq_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 35
+  max_minutes_since_open: 110
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop7
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.07
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: put
+    side: long
+    target_delta: -0.55
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
+  min_trend_gap_pct: 0.0009
+- name: qqq__governed__choppy__call__single_leg_repair__qqq_regime_rescue_c073_1__b47123fd65714f__qqq_regime_rescue__overnight_20260508
+  underlying_symbol: QQQ
+  regime: choppy
+  family: Single-leg long call
+  description: QQQ governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.025
+  max_contracts: 4
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.08
+  candidate_variant_id: portfolio12h__qqq__choppy__call__single_leg_repair__b47123fd65714f__profile_qqq-regime-rescue-c073-108-qqq-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: qqq__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/qqq_overnight_governed_validation_20260508.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/traditional_20ticker_realtime_compatible_overnight_20260507T2045ET/workers/qqq_regime_rescue_c073_108/promotion_packet/qqq_regime_rescue_c073_108_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 1.0
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 71
+  min_net_pnl: 739.547
+  min_test_net_pnl: 124.265
+  research_profile: qqq_regime_rescue_c073_108_qqq_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop8
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.08
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
+  max_trend_gap_pct: 0.001
+  min_range_pct: 0.002
+  max_range_pct: 0.006
+  max_midpoint_distance_pct: 0.0035
+  range_edge_pct: 0.0012
+  range_entry_side: lower_band
+- name: qqq__governed__bull__call__single_leg_repair__bull_opening_drive_20_95__4d51226db9da8f__qqq_regime_rescue__overnight_20260508
+  underlying_symbol: QQQ
+  regime: bull
+  family: Single-leg long call
+  description: QQQ governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.025
+  max_contracts: 4
+  profit_target_multiple: 0.35
+  stop_loss_multiple: 0.11
+  candidate_variant_id: portfolio12h__qqq__bull__call__single_leg_repair__4d51226db9da8f__profile_qqq-regime-rescue-c073-108-qqq-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: qqq__bull__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/qqq_overnight_governed_validation_20260508.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/traditional_20ticker_realtime_compatible_overnight_20260507T2045ET/workers/qqq_regime_rescue_c073_108/promotion_packet/qqq_regime_rescue_c073_108_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9773
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 43
+  min_net_pnl: 1158.234
+  min_test_net_pnl: 1362.894
+  research_profile: qqq_regime_rescue_c073_108_qqq_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 20
+  max_minutes_since_open: 95
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target35_stop11
+  option_profit_target_pct: 0.35
+  option_stop_loss_pct: 0.11
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
+  min_trend_gap_pct: 0.0018
+- name: qqq__governed__bull__call__single_leg_repair__bull_opening_drive_20_95__6711cd0ca15f5d__qqq_regime_rescue__overnight_20260508
+  underlying_symbol: QQQ
+  regime: bull
+  family: Single-leg long call
+  description: QQQ governed bull call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_breakout_call
+  timing_profile: governed_late
+  hard_exit_minute: 45
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.025
+  max_contracts: 4
+  profit_target_multiple: 0.22
+  stop_loss_multiple: 0.08
+  candidate_variant_id: portfolio12h__qqq__bull__call__single_leg_repair__6711cd0ca15f5d__profile_qqq-regime-rescue-c073-108-qqq-e0-x60-entry-liquidity-first-research-only
+  source_strategy_id: qqq__bull__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/qqq_overnight_governed_validation_20260508.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/traditional_20ticker_realtime_compatible_overnight_20260507T2045ET/workers/qqq_regime_rescue_c073_108/promotion_packet/qqq_regime_rescue_c073_108_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 0.9773
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 43
+  min_net_pnl: 388.005
+  min_test_net_pnl: 422.835
+  research_profile: qqq_regime_rescue_c073_108_qqq_e0_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: breakout
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 20
+  max_minutes_since_open: 95
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target22_stop8
+  option_profit_target_pct: 0.22
+  option_stop_loss_pct: 0.08
+  min_option_hold_minutes: 1
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
+  min_trend_gap_pct: 0.0018
+- name: qqq__governed__choppy__call__single_leg_repair__qqq_regime_rescue_c073_1__398fce8830a27b__qqq_regime_rescue__overnight_20260508
+  underlying_symbol: QQQ
+  regime: choppy
+  family: Single-leg long call
+  description: QQQ governed choppy call candidate from generated promotion-review packet; strategy_fill_coverage gate cleared
+    and source identity preserved.
+  dte_mode: next_expiry
+  signal_name: governed_lower_band_reversion_call
+  timing_profile: governed_late
+  hard_exit_minute: 35
+  runner_hard_exit_mode: minutes_after_entry
+  risk_fraction: 0.025
+  max_contracts: 4
+  profit_target_multiple: 0.2
+  stop_loss_multiple: 0.08
+  candidate_variant_id: portfolio12h__qqq__choppy__call__single_leg_repair__398fce8830a27b__profile_qqq-regime-rescue-c073-108-qqq-e10-x60-entry-liquidity-first-research-only
+  source_strategy_id: qqq__choppy__call__single_leg_repair
+  promotion_manifest_path: config/promotion_manifests/qqq_overnight_governed_validation_20260508.yaml
+  governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/traditional_20ticker_realtime_compatible_overnight_20260507T2045ET/workers/qqq_regime_rescue_c073_108/promotion_packet/qqq_regime_rescue_c073_108_promotion_packet/research_promotion_review_packet.json
+  promotion_status: eligible_for_promotion_review
+  min_fill_coverage: 1.0
+  min_data_foundation_coverage: 1.0
+  min_option_trade_count: 86
+  min_net_pnl: 156.581
+  min_test_net_pnl: 416.82
+  research_profile: qqq_regime_rescue_c073_108_qqq_e10_x60_entry_liquidity_first_research_only
+  research_entry_timing_mode: rising_edge
+  runner_semantics_status: packet_translated_to_runtime_single_leg
+  stock_proxy_mode: range_bound
+  entry_signal_mode: rising_edge
+  min_minutes_since_open: 105
+  max_minutes_since_open: 150
+  liquidity_gate: tight
+  option_exit_mode: premium_target_stop
+  option_exit_profile: target20_stop8
+  option_profit_target_pct: 0.2
+  option_stop_loss_pct: 0.08
+  min_option_hold_minutes: 2
+  legs:
+  - option_type: call
+    side: long
+    target_delta: 0.55
+    min_abs_delta: 0.35000000000000003
+    max_abs_delta: 0.75
+  max_trend_gap_pct: 0.0008
+  min_range_pct: 0.0015
+  max_range_pct: 0.004
+  max_midpoint_distance_pct: 0.003
+  range_edge_pct: 0.001
+  range_entry_side: lower_band
+hard_rules:
+- This manifest does not modify the live strategy manifest.
+- This manifest does not lower promotion gates.
+- This manifest does not start trading by itself.
+- 'Broker-facing paper order submission requires explicit runner arming: either --submit-paper-orders or a config with paper_order_arming_mode=config_explicit.'
