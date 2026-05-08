@@ -235,6 +235,11 @@ def test_option_aware_backtest_prices_stock_signal_windows_against_options(
     assert summary["family"] == "Single-leg long put"
     assert '"hard_exit_minute":5' in summary["parameter_set"]
     assert payload["trade_rows"][0]["family"] == "Single-leg long put"
+    assert payload["trade_rows"][0]["entry_quote_source"] == "option_bar_close_no_bid_ask"
+    assert payload["trade_rows"][0]["exit_quote_source"] == "option_bar_close_no_bid_ask"
+    assert payload["trade_rows"][0]["entry_legs_with_bid_ask"] == 0
+    assert "entry_quote_age_seconds" in payload["trade_rows"][0]
+    assert "entry_option_bar_lag_seconds" in payload["trade_rows"][0]
     assert summary["fill_coverage"] == 1.0
     assert summary["fill_failure_reason"] == "fill_gate_clear"
     assert summary["net_pnl"] > 0

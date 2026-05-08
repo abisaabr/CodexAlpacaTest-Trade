@@ -1382,6 +1382,135 @@ def _credit_structure_spread_widths(legs: list[dict[str, Any]]) -> list[float]:
     return call_widths + put_widths
 
 
+def _bar_float(row: dict[str, Any], names: tuple[str, ...]) -> float | None:
+    for name in names:
+        value = row.get(name)
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(parsed):
+            return parsed
+    return None
+
+
+def _bar_timestamp(row: dict[str, Any], names: tuple[str, ...] = ("quote_time", "timestamp")) -> pd.Timestamp | None:
+    for name in names:
+        value = row.get(name)
+        if value in (None, ""):
+            continue
+        try:
+            timestamp = pd.Timestamp(value)
+        except (TypeError, ValueError):
+            continue
+        if pd.isna(timestamp):
+            continue
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.tz_localize("UTC")
+        return timestamp
+    return None
+
+
+def _quote_quality_from_bar(
+    *,
+    bar: dict[str, Any],
+    decision_time: pd.Timestamp,
+    prefix: str,
+) -> dict[str, Any]:
+    bid = _bar_float(bar, ("bid", "bid_price", "best_bid"))
+    ask = _bar_float(bar, ("ask", "ask_price", "best_ask"))
+    timestamp = _bar_timestamp(bar)
+    quote_time = _bar_timestamp(bar, ("quote_time", "latest_quote_time"))
+    if quote_time is None:
+        quote_time = timestamp
+    if decision_time.tzinfo is None:
+        decision_time = decision_time.tz_localize("UTC")
+    row: dict[str, Any] = {
+        f"{prefix}_quote_time": str(quote_time) if quote_time is not None else "",
+        f"{prefix}_option_bar_time": str(timestamp) if timestamp is not None else "",
+        f"{prefix}_bid": bid,
+        f"{prefix}_ask": ask,
+        f"{prefix}_mid": None,
+        f"{prefix}_absolute_spread": None,
+        f"{prefix}_relative_spread": None,
+        f"{prefix}_spread_pct": None,
+        f"{prefix}_quote_age_seconds": None,
+        f"{prefix}_option_bar_lag_seconds": None,
+        f"{prefix}_quote_source": "option_bar_close_no_bid_ask",
+    }
+    if timestamp is not None:
+        row[f"{prefix}_option_bar_lag_seconds"] = round(
+            (timestamp - decision_time).total_seconds(), 6
+        )
+    if quote_time is not None:
+        row[f"{prefix}_quote_age_seconds"] = round(
+            max((decision_time - quote_time).total_seconds(), 0.0), 6
+        )
+    if bid is not None and ask is not None and ask >= bid and ask > 0.0:
+        mid = (bid + ask) / 2.0
+        spread = ask - bid
+        relative_spread = spread / mid if mid > 0.0 else None
+        row.update(
+            {
+                f"{prefix}_mid": round(mid, 6),
+                f"{prefix}_absolute_spread": round(spread, 6),
+                f"{prefix}_relative_spread": round(relative_spread, 8)
+                if relative_spread is not None
+                else None,
+                f"{prefix}_spread_pct": round(relative_spread, 8)
+                if relative_spread is not None
+                else None,
+                f"{prefix}_quote_source": "option_quote_bid_ask",
+            }
+        )
+    return row
+
+
+def _aggregate_leg_quote_quality(
+    leg_details: list[dict[str, Any]],
+    prefix: str,
+) -> dict[str, Any]:
+    relative_spreads = [
+        float(item[f"{prefix}_relative_spread"])
+        for item in leg_details
+        if item.get(f"{prefix}_relative_spread") not in (None, "")
+        and math.isfinite(float(item[f"{prefix}_relative_spread"]))
+    ]
+    quote_ages = [
+        float(item[f"{prefix}_quote_age_seconds"])
+        for item in leg_details
+        if item.get(f"{prefix}_quote_age_seconds") not in (None, "")
+        and math.isfinite(float(item[f"{prefix}_quote_age_seconds"]))
+    ]
+    bar_lags = [
+        float(item[f"{prefix}_option_bar_lag_seconds"])
+        for item in leg_details
+        if item.get(f"{prefix}_option_bar_lag_seconds") not in (None, "")
+        and math.isfinite(float(item[f"{prefix}_option_bar_lag_seconds"]))
+    ]
+    sources = sorted(
+        {
+            str(item.get(f"{prefix}_quote_source"))
+            for item in leg_details
+            if item.get(f"{prefix}_quote_source")
+        }
+    )
+    return {
+        f"{prefix}_average_relative_spread": round(sum(relative_spreads) / len(relative_spreads), 8)
+        if relative_spreads
+        else None,
+        f"{prefix}_max_relative_spread": round(max(relative_spreads), 8)
+        if relative_spreads
+        else None,
+        f"{prefix}_quote_age_seconds": round(max(quote_ages), 6) if quote_ages else None,
+        f"{prefix}_option_bar_lag_seconds": round(max(bar_lags), 6) if bar_lags else None,
+        f"{prefix}_quote_source": ";".join(sources) if sources else "",
+        f"{prefix}_legs_with_bid_ask": sum(
+            1 for item in leg_details if item.get(f"{prefix}_quote_source") == "option_quote_bid_ask"
+        ),
+    }
+
+
 def _leg_entry_price_after_slippage(leg: dict[str, Any], slippage_bps: float) -> float:
     side = int(leg["side"])
     close = float(leg["entry_bar"]["close"])
@@ -2258,6 +2387,18 @@ def _option_rows_for_candidate(
             ratio = int(leg_item["ratio"])
             entry_price = _leg_entry_price_after_slippage(leg_item, slippage_bps)
             exit_price = _leg_exit_price_after_slippage(leg_item, exit_bar, slippage_bps)
+            quality = {
+                **_quote_quality_from_bar(
+                    bar=leg_item["entry_bar"],
+                    decision_time=entry_time,
+                    prefix="entry",
+                ),
+                **_quote_quality_from_bar(
+                    bar=exit_bar,
+                    decision_time=exit_time,
+                    prefix="exit",
+                ),
+            }
             leg_details.append(
                 {
                     "role": leg_item["role"],
@@ -2277,11 +2418,14 @@ def _option_rows_for_candidate(
                     "entry_vega": leg_item["contract"].get("entry_vega"),
                     "entry_implied_vol": leg_item["contract"].get("entry_implied_vol"),
                     "entry_greek_spot": leg_item["contract"].get("entry_greek_spot"),
+                    **quality,
                 }
             )
         fees = fee_per_contract * quantity * 2.0 * total_contract_units
         pnl = (exit_value_per_unit - entry_debit_per_unit) * quantity - fees
         primary_leg = leg_details[0]
+        entry_quote_quality = _aggregate_leg_quote_quality(leg_details, "entry")
+        exit_quote_quality = _aggregate_leg_quote_quality(leg_details, "exit")
         option_rows.append(
             {
                 "candidate_variant_id": queue_item.get("candidate_variant_id"),
@@ -2314,6 +2458,8 @@ def _option_rows_for_candidate(
                 "option_exit_reason": option_exit_reason,
                 "option_exit_mode": str(parameters.get("option_exit_mode") or OPTION_EXIT_STOCK_PROXY),
                 "contract_selection_method": contract_selection_method,
+                **entry_quote_quality,
+                **exit_quote_quality,
                 "contract_dte": ";".join(str(item["dte"]) for item in leg_details),
                 "contract_relative_strike_step": ";".join(
                     str(item["relative_strike_step"]) for item in leg_details
