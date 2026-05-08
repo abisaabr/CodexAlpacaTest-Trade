@@ -309,3 +309,52 @@ Selected-contract gap request packet:
 - `AVGO` bear `debit_put_vertical`: `14` missing selected-contract dates.
 
 The packet is intentionally a contract/date selector-repair input, not a promotion packet. The next GCP work should use it to determine whether the current selected-contract root is too narrow for realistic vertical leg pairing, then rerun the same candidates after repair without changing promotion gates.
+
+## Selected-Contract Gap Diagnostic
+
+Diagnostic tooling added:
+
+- Script: `scripts/build_selected_contract_gap_diagnostic.py`
+- Test: `tests/test_build_selected_contract_gap_diagnostic.py`
+
+Diagnostic command:
+
+```powershell
+python scripts\build_selected_contract_gap_diagnostic.py `
+  --requests-csv reports\gcp_research\bear_choppy_non_single_refine_20260508T2005Z\aggregate\selected_contract_gap_requests\selected_contract_gap_requests.csv `
+  --source-root reports\gcp_research\bear_choppy_non_single_refine_20260508T2005Z\aggregate\selected_contract_gap_source `
+  --output-dir reports\gcp_research\bear_choppy_non_single_refine_20260508T2005Z\aggregate\selected_contract_gap_diagnostic
+```
+
+Local output root:
+
+- `reports/gcp_research/bear_choppy_non_single_refine_20260508T2005Z/aggregate/selected_contract_gap_diagnostic/`
+
+GCS output root:
+
+- `gs://codexalpaca-control-us/research_results/bear_choppy_non_single_refine_20260508T2005Z/aggregate/selected_contract_gap_diagnostic/`
+
+Diagnostic result:
+
+- Requests analyzed: `34`
+- Case count: `3`
+- `missing_selected_contract_partition`: `1`
+- `no_valid_wing_contract`: `33`
+- `chain_builds_with_source_data`: `0`
+
+Case breakdown:
+
+- `AVGO` choppy `debit_call_vertical`: `13` true no-valid-wing rows and `1` missing source partition (`2025-07-03`).
+- `IWM` bear `bear_call_credit_spread`: `6` true no-valid-wing rows.
+- `AVGO` bear `debit_put_vertical`: `14` true no-valid-wing rows.
+
+Important implementation detail:
+
+- The diagnostic intentionally matches the GCP replay semantics where `option_trades_root` is empty. It therefore ranks entry-liquidity-first candidates with `prints=0`, not option-bar `trade_count`. Using bar `trade_count` as a proxy falsely made several rows look buildable because it selected a different base strike than the backtester.
+
+Interpretation:
+
+- The blocker is selected-contract wing depth, not entry lag and not a broad option-bar timestamp issue.
+- The dense selected-contract universe often includes the liquid base leg, but the liquidity-first selector can choose a base at the edge of the selected strike ladder, leaving no higher call wing or lower put wing for the vertical.
+- The next repair should expand selected-contract construction for multi-leg research so it preserves additional wing rows beyond the entry-liquidity-ranked base. This is a data/selector repair, not a reason to lower the `0.90` fill gate.
+- After repair, rerun only these three near-miss families and adjacent width/DTE variants before launching any broader GCP sweep.
