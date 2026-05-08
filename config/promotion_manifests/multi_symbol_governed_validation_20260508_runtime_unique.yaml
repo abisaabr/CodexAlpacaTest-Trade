@@ -4906,7 +4906,7 @@ strategies:
   min_test_net_pnl: 1271.037
   research_profile: tsm_regime_rescue_c001_021_tsm_e30_x120_entry_liquidity_first_research_only
   research_entry_timing_mode: daily_first
-  runner_semantics_status: packet_translated_to_runtime_single_leg
+  runner_semantics_status: packet_translated_to_runtime_native_multileg
   stock_proxy_mode: breakout
   entry_signal_mode: daily_first
   min_minutes_since_open: 15
@@ -5816,7 +5816,7 @@ strategies:
   min_test_net_pnl: 5719.042
   research_profile: iwm_regime_rescue_c217_288_iwm_e10_x60_entry_liquidity_first_research_only
   research_entry_timing_mode: rising_edge
-  runner_semantics_status: packet_translated_to_runtime_single_leg
+  runner_semantics_status: packet_translated_to_runtime_native_multileg
   stock_proxy_mode: breakout
   entry_signal_mode: rising_edge
   min_minutes_since_open: 20
@@ -6006,7 +6006,7 @@ strategies:
   min_test_net_pnl: 3234.703
   research_profile: iwm_regime_rescue_c217_288_iwm_e10_x60_entry_liquidity_first_research_only
   research_entry_timing_mode: rising_edge
-  runner_semantics_status: packet_translated_to_runtime_single_leg
+  runner_semantics_status: packet_translated_to_runtime_native_multileg
   stock_proxy_mode: breakout
   entry_signal_mode: rising_edge
   min_minutes_since_open: 20
@@ -6426,7 +6426,7 @@ strategies:
   min_test_net_pnl: 1837.4
   research_profile: iwm_regime_rescue_c217_288_iwm_e10_x60_entry_liquidity_first_research_only
   research_entry_timing_mode: rising_edge
-  runner_semantics_status: packet_translated_to_runtime_single_leg
+  runner_semantics_status: packet_translated_to_runtime_native_multileg
   stock_proxy_mode: breakout
   entry_signal_mode: rising_edge
   min_minutes_since_open: 20
@@ -6751,7 +6751,7 @@ strategies:
   min_test_net_pnl: 362.493
   research_profile: iwm_greek_c257_320_iwm_e30_x120_entry_delta_target_research_only
   research_entry_timing_mode: rising_edge
-  runner_semantics_status: packet_translated_to_runtime_single_leg
+  runner_semantics_status: packet_translated_to_runtime_native_multileg
   stock_proxy_mode: breakout
   entry_signal_mode: rising_edge
   min_minutes_since_open: 20
@@ -6811,7 +6811,7 @@ strategies:
   min_test_net_pnl: 7015.793
   research_profile: iwm_greek_c577_640_iwm_e30_x120_entry_delta_target_research_only
   research_entry_timing_mode: rising_edge
-  runner_semantics_status: packet_translated_to_runtime_single_leg
+  runner_semantics_status: packet_translated_to_runtime_native_multileg
   stock_proxy_mode: breakout
   entry_signal_mode: rising_edge
   min_minutes_since_open: 10
@@ -6861,7 +6861,7 @@ strategies:
   min_test_net_pnl: 6699.595
   research_profile: iwm_greek_c513_576_iwm_e30_x120_entry_delta_target_research_only
   research_entry_timing_mode: rising_edge
-  runner_semantics_status: packet_translated_to_runtime_single_leg
+  runner_semantics_status: packet_translated_to_runtime_native_multileg
   stock_proxy_mode: breakout
   entry_signal_mode: rising_edge
   min_minutes_since_open: 10
@@ -6911,7 +6911,7 @@ strategies:
   min_test_net_pnl: 5704.19
   research_profile: iwm_greek_c641_704_iwm_e30_x120_entry_delta_target_research_only
   research_entry_timing_mode: rising_edge
-  runner_semantics_status: packet_translated_to_runtime_single_leg
+  runner_semantics_status: packet_translated_to_runtime_native_multileg
   stock_proxy_mode: breakout
   entry_signal_mode: rising_edge
   min_minutes_since_open: 90
@@ -6961,7 +6961,7 @@ strategies:
   min_test_net_pnl: 3110.917
   research_profile: iwm_greek_c641_704_iwm_e30_x120_entry_delta_target_research_only
   research_entry_timing_mode: rising_edge
-  runner_semantics_status: packet_translated_to_runtime_single_leg
+  runner_semantics_status: packet_translated_to_runtime_native_multileg
   stock_proxy_mode: breakout
   entry_signal_mode: rising_edge
   min_minutes_since_open: 20
@@ -7011,7 +7011,7 @@ strategies:
   min_test_net_pnl: 2186.98
   research_profile: spy_greek_c577_640_spy_e0_x60_entry_delta_target_research_only
   research_entry_timing_mode: rising_edge
-  runner_semantics_status: packet_translated_to_runtime_single_leg
+  runner_semantics_status: packet_translated_to_runtime_native_multileg
   stock_proxy_mode: breakout
   entry_signal_mode: rising_edge
   min_minutes_since_open: 20
@@ -7071,7 +7071,7 @@ strategies:
   min_test_net_pnl: 4242.284
   research_profile: iwm_greek_c705_768_iwm_e30_x120_entry_delta_target_research_only
   research_entry_timing_mode: rising_edge
-  runner_semantics_status: packet_translated_to_runtime_single_leg
+  runner_semantics_status: packet_translated_to_runtime_native_multileg
   stock_proxy_mode: breakout
   entry_signal_mode: rising_edge
   min_minutes_since_open: 90
@@ -7211,7 +7211,7 @@ strategies:
   min_test_net_pnl: 922.849
   research_profile: iwm_greek_c129_192_iwm_e0_x60_entry_delta_target_research_only
   research_entry_timing_mode: rising_edge
-  runner_semantics_status: packet_translated_to_runtime_single_leg
+  runner_semantics_status: packet_translated_to_runtime_native_multileg
   stock_proxy_mode: breakout
   entry_signal_mode: rising_edge
   min_minutes_since_open: 10
@@ -7306,7 +7306,7 @@ strategies:
   min_test_net_pnl: 1366.126
   research_profile: spy_greek_c641_704_spy_e0_x60_entry_delta_target_research_only
   research_entry_timing_mode: rising_edge
-  runner_semantics_status: packet_translated_to_runtime_single_leg
+  runner_semantics_status: packet_translated_to_runtime_native_multileg
   stock_proxy_mode: breakout
   entry_signal_mode: rising_edge
   min_minutes_since_open: 20
@@ -7366,7 +7366,7 @@ strategies:
   min_test_net_pnl: 1718.832
   research_profile: spy_greek_c577_640_spy_e0_x60_entry_delta_target_research_only
   research_entry_timing_mode: rising_edge
-  runner_semantics_status: packet_translated_to_runtime_single_leg
+  runner_semantics_status: packet_translated_to_runtime_native_multileg
   stock_proxy_mode: breakout
   entry_signal_mode: rising_edge
   min_minutes_since_open: 20
@@ -7471,7 +7471,7 @@ strategies:
   min_test_net_pnl: 1158.088
   research_profile: qqq_greek_c513_576_qqq_e0_x60_entry_delta_target_research_only
   research_entry_timing_mode: rising_edge
-  runner_semantics_status: packet_translated_to_runtime_single_leg
+  runner_semantics_status: packet_translated_to_runtime_native_multileg
   stock_proxy_mode: breakout
   entry_signal_mode: rising_edge
   min_minutes_since_open: 10
@@ -7621,7 +7621,7 @@ strategies:
   min_test_net_pnl: 196.061
   research_profile: qqq_greek_c513_576_qqq_e0_x60_entry_delta_target_research_only
   research_entry_timing_mode: rising_edge
-  runner_semantics_status: packet_translated_to_runtime_single_leg
+  runner_semantics_status: packet_translated_to_runtime_native_multileg
   stock_proxy_mode: breakout
   entry_signal_mode: rising_edge
   min_minutes_since_open: 10

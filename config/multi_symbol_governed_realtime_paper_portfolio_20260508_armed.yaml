@@ -4,6 +4,7 @@ strategy_manifest_paths:
   - promotion_manifests/multi_symbol_governed_validation_20260508_runtime_unique.yaml
   - promotion_manifests/tsm_overnight_governed_validation_20260508.yaml
   - promotion_manifests/avgo_overnight_governed_validation_20260508.yaml
+  - promotion_manifests/avgo_c109_overnight_governed_validation_20260508.yaml
   - promotion_manifests/qqq_overnight_governed_validation_20260508.yaml
 
 ownership:
