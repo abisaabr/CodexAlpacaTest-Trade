@@ -107,3 +107,35 @@ Priority sweeps should target candidate diversity, not another broad single-leg 
 
 No strategy is newly eligible for live activation from this pass. Promotion remains governed-validation review only.
 
+## Follow-On GCP Sweep Launched
+
+Research-only follow-on wave:
+
+- Wave ID: `bear_choppy_non_single_refine_20260508T2005Z`
+- GCS root: `gs://codexalpaca-control-us/research_results/bear_choppy_non_single_refine_20260508T2005Z/`
+- Source archive: `gs://codexalpaca-control-us/research_results/bear_choppy_non_single_refine_20260508T2005Z/inputs/source/codexalpaca_repo_source.tar.gz`
+- Source commit: `5c94b1c`
+- Broker-facing: `false`
+- Live manifest effect: `none`
+- Risk policy effect: `none`
+- Target symbols: `QQQ`, `SPY`, `IWM`, `AVGO`
+- Target regimes: `bear`, `choppy`
+- Candidate ranges: `c097-120`, `c121-144`
+- Choppy family filter: `debit_call_vertical`, `debit_put_vertical`, `bull_put_credit_spread`, `bear_call_credit_spread`, `broken_wing_call_butterfly`, `broken_wing_put_butterfly`
+- Bear profile set: `signal_window_refine`
+- Choppy profile set: `timewindow_quality_filter`
+- Selector: `entry_liquidity_first_research_only`
+- Lag profiles: `0:60`, `10:60`, `30:120`
+
+Expected active research VMs:
+
+- `qqq-rescue-c097-120-20260508ns1`
+- `qqq-rescue-c121-144-20260508ns1`
+- `spy-rescue-c097-120-20260508ns1`
+- `spy-rescue-c121-144-20260508ns1`
+- `iwm-rescue-c097-120-20260508ns1`
+- `iwm-rescue-c121-144-20260508ns1`
+- `avgo-rescue-c097-120-20260508ns1`
+- `avgo-rescue-c121-144-20260508ns1`
+
+When these workers terminate, sync artifacts, build strict portfolio reports and promotion-review packets, mirror aggregate outputs to GCS, delete only synced TERMINATED VMs, and compare any new eligible candidates against the `full_lineage_optimizer_tiers_exact_v3_scaled` benchmark.
