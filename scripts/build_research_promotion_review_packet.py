@@ -209,6 +209,7 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         f"- Missing eligible regimes: `{', '.join(packet['gate_summary'].get('missing_eligible_regimes') or []) or 'none'}`",
         f"- Regime complete for promotion review: `{packet['gate_summary'].get('regime_complete_for_promotion_review')}`",
         f"- Regime completeness policy: `{packet['gate_summary'].get('regime_completeness_policy')}`",
+        f"- Governance review scope: `{packet['gate_summary'].get('governance_review_scope')}`",
         f"- Fill coverage unit: `{packet['gate_summary'].get('fill_coverage_unit')}`",
         f"- Fill coverage semantics: {packet['gate_summary'].get('fill_coverage_semantics')}",
         f"- Capital allocated weight: `{packet['gate_summary']['capital_plan_allocated_weight']}`",
@@ -359,6 +360,13 @@ def build_research_promotion_review_packet(
         else "research_only_blocked"
     )
     decision = candidate_level_decision
+    missing_eligible_regimes = source.get("missing_eligible_regimes") or []
+    governance_review_scope = (
+        "per_regime_governed_validation_review"
+        if missing_eligible_regimes
+        and candidate_level_decision == "ready_for_governed_validation_review"
+        else "multi_regime_governed_validation_review"
+    )
     packet = {
         "generated_at": datetime.now(UTC).isoformat(),
         "status": "research_promotion_review_packet_complete",
@@ -405,6 +413,7 @@ def build_research_promotion_review_packet(
                 "promotion_allowed_regime_complete"
             ),
             "regime_completeness_policy": "informational_only_not_a_hard_promotion_gate",
+            "governance_review_scope": governance_review_scope,
         },
         "portfolio_constraints": {
             "initial_cash": source.get("initial_cash"),

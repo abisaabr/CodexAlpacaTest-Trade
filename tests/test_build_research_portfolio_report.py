@@ -405,6 +405,7 @@ def test_research_portfolio_report_tracks_iwm_regime_completeness(tmp_path: Path
     assert packet["regime_complete_for_promotion_review"] is False
     assert packet["promotion_allowed_regime_complete"] is True
     assert packet["regime_completeness_policy"] == "informational_only_not_a_hard_promotion_gate"
+    assert packet["governance_review_scope"] == "per_regime_governed_validation_review"
     summary_by_regime = {row["intended_regime"]: row for row in packet["regime_summary"]}
     assert summary_by_regime["bull"]["eligible_for_promotion_review_count"] == 1
     assert summary_by_regime["bear"]["blocker_counts"] == {

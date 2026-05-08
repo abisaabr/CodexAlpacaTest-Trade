@@ -977,6 +977,11 @@ def build_research_portfolio_report(
         "regime_complete_for_promotion_review": not missing_eligible_regimes,
         "promotion_allowed_regime_complete": eligible_count > 0,
         "regime_completeness_policy": "informational_only_not_a_hard_promotion_gate",
+        "governance_review_scope": (
+            "per_regime_governed_validation_review"
+            if missing_eligible_regimes and eligible_count > 0
+            else "multi_regime_governed_validation_review"
+        ),
         "data_repair_priority_candidates": _data_repair_candidates(candidate_rows),
         "strategy_redesign_candidates": _strategy_redesign_candidates(candidate_rows),
         "next_step_contract": [

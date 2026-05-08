@@ -207,6 +207,7 @@ def test_promotion_review_packet_marks_eligible_research_candidates(
         packet["gate_summary"]["regime_completeness_policy"]
         == "informational_only_not_a_hard_promotion_gate"
     )
+    assert packet["gate_summary"]["governance_review_scope"] == "per_regime_governed_validation_review"
     assert packet["regime_summary"][0]["intended_regime"] == "bull"
     assert packet["review_candidates"][0]["base_candidate_variant_id"] == "amd_base"
     assert packet["review_candidates"][0]["aggregate_profile"] == "profile_a"
