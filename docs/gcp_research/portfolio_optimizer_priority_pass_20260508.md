@@ -296,3 +296,16 @@ Interpretation:
 - The best non-single-leg near misses are mostly contract-universe repair problems, not broad strategy problems.
 - For these candidates, entry and exit bar coverage is already high; selected-contract availability is the binding gate.
 - The next repair should produce a contract-date request list for the missing vertical legs, then rerun only these candidates and adjacent width/DTE variants.
+
+Selected-contract gap request packet:
+
+- Local root: `reports/gcp_research/bear_choppy_non_single_refine_20260508T2005Z/aggregate/selected_contract_gap_requests/`
+- GCS root: `gs://codexalpaca-control-us/research_results/bear_choppy_non_single_refine_20260508T2005Z/aggregate/selected_contract_gap_requests/`
+- Request rows: `34`
+- Case count: `3`
+- Cases:
+- `AVGO` choppy `debit_call_vertical`: `14` missing selected-contract dates.
+- `IWM` bear `bear_call_credit_spread`: `6` missing selected-contract dates.
+- `AVGO` bear `debit_put_vertical`: `14` missing selected-contract dates.
+
+The packet is intentionally a contract/date selector-repair input, not a promotion packet. The next GCP work should use it to determine whether the current selected-contract root is too narrow for realistic vertical leg pairing, then rerun the same candidates after repair without changing promotion gates.
