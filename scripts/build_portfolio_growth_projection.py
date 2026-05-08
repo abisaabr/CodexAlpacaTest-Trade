@@ -114,6 +114,53 @@ def parse_args() -> argparse.Namespace:
         default="trade_date",
         help="Date column in --calendar-csv.",
     )
+    parser.add_argument(
+        "--optimization-train-end-date",
+        default=None,
+        help=(
+            "Optional YYYY-MM-DD split date. When set, emit train/test candidate "
+            "stability and a recommended train-positive/test-positive subset."
+        ),
+    )
+    parser.add_argument("--optimization-min-train-trades", type=int, default=5)
+    parser.add_argument("--optimization-min-test-trades", type=int, default=5)
+    parser.add_argument(
+        "--optimization-max-per-symbol-regime",
+        type=int,
+        default=None,
+        help=(
+            "Optional cap for the train/test recommended subset. Candidates are "
+            "ranked by train PnL within each symbol/regime bucket."
+        ),
+    )
+    parser.add_argument("--stress-max-entry-spread-pct", type=float, default=None)
+    parser.add_argument("--stress-max-exit-spread-pct", type=float, default=None)
+    parser.add_argument("--stress-max-entry-quote-age-seconds", type=float, default=None)
+    parser.add_argument("--stress-max-exit-quote-age-seconds", type=float, default=None)
+    parser.add_argument(
+        "--fill-model-enabled",
+        action="store_true",
+        help="Annotate rows with a simple market-quality fill-probability estimate.",
+    )
+    parser.add_argument(
+        "--min-fill-probability",
+        type=float,
+        default=None,
+        help="Reject rows with projected_fill_probability below this threshold.",
+    )
+    parser.add_argument(
+        "--unknown-fill-probability",
+        type=float,
+        default=1.0,
+        help="Fill probability assigned when no spread, age, or trade-print inputs are present.",
+    )
+    parser.add_argument("--diversification-min-symbols", type=int, default=None)
+    parser.add_argument("--diversification-min-regimes", type=int, default=None)
+    parser.add_argument("--diversification-min-families", type=int, default=None)
+    parser.add_argument("--diversification-max-symbol-trade-share", type=float, default=None)
+    parser.add_argument("--diversification-max-family-trade-share", type=float, default=None)
+    parser.add_argument("--diversification-max-regime-trade-share", type=float, default=None)
+    parser.add_argument("--diversification-max-symbol-pnl-share", type=float, default=None)
     return parser.parse_args()
 
 
@@ -608,6 +655,396 @@ def _select_capital_plan_trades(
     return pd.concat(selected_frames, ignore_index=True)
 
 
+def _capital_plan_match_key(row: dict[str, Any]) -> tuple[str, str]:
+    candidate_id = str(row.get("base_candidate_variant_id") or row.get("candidate_variant_id") or "")
+    candidate_id = candidate_id.split("__profile_", 1)[0]
+    return candidate_id, str(row.get("aggregate_profile") or "")
+
+
+def _selected_trade_match_key(row: pd.Series) -> tuple[str, str]:
+    candidate_id = str(
+        row.get("base_candidate_variant_id")
+        or row.get("candidate_variant_id")
+        or row.get("portfolio_candidate_variant_id")
+        or ""
+    )
+    candidate_id = candidate_id.split("__profile_", 1)[0]
+    return candidate_id, str(row.get("aggregate_profile") or "")
+
+
+def _capital_plan_match_coverage(
+    *, capital_plan: list[dict[str, Any]], selected_trades: pd.DataFrame
+) -> dict[str, Any]:
+    matched_keys = (
+        {_selected_trade_match_key(row) for _, row in selected_trades.iterrows()}
+        if not selected_trades.empty
+        else set()
+    )
+    matched_rows = []
+    unmatched_rows = []
+    for row in capital_plan:
+        normalized = {
+            "candidate_variant_id": row.get("candidate_variant_id"),
+            "base_candidate_variant_id": row.get("base_candidate_variant_id"),
+            "aggregate_profile": row.get("aggregate_profile"),
+            "symbol": row.get("symbol"),
+            "family": row.get("family"),
+            "intended_regime": row.get("intended_regime"),
+        }
+        if _capital_plan_match_key(row) in matched_keys:
+            matched_rows.append(normalized)
+        else:
+            unmatched_rows.append(normalized)
+    unmatched_frame = pd.DataFrame(unmatched_rows)
+    unmatched_by_symbol = (
+        unmatched_frame.get("symbol", pd.Series(dtype=object))
+        .fillna("UNKNOWN")
+        .astype(str)
+        .str.upper()
+        .value_counts()
+        .to_dict()
+        if not unmatched_frame.empty
+        else {}
+    )
+    unmatched_by_regime = (
+        unmatched_frame.get("intended_regime", pd.Series(dtype=object))
+        .fillna("unknown")
+        .astype(str)
+        .value_counts()
+        .to_dict()
+        if not unmatched_frame.empty
+        else {}
+    )
+    unmatched_by_family = (
+        unmatched_frame.get("family", pd.Series(dtype=object))
+        .fillna("unknown")
+        .astype(str)
+        .value_counts()
+        .to_dict()
+        if not unmatched_frame.empty
+        else {}
+    )
+    return {
+        "status": "complete",
+        "capital_plan_count": int(len(capital_plan)),
+        "matched_capital_plan_count": int(len(matched_rows)),
+        "unmatched_capital_plan_count": int(len(unmatched_rows)),
+        "selected_trade_count_before_hardening": int(len(selected_trades)),
+        "match_rate_pct": (
+            round(len(matched_rows) / len(capital_plan) * 100.0, 4) if capital_plan else 0.0
+        ),
+        "unmatched_by_symbol": {str(key): int(value) for key, value in unmatched_by_symbol.items()},
+        "unmatched_by_regime": {str(key): int(value) for key, value in unmatched_by_regime.items()},
+        "unmatched_by_family": {str(key): int(value) for key, value in unmatched_by_family.items()},
+        "unmatched_rows": unmatched_rows,
+        "unmatched_sample": unmatched_rows[:200],
+    }
+
+
+def _first_existing_column(frame: pd.DataFrame, names: list[str]) -> str | None:
+    for name in names:
+        if name in frame.columns:
+            return name
+    return None
+
+
+def _normalize_share(value: object) -> float:
+    parsed = _float(value, default=math.nan)
+    if math.isnan(parsed):
+        return math.nan
+    parsed = abs(parsed)
+    if parsed > 1.0:
+        parsed /= 100.0
+    return parsed
+
+
+def _threshold_share(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return _normalize_share(value)
+
+
+def _quality_column_map(frame: pd.DataFrame) -> dict[str, str | None]:
+    return {
+        "entry_spread_pct": _first_existing_column(
+            frame,
+            [
+                "entry_spread_pct",
+                "entry_relative_spread",
+                "entry_relative_spread_pct",
+                "entry_bid_ask_spread_pct",
+                "entry_option_spread_pct",
+                "spread_pct",
+            ],
+        ),
+        "exit_spread_pct": _first_existing_column(
+            frame,
+            [
+                "exit_spread_pct",
+                "exit_relative_spread",
+                "exit_relative_spread_pct",
+                "exit_bid_ask_spread_pct",
+                "exit_option_spread_pct",
+            ],
+        ),
+        "entry_quote_age_seconds": _first_existing_column(
+            frame,
+            [
+                "entry_quote_age_seconds",
+                "entry_freshness_seconds",
+                "entry_option_quote_age_seconds",
+                "freshness_seconds",
+            ],
+        ),
+        "exit_quote_age_seconds": _first_existing_column(
+            frame,
+            [
+                "exit_quote_age_seconds",
+                "exit_freshness_seconds",
+                "exit_option_quote_age_seconds",
+            ],
+        ),
+    }
+
+
+def _hardening_rejection_row(
+    *,
+    row_id: int,
+    row: pd.Series,
+    reason: str,
+    detail: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    event = {
+        "row_id": int(row_id),
+        "decision": "rejected",
+        "decision_reason": reason,
+        "trade_date": str(row.get("trade_date")),
+        "candidate_variant_id": row.get("portfolio_candidate_variant_id")
+        or row.get("candidate_variant_id"),
+        "base_candidate_variant_id": row.get("base_candidate_variant_id"),
+        "aggregate_profile": row.get("aggregate_profile"),
+        "symbol": row.get("symbol"),
+        "family": row.get("capital_plan_family") or row.get("family"),
+        "intended_regime": row.get("capital_plan_regime") or row.get("intended_regime"),
+    }
+    if detail:
+        event.update(detail)
+    return event
+
+
+def _apply_market_quality_stress(
+    *,
+    selected_trades: pd.DataFrame,
+    max_entry_spread_pct: float | None,
+    max_exit_spread_pct: float | None,
+    max_entry_quote_age_seconds: float | None,
+    max_exit_quote_age_seconds: float | None,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
+    limits = {
+        "entry_spread_pct": _threshold_share(max_entry_spread_pct),
+        "exit_spread_pct": _threshold_share(max_exit_spread_pct),
+        "entry_quote_age_seconds": max_entry_quote_age_seconds,
+        "exit_quote_age_seconds": max_exit_quote_age_seconds,
+    }
+    configured = {key: value for key, value in limits.items() if value is not None}
+    if not configured:
+        return selected_trades, pd.DataFrame(), {
+            "status": "not_configured",
+            "input_trade_count": int(len(selected_trades)),
+            "kept_trade_count": int(len(selected_trades)),
+            "rejected_trade_count": 0,
+        }
+    if selected_trades.empty:
+        return selected_trades, pd.DataFrame(), {
+            "status": "enabled",
+            "input_trade_count": 0,
+            "kept_trade_count": 0,
+            "rejected_trade_count": 0,
+            "limits": configured,
+        }
+    column_map = _quality_column_map(selected_trades)
+    keep_mask = pd.Series(True, index=selected_trades.index)
+    rejections: list[dict[str, Any]] = []
+    for row_id, row in selected_trades.iterrows():
+        row_reasons: list[str] = []
+        details: dict[str, Any] = {}
+        for field, limit in configured.items():
+            source_column = column_map.get(field)
+            details[f"{field}_limit"] = limit
+            details[f"{field}_source_column"] = source_column
+            if not source_column:
+                row_reasons.append(f"missing_{field}")
+                continue
+            if field.endswith("_spread_pct"):
+                value = _normalize_share(row.get(source_column))
+            else:
+                value = _float(row.get(source_column), default=math.nan)
+            details[field] = None if math.isnan(value) else round(value, 8)
+            if math.isnan(value):
+                row_reasons.append(f"missing_{field}")
+            elif value > float(limit):
+                row_reasons.append(f"{field}_above_limit")
+        if row_reasons:
+            keep_mask.loc[row_id] = False
+            rejections.append(
+                _hardening_rejection_row(
+                    row_id=int(row_id),
+                    row=row,
+                    reason=";".join(row_reasons),
+                    detail=details,
+                )
+            )
+    rejection_frame = pd.DataFrame(rejections)
+    kept = selected_trades.loc[keep_mask].copy()
+    reason_counts = Counter()
+    for rejection in rejections:
+        for reason in str(rejection["decision_reason"]).split(";"):
+            reason_counts[reason] += 1
+    return kept, rejection_frame, {
+        "status": "enabled",
+        "input_trade_count": int(len(selected_trades)),
+        "kept_trade_count": int(len(kept)),
+        "rejected_trade_count": int(len(rejection_frame)),
+        "limits": configured,
+        "source_columns": column_map,
+        "rejection_reason_counts": dict(sorted(reason_counts.items())),
+    }
+
+
+def _estimate_fill_probability(row: pd.Series, *, unknown_fill_probability: float) -> tuple[float, list[str]]:
+    probability = 1.0
+    components: list[str] = []
+    frame_columns = set(row.index)
+    column_map = {
+        key: value
+        for key, value in _quality_column_map(pd.DataFrame(columns=list(frame_columns))).items()
+        if value
+    }
+    entry_spread_column = column_map.get("entry_spread_pct")
+    if entry_spread_column:
+        spread = _normalize_share(row.get(entry_spread_column))
+        if not math.isnan(spread):
+            probability *= max(0.15, 1.0 - min(spread, 0.5) * 2.0)
+            components.append(f"entry_spread={round(spread, 6)}")
+    entry_age_column = column_map.get("entry_quote_age_seconds")
+    if entry_age_column:
+        age = _float(row.get(entry_age_column), default=math.nan)
+        if not math.isnan(age):
+            probability *= 1.0 if age <= 5.0 else max(0.2, 1.0 - (age - 5.0) / 120.0)
+            components.append(f"entry_quote_age_seconds={round(age, 3)}")
+    print_column = _first_existing_column(
+        pd.DataFrame(columns=list(frame_columns)),
+        ["entry_selection_trade_print_count", "option_trade_print_count", "trade_print_count"],
+    )
+    if print_column:
+        prints = _float(row.get(print_column), default=math.nan)
+        if not math.isnan(prints):
+            if prints <= 0:
+                multiplier = 0.35
+            elif prints <= 2:
+                multiplier = 0.65
+            elif prints <= 5:
+                multiplier = 0.85
+            else:
+                multiplier = 1.0
+            probability *= multiplier
+            components.append(f"{print_column}={round(prints, 3)}")
+    if not components:
+        unknown = min(max(_float(unknown_fill_probability, 1.0), 0.0), 1.0)
+        return unknown, ["unknown_market_quality_inputs"]
+    return min(max(probability, 0.0), 1.0), components
+
+
+def _apply_fill_probability_model(
+    *,
+    selected_trades: pd.DataFrame,
+    enabled: bool,
+    min_fill_probability: float | None,
+    unknown_fill_probability: float,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
+    configured = enabled or min_fill_probability is not None
+    if not configured:
+        return selected_trades, pd.DataFrame(), {
+            "status": "not_configured",
+            "input_trade_count": int(len(selected_trades)),
+            "kept_trade_count": int(len(selected_trades)),
+            "rejected_trade_count": 0,
+        }
+    if selected_trades.empty:
+        return selected_trades, pd.DataFrame(), {
+            "status": "enabled",
+            "input_trade_count": 0,
+            "kept_trade_count": 0,
+            "rejected_trade_count": 0,
+            "min_fill_probability": min_fill_probability,
+            "unknown_fill_probability": unknown_fill_probability,
+        }
+    modeled = selected_trades.copy()
+    probabilities: list[float] = []
+    components: list[str] = []
+    for _, row in modeled.iterrows():
+        probability, row_components = _estimate_fill_probability(
+            row,
+            unknown_fill_probability=unknown_fill_probability,
+        )
+        probabilities.append(probability)
+        components.append("|".join(row_components))
+    modeled["projected_fill_probability"] = probabilities
+    modeled["fill_probability_components"] = components
+    if min_fill_probability is None:
+        return modeled, pd.DataFrame(), {
+            "status": "enabled",
+            "input_trade_count": int(len(selected_trades)),
+            "kept_trade_count": int(len(modeled)),
+            "rejected_trade_count": 0,
+            "min_fill_probability": None,
+            "unknown_fill_probability": unknown_fill_probability,
+            "average_fill_probability": round(float(np.mean(probabilities)), 6)
+            if probabilities
+            else None,
+        }
+    threshold = min(max(_float(min_fill_probability), 0.0), 1.0)
+    keep_mask = modeled["projected_fill_probability"] >= threshold
+    rejections = [
+        _hardening_rejection_row(
+            row_id=int(row_id),
+            row=row,
+            reason="fill_probability_below_min",
+            detail={
+                "projected_fill_probability": round(_float(row.get("projected_fill_probability")), 8),
+                "min_fill_probability": threshold,
+                "fill_probability_components": row.get("fill_probability_components"),
+            },
+        )
+        for row_id, row in modeled.loc[~keep_mask].iterrows()
+    ]
+    kept = modeled.loc[keep_mask].copy()
+    probability_array = np.array(probabilities, dtype=float)
+    return kept, pd.DataFrame(rejections), {
+        "status": "enabled",
+        "input_trade_count": int(len(selected_trades)),
+        "kept_trade_count": int(len(kept)),
+        "rejected_trade_count": int(len(rejections)),
+        "min_fill_probability": threshold,
+        "unknown_fill_probability": unknown_fill_probability,
+        "average_fill_probability": round(float(np.mean(probability_array)), 6)
+        if probability_array.size
+        else None,
+        "p10_fill_probability": round(float(np.percentile(probability_array, 10)), 6)
+        if probability_array.size
+        else None,
+        "p50_fill_probability": round(float(np.percentile(probability_array, 50)), 6)
+        if probability_array.size
+        else None,
+        "p90_fill_probability": round(float(np.percentile(probability_array, 90)), 6)
+        if probability_array.size
+        else None,
+        "rejection_reason_counts": {"fill_probability_below_min": int(len(rejections))}
+        if rejections
+        else {},
+    }
+
+
 def _build_daily_equity(
     *,
     selected_trades: pd.DataFrame,
@@ -665,6 +1102,8 @@ def _build_daily_equity(
                     "source_option_pnl": round(_float(row.get("option_pnl")), 6),
                     "dynamic_scale_factor": round(scale, 8),
                     "scaled_option_pnl": round(scaled_pnl, 6),
+                    "projected_fill_probability": row.get("projected_fill_probability"),
+                    "fill_probability_components": row.get("fill_probability_components"),
                 }
             )
         equity = max(start_equity + daily_pnl, 0.0)
@@ -950,6 +1389,8 @@ def _build_daily_equity_production_runtime(
                     "scaled_option_pnl": round(scaled_pnl, 6),
                     "option_entry_time": str(row.get("entry_ts")),
                     "option_exit_time": str(row.get("exit_ts")),
+                    "projected_fill_probability": row.get("projected_fill_probability"),
+                    "fill_probability_components": row.get("fill_probability_components"),
                 }
             )
             risk_events.append(
@@ -1148,6 +1589,7 @@ def _build_daily_equity_production_runtime(
                 "equity": round(equity, 6),
                 "open_position_count": len(open_positions),
                 "reserved_risk_after_entry": round(_reserved_risk(open_positions), 6),
+                "projected_fill_probability": row.get("projected_fill_probability"),
             }
         )
 
@@ -1546,6 +1988,230 @@ def _bootstrap_projection(
     }
 
 
+def _candidate_group_columns(frame: pd.DataFrame) -> list[str]:
+    return [
+        column
+        for column in [
+            "base_candidate_variant_id",
+            "candidate_variant_id",
+            "aggregate_profile",
+            "symbol",
+            "family",
+            "intended_regime",
+        ]
+        if column in frame.columns
+    ]
+
+
+def _train_test_optimization_report(
+    *,
+    scaled_trades: pd.DataFrame,
+    train_end_date: str | None,
+    min_train_trades: int,
+    min_test_trades: int,
+    max_per_symbol_regime: int | None,
+) -> dict[str, Any]:
+    if not train_end_date:
+        return {
+            "status": "not_configured",
+            "candidate_count": 0,
+            "eligible_candidate_count": 0,
+            "selected_candidate_count": 0,
+        }
+    if scaled_trades.empty:
+        return {
+            "status": "enabled_no_trades",
+            "train_end_date": train_end_date,
+            "candidate_count": 0,
+            "eligible_candidate_count": 0,
+            "selected_candidate_count": 0,
+        }
+    trades = scaled_trades.copy()
+    trades["trade_date_dt"] = pd.to_datetime(trades["trade_date"], errors="coerce").dt.date
+    split_date = pd.to_datetime(train_end_date, errors="raise").date()
+    group_columns = _candidate_group_columns(trades)
+    if not group_columns:
+        return {
+            "status": "enabled_no_candidate_columns",
+            "train_end_date": train_end_date,
+            "candidate_count": 0,
+            "eligible_candidate_count": 0,
+            "selected_candidate_count": 0,
+        }
+    rows: list[dict[str, Any]] = []
+    for key, group in trades.groupby(group_columns, dropna=False):
+        key_values = key if isinstance(key, tuple) else (key,)
+        identity = {column: value for column, value in zip(group_columns, key_values)}
+        train = group[group["trade_date_dt"] <= split_date]
+        test = group[group["trade_date_dt"] > split_date]
+        train_trades = int(len(train))
+        test_trades = int(len(test))
+        train_pnl = float(train["scaled_option_pnl"].sum()) if train_trades else 0.0
+        test_pnl = float(test["scaled_option_pnl"].sum()) if test_trades else 0.0
+        reason_codes = []
+        if train_trades < min_train_trades:
+            reason_codes.append("min_train_trades")
+        if test_trades < min_test_trades:
+            reason_codes.append("min_test_trades")
+        if train_pnl <= 0:
+            reason_codes.append("train_pnl_not_positive")
+        if test_pnl <= 0:
+            reason_codes.append("test_pnl_not_positive")
+        rows.append(
+            {
+                **identity,
+                "train_trades": train_trades,
+                "test_trades": test_trades,
+                "total_trades": train_trades + test_trades,
+                "train_scaled_pnl": round(train_pnl, 6),
+                "test_scaled_pnl": round(test_pnl, 6),
+                "total_scaled_pnl": round(train_pnl + test_pnl, 6),
+                "train_expectancy": round(train_pnl / train_trades, 6)
+                if train_trades
+                else None,
+                "test_expectancy": round(test_pnl / test_trades, 6) if test_trades else None,
+                "eligible": not reason_codes,
+                "blockers": ",".join(reason_codes),
+            }
+        )
+    candidate_frame = pd.DataFrame(rows)
+    eligible = candidate_frame[candidate_frame["eligible"].astype(bool)].copy()
+    selected = eligible.copy()
+    if max_per_symbol_regime is not None and max_per_symbol_regime > 0 and not eligible.empty:
+        selected = (
+            eligible.sort_values(
+                ["symbol", "intended_regime", "train_scaled_pnl", "test_scaled_pnl"],
+                ascending=[True, True, False, False],
+            )
+            .groupby(["symbol", "intended_regime"], dropna=False)
+            .head(max_per_symbol_regime)
+            .reset_index(drop=True)
+        )
+    reason_counts = Counter()
+    for blockers in candidate_frame.get("blockers", pd.Series(dtype=object)).fillna(""):
+        for blocker in str(blockers).split(","):
+            if blocker:
+                reason_counts[blocker] += 1
+    return {
+        "status": "enabled",
+        "train_end_date": train_end_date,
+        "min_train_trades": int(min_train_trades),
+        "min_test_trades": int(min_test_trades),
+        "max_per_symbol_regime": max_per_symbol_regime,
+        "candidate_count": int(len(candidate_frame)),
+        "eligible_candidate_count": int(len(eligible)),
+        "selected_candidate_count": int(len(selected)),
+        "blocker_counts": dict(sorted(reason_counts.items())),
+        "candidate_rows": candidate_frame.to_dict(orient="records"),
+        "selected_candidate_rows": selected.to_dict(orient="records"),
+    }
+
+
+def _share_threshold(value: float | None) -> float | None:
+    if value is None:
+        return None
+    parsed = _normalize_share(value)
+    if math.isnan(parsed):
+        return None
+    return min(max(parsed, 0.0), 1.0)
+
+
+def _top_share(rows: list[dict[str, Any]], key: str) -> float:
+    if not rows:
+        return 0.0
+    return max(_float(row.get(key)) for row in rows)
+
+
+def _distribution_by_column(
+    *, frame: pd.DataFrame, column: str, pnl_column: str = "scaled_option_pnl"
+) -> list[dict[str, Any]]:
+    if frame.empty or column not in frame.columns:
+        return []
+    total_trades = max(len(frame), 1)
+    total_abs_pnl = float(frame[pnl_column].abs().sum()) if pnl_column in frame.columns else 0.0
+    rows = []
+    for value, group in frame.groupby(column, dropna=False):
+        pnl = float(group[pnl_column].sum()) if pnl_column in group.columns else 0.0
+        abs_pnl = float(group[pnl_column].abs().sum()) if pnl_column in group.columns else 0.0
+        rows.append(
+            {
+                str(column): str(value),
+                "trade_count": int(len(group)),
+                "trade_share": round(len(group) / total_trades, 6),
+                "scaled_pnl": round(pnl, 6),
+                "abs_pnl_share": round(abs_pnl / total_abs_pnl, 6) if total_abs_pnl > 0 else 0.0,
+            }
+        )
+    return sorted(rows, key=lambda row: row["trade_count"], reverse=True)
+
+
+def _diversification_report(
+    *,
+    scaled_trades: pd.DataFrame,
+    min_symbols: int | None,
+    min_regimes: int | None,
+    min_families: int | None,
+    max_symbol_trade_share: float | None,
+    max_family_trade_share: float | None,
+    max_regime_trade_share: float | None,
+    max_symbol_pnl_share: float | None,
+) -> dict[str, Any]:
+    thresholds = {
+        "min_symbols": min_symbols,
+        "min_regimes": min_regimes,
+        "min_families": min_families,
+        "max_symbol_trade_share": _share_threshold(max_symbol_trade_share),
+        "max_family_trade_share": _share_threshold(max_family_trade_share),
+        "max_regime_trade_share": _share_threshold(max_regime_trade_share),
+        "max_symbol_pnl_share": _share_threshold(max_symbol_pnl_share),
+    }
+    configured = any(value is not None for value in thresholds.values())
+    symbol_rows = _distribution_by_column(frame=scaled_trades, column="symbol")
+    regime_rows = _distribution_by_column(frame=scaled_trades, column="intended_regime")
+    family_rows = _distribution_by_column(frame=scaled_trades, column="family")
+    symbol_count = len(symbol_rows)
+    regime_count = len(regime_rows)
+    family_count = len(family_rows)
+    failures: list[str] = []
+    if min_symbols is not None and symbol_count < min_symbols:
+        failures.append("min_symbols")
+    if min_regimes is not None and regime_count < min_regimes:
+        failures.append("min_regimes")
+    if min_families is not None and family_count < min_families:
+        failures.append("min_families")
+    max_symbol_trade = _top_share(symbol_rows, "trade_share")
+    max_family_trade = _top_share(family_rows, "trade_share")
+    max_regime_trade = _top_share(regime_rows, "trade_share")
+    max_symbol_abs_pnl = _top_share(symbol_rows, "abs_pnl_share")
+    if thresholds["max_symbol_trade_share"] is not None and max_symbol_trade > thresholds["max_symbol_trade_share"]:
+        failures.append("max_symbol_trade_share")
+    if thresholds["max_family_trade_share"] is not None and max_family_trade > thresholds["max_family_trade_share"]:
+        failures.append("max_family_trade_share")
+    if thresholds["max_regime_trade_share"] is not None and max_regime_trade > thresholds["max_regime_trade_share"]:
+        failures.append("max_regime_trade_share")
+    if thresholds["max_symbol_pnl_share"] is not None and max_symbol_abs_pnl > thresholds["max_symbol_pnl_share"]:
+        failures.append("max_symbol_pnl_share")
+    status = "not_configured"
+    if configured:
+        status = "failed" if failures else "passed"
+    return {
+        "status": status,
+        "thresholds": thresholds,
+        "failure_reasons": failures,
+        "trade_count": int(len(scaled_trades)),
+        "symbol_count": symbol_count,
+        "regime_count": regime_count,
+        "family_count": family_count,
+        "max_symbol_trade_share": round(max_symbol_trade, 6),
+        "max_family_trade_share": round(max_family_trade, 6),
+        "max_regime_trade_share": round(max_regime_trade, 6),
+        "max_symbol_abs_pnl_share": round(max_symbol_abs_pnl, 6),
+        "symbol_distribution": symbol_rows[:50],
+        "regime_distribution": regime_rows[:50],
+        "family_distribution": family_rows[:50],
+    }
+
+
 def _evidence_grade(
     *,
     daily_curve: pd.DataFrame,
@@ -1553,6 +2219,7 @@ def _evidence_grade(
     projection: dict[str, Any],
     capital_plan: list[dict[str, Any]],
     regime_coverage: dict[str, Any] | None = None,
+    hardening_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     blockers: list[str] = []
     warnings: list[str] = []
@@ -1585,6 +2252,22 @@ def _evidence_grade(
         warnings.append("bootstrap_probability_of_50pct_drawdown_above_5pct")
     if _float(projection.get("risk_of_ruin_pct")) > 0:
         blockers.append("nonzero_bootstrap_risk_of_ruin")
+    if hardening_summary:
+        match_coverage = hardening_summary.get("match_coverage") or {}
+        if int(_float(match_coverage.get("unmatched_capital_plan_count"))) > 0:
+            warnings.append("unmatched_capital_plan_strategies")
+        market_stress = hardening_summary.get("market_quality_stress") or {}
+        if int(_float(market_stress.get("rejected_trade_count"))) > 0:
+            warnings.append("market_quality_stress_rejected_trades")
+        fill_model = hardening_summary.get("fill_probability_model") or {}
+        if int(_float(fill_model.get("rejected_trade_count"))) > 0:
+            warnings.append("fill_probability_model_rejected_trades")
+        train_test = hardening_summary.get("train_test_optimization") or {}
+        if train_test.get("status") == "enabled" and int(_float(train_test.get("selected_candidate_count"))) == 0:
+            warnings.append("train_test_no_candidate_survived")
+        diversification = hardening_summary.get("diversification_constraints") or {}
+        if diversification.get("status") == "failed":
+            blockers.append("diversification_constraints_failed")
     if blockers:
         grade = "not_institutional_expectation"
     elif warnings:
@@ -1611,6 +2294,7 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
     regime_coverage = packet.get("regime_coverage", {})
     capital_plan_merge = packet.get("capital_plan_merge", {})
     production_risk = packet.get("production_risk_simulation") or {}
+    projection_hardening = packet.get("projection_hardening") or {}
     lines = [
         "# Portfolio Growth Projection",
         "",
@@ -1653,6 +2337,29 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         )
     lines.extend(
         [
+            "",
+            "## Projection Hardening",
+            "",
+        ]
+    )
+    match_coverage = projection_hardening.get("match_coverage") or {}
+    market_stress = projection_hardening.get("market_quality_stress") or {}
+    fill_model = projection_hardening.get("fill_probability_model") or {}
+    train_test = projection_hardening.get("train_test_optimization") or {}
+    diversification = projection_hardening.get("diversification_constraints") or {}
+    lines.extend(
+        [
+            f"- Capital-plan match rate: `{match_coverage.get('match_rate_pct')}%`",
+            f"- Unmatched capital-plan strategies: `{match_coverage.get('unmatched_capital_plan_count')}`",
+            f"- Market-quality stress status: `{market_stress.get('status')}`",
+            f"- Market-quality stress rejected trades: `{market_stress.get('rejected_trade_count')}`",
+            f"- Fill-probability model status: `{fill_model.get('status')}`",
+            f"- Fill-probability rejected trades: `{fill_model.get('rejected_trade_count')}`",
+            f"- Train/test optimization status: `{train_test.get('status')}`",
+            f"- Train/test eligible candidates: `{train_test.get('eligible_candidate_count')}`",
+            f"- Train/test selected candidates: `{train_test.get('selected_candidate_count')}`",
+            f"- Diversification status: `{diversification.get('status')}`",
+            f"- Diversification failures: `{diversification.get('failure_reasons')}`",
             "",
             "## Full-Year Calendar Coverage",
             "",
@@ -1791,6 +2498,24 @@ def build_growth_projection(
     production_default_risk_fraction: float = 0.05,
     production_default_max_contracts: int = 6,
     production_enforce_broker_equity_floor: bool = False,
+    optimization_train_end_date: str | None = None,
+    optimization_min_train_trades: int = 5,
+    optimization_min_test_trades: int = 5,
+    optimization_max_per_symbol_regime: int | None = None,
+    stress_max_entry_spread_pct: float | None = None,
+    stress_max_exit_spread_pct: float | None = None,
+    stress_max_entry_quote_age_seconds: float | None = None,
+    stress_max_exit_quote_age_seconds: float | None = None,
+    fill_model_enabled: bool = False,
+    min_fill_probability: float | None = None,
+    unknown_fill_probability: float = 1.0,
+    diversification_min_symbols: int | None = None,
+    diversification_min_regimes: int | None = None,
+    diversification_min_families: int | None = None,
+    diversification_max_symbol_trade_share: float | None = None,
+    diversification_max_family_trade_share: float | None = None,
+    diversification_max_regime_trade_share: float | None = None,
+    diversification_max_symbol_pnl_share: float | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     if risk_simulation_mode not in {"capital_plan", "production_runtime"}:
@@ -1819,6 +2544,29 @@ def build_growth_projection(
         default_risk_fraction=production_default_risk_fraction,
         default_max_contracts=production_default_max_contracts,
     )
+    match_coverage = _capital_plan_match_coverage(
+        capital_plan=capital_plan,
+        selected_trades=selected_trades,
+    )
+    market_rejections = pd.DataFrame()
+    fill_rejections = pd.DataFrame()
+    selected_trades, market_rejections, market_quality_stress = _apply_market_quality_stress(
+        selected_trades=selected_trades,
+        max_entry_spread_pct=stress_max_entry_spread_pct,
+        max_exit_spread_pct=stress_max_exit_spread_pct,
+        max_entry_quote_age_seconds=stress_max_entry_quote_age_seconds,
+        max_exit_quote_age_seconds=stress_max_exit_quote_age_seconds,
+    )
+    selected_trades, fill_rejections, fill_probability_model = _apply_fill_probability_model(
+        selected_trades=selected_trades,
+        enabled=fill_model_enabled,
+        min_fill_probability=min_fill_probability,
+        unknown_fill_probability=unknown_fill_probability,
+    )
+    hardening_rejections = pd.concat(
+        [frame for frame in [market_rejections, fill_rejections] if not frame.empty],
+        ignore_index=True,
+    ) if not market_rejections.empty or not fill_rejections.empty else pd.DataFrame()
     risk_events = pd.DataFrame()
     production_risk_summary: dict[str, Any] | None = None
     if risk_simulation_mode == "production_runtime":
@@ -1874,12 +2622,41 @@ def build_growth_projection(
         capital_plan=capital_plan,
         projection_calendar=projection_calendar,
     )
+    train_test_optimization = _train_test_optimization_report(
+        scaled_trades=scaled_trades,
+        train_end_date=optimization_train_end_date,
+        min_train_trades=optimization_min_train_trades,
+        min_test_trades=optimization_min_test_trades,
+        max_per_symbol_regime=optimization_max_per_symbol_regime,
+    )
+    diversification_constraints = _diversification_report(
+        scaled_trades=scaled_trades,
+        min_symbols=diversification_min_symbols,
+        min_regimes=diversification_min_regimes,
+        min_families=diversification_min_families,
+        max_symbol_trade_share=diversification_max_symbol_trade_share,
+        max_family_trade_share=diversification_max_family_trade_share,
+        max_regime_trade_share=diversification_max_regime_trade_share,
+        max_symbol_pnl_share=diversification_max_symbol_pnl_share,
+    )
+    projection_hardening = {
+        "match_coverage": match_coverage,
+        "market_quality_stress": market_quality_stress,
+        "fill_probability_model": fill_probability_model,
+        "train_test_optimization": {
+            key: value
+            for key, value in train_test_optimization.items()
+            if key not in {"candidate_rows", "selected_candidate_rows"}
+        },
+        "diversification_constraints": diversification_constraints,
+    }
     evidence_grade = _evidence_grade(
         daily_curve=daily_curve,
         historical=historical,
         projection=projection,
         capital_plan=capital_plan,
         regime_coverage=regime_coverage,
+        hardening_summary=projection_hardening,
     )
     packet = {
         "generated_at": datetime.now(UTC).isoformat(),
@@ -1898,6 +2675,7 @@ def build_growth_projection(
         "max_symbol_weight": max_symbol_weight,
         "risk_simulation_mode": risk_simulation_mode,
         "production_risk_simulation": production_risk_summary,
+        "projection_hardening": projection_hardening,
         "capital_plan_merge": capital_plan_merge,
         "capital_plan_count": len(capital_plan),
         "matched_trade_count": int(len(selected_trades)),
@@ -1926,6 +2704,23 @@ def build_growth_projection(
         scaled_trades.to_csv(output_dir / "portfolio_growth_scaled_trades.csv", index=False)
     if not risk_events.empty:
         risk_events.to_csv(output_dir / "portfolio_growth_risk_events.csv", index=False)
+    if not hardening_rejections.empty:
+        hardening_rejections.to_csv(
+            output_dir / "portfolio_growth_hardening_rejections.csv",
+            index=False,
+        )
+    unmatched_rows = match_coverage.get("unmatched_rows") or []
+    if unmatched_rows:
+        pd.DataFrame(unmatched_rows).to_csv(
+            output_dir / "portfolio_growth_unmatched_capital_plan.csv",
+            index=False,
+        )
+    train_test_rows = train_test_optimization.get("candidate_rows") or []
+    if train_test_rows:
+        pd.DataFrame(train_test_rows).to_csv(
+            output_dir / "portfolio_growth_train_test_candidates.csv",
+            index=False,
+        )
     _write_markdown(output_dir / "portfolio_growth_projection.md", packet)
     return packet
 
@@ -1960,6 +2755,24 @@ def main() -> None:
         production_default_risk_fraction=args.production_default_risk_fraction,
         production_default_max_contracts=args.production_default_max_contracts,
         production_enforce_broker_equity_floor=args.production_enforce_broker_equity_floor,
+        optimization_train_end_date=args.optimization_train_end_date,
+        optimization_min_train_trades=args.optimization_min_train_trades,
+        optimization_min_test_trades=args.optimization_min_test_trades,
+        optimization_max_per_symbol_regime=args.optimization_max_per_symbol_regime,
+        stress_max_entry_spread_pct=args.stress_max_entry_spread_pct,
+        stress_max_exit_spread_pct=args.stress_max_exit_spread_pct,
+        stress_max_entry_quote_age_seconds=args.stress_max_entry_quote_age_seconds,
+        stress_max_exit_quote_age_seconds=args.stress_max_exit_quote_age_seconds,
+        fill_model_enabled=args.fill_model_enabled,
+        min_fill_probability=args.min_fill_probability,
+        unknown_fill_probability=args.unknown_fill_probability,
+        diversification_min_symbols=args.diversification_min_symbols,
+        diversification_min_regimes=args.diversification_min_regimes,
+        diversification_min_families=args.diversification_min_families,
+        diversification_max_symbol_trade_share=args.diversification_max_symbol_trade_share,
+        diversification_max_family_trade_share=args.diversification_max_family_trade_share,
+        diversification_max_regime_trade_share=args.diversification_max_regime_trade_share,
+        diversification_max_symbol_pnl_share=args.diversification_max_symbol_pnl_share,
     )
     print(json.dumps(packet, indent=2, sort_keys=True))
 

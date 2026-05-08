@@ -378,3 +378,262 @@ def test_production_runtime_enforces_per_symbol_open_position_cap(tmp_path: Path
     assert packet["production_risk_simulation"]["rejection_reason_counts"] == {
         "max_positions_per_symbol": 1
     }
+
+
+def test_projection_reports_unmatched_capital_plan_rows(tmp_path: Path) -> None:
+    replay_root = tmp_path / "replay"
+    profile_dir = replay_root / "profile_a"
+    profile_dir.mkdir(parents=True)
+    pd.DataFrame(
+        [
+            {
+                "trade_date": "2025-01-02",
+                "candidate_variant_id": "qqq_bull",
+                "option_pnl": 100.0,
+                "symbol": "QQQ",
+                "contract_symbol": "QQQ250103C00100000",
+                "option_entry_time": "2025-01-02T15:00:00Z",
+                "option_exit_time": "2025-01-02T16:00:00Z",
+                "quantity": 1,
+            }
+        ]
+    ).to_csv(profile_dir / "option_aware_trade_economics.csv", index=False)
+    portfolio_path = tmp_path / "portfolio_report.json"
+    portfolio_path.write_text(
+        json.dumps(
+            {
+                "capital_plan": [
+                    {
+                        "candidate_variant_id": "qqq_bull__profile_profile-a",
+                        "base_candidate_variant_id": "qqq_bull",
+                        "aggregate_profile": "profile_a",
+                        "symbol": "QQQ",
+                        "family": "single_leg_repair",
+                        "intended_regime": "bull",
+                        "research_only_weight": 0.5,
+                        "research_only_dollars": 12_500.0,
+                    },
+                    {
+                        "candidate_variant_id": "iwm_missing__profile_profile-a",
+                        "base_candidate_variant_id": "iwm_missing",
+                        "aggregate_profile": "profile_a",
+                        "symbol": "IWM",
+                        "family": "debit_put_vertical",
+                        "intended_regime": "bear",
+                        "research_only_weight": 0.5,
+                        "research_only_dollars": 12_500.0,
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    packet = build_growth_projection(
+        portfolio_report_json=portfolio_path,
+        replay_root=replay_root,
+        output_dir=tmp_path / "out_unmatched",
+        initial_cash=25_000.0,
+        target_equity=300_000.0,
+        backtest_allocation_fraction=0.05,
+        annual_trading_days=252,
+        projection_years=1,
+        bootstrap_runs=25,
+        seed=1,
+    )
+
+    coverage = packet["projection_hardening"]["match_coverage"]
+    assert coverage["matched_capital_plan_count"] == 1
+    assert coverage["unmatched_capital_plan_count"] == 1
+    assert coverage["unmatched_sample"][0]["base_candidate_variant_id"] == "iwm_missing"
+    assert "unmatched_capital_plan_strategies" in packet["evidence_grade"]["warnings"]
+    assert (tmp_path / "out_unmatched" / "portfolio_growth_unmatched_capital_plan.csv").exists()
+
+
+def test_projection_filters_market_quality_and_fill_probability(tmp_path: Path) -> None:
+    replay_root = tmp_path / "replay"
+    profile_dir = replay_root / "profile_a"
+    profile_dir.mkdir(parents=True)
+    rows = []
+    for index, values in enumerate(
+        [
+            ("2025-01-02", 100.0, 0.01, 1.0, 12),
+            ("2025-01-03", 75.0, 0.25, 1.0, 12),
+            ("2025-01-06", 50.0, 0.01, 90.0, 0),
+        ],
+        start=1,
+    ):
+        trade_date, pnl, spread, age, prints = values
+        rows.append(
+            {
+                "trade_date": trade_date,
+                "candidate_variant_id": "qqq_bull",
+                "option_pnl": pnl,
+                "symbol": "QQQ",
+                "contract_symbol": f"QQQ25010{index}C00100000",
+                "option_entry_time": f"{trade_date}T15:0{index}:00Z",
+                "option_exit_time": f"{trade_date}T16:0{index}:00Z",
+                "quantity": 1,
+                "entry_spread_pct": spread,
+                "entry_quote_age_seconds": age,
+                "entry_selection_trade_print_count": prints,
+            }
+        )
+    pd.DataFrame(rows).to_csv(profile_dir / "option_aware_trade_economics.csv", index=False)
+    portfolio_path = tmp_path / "portfolio_report.json"
+    portfolio_path.write_text(
+        json.dumps(
+            {
+                "capital_plan": [
+                    {
+                        "candidate_variant_id": "qqq_bull__profile_profile-a",
+                        "base_candidate_variant_id": "qqq_bull",
+                        "aggregate_profile": "profile_a",
+                        "symbol": "QQQ",
+                        "family": "single_leg_repair",
+                        "intended_regime": "bull",
+                        "research_only_weight": 1.0,
+                        "research_only_dollars": 25_000.0,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "out_quality"
+    packet = build_growth_projection(
+        portfolio_report_json=portfolio_path,
+        replay_root=replay_root,
+        output_dir=output_dir,
+        initial_cash=25_000.0,
+        target_equity=300_000.0,
+        backtest_allocation_fraction=0.05,
+        annual_trading_days=252,
+        projection_years=1,
+        bootstrap_runs=25,
+        seed=1,
+        stress_max_entry_spread_pct=0.05,
+        fill_model_enabled=True,
+        min_fill_probability=0.5,
+    )
+
+    hardening = packet["projection_hardening"]
+    assert hardening["market_quality_stress"]["input_trade_count"] == 3
+    assert hardening["market_quality_stress"]["rejected_trade_count"] == 1
+    assert hardening["fill_probability_model"]["input_trade_count"] == 2
+    assert hardening["fill_probability_model"]["rejected_trade_count"] == 1
+    assert packet["matched_trade_count"] == 1
+    assert (output_dir / "portfolio_growth_hardening_rejections.csv").exists()
+    scaled_trades = pd.read_csv(output_dir / "portfolio_growth_scaled_trades.csv")
+    assert scaled_trades["projected_fill_probability"].iloc[0] >= 0.5
+
+
+def test_train_test_and_diversification_constraints_report(tmp_path: Path) -> None:
+    replay_root = tmp_path / "replay"
+    profile_dir = replay_root / "profile_a"
+    profile_dir.mkdir(parents=True)
+    pd.DataFrame(
+        [
+            {
+                "trade_date": "2025-01-02",
+                "candidate_variant_id": "qqq_bull",
+                "option_pnl": 100.0,
+                "symbol": "QQQ",
+                "contract_symbol": "QQQ250102C00100000",
+                "option_entry_time": "2025-01-02T15:00:00Z",
+                "option_exit_time": "2025-01-02T16:00:00Z",
+                "quantity": 1,
+            },
+            {
+                "trade_date": "2025-01-06",
+                "candidate_variant_id": "qqq_bull",
+                "option_pnl": 75.0,
+                "symbol": "QQQ",
+                "contract_symbol": "QQQ250106C00100000",
+                "option_entry_time": "2025-01-06T15:00:00Z",
+                "option_exit_time": "2025-01-06T16:00:00Z",
+                "quantity": 1,
+            },
+            {
+                "trade_date": "2025-01-02",
+                "candidate_variant_id": "iwm_bear",
+                "option_pnl": 60.0,
+                "symbol": "IWM",
+                "contract_symbol": "IWM250102P00100000",
+                "option_entry_time": "2025-01-02T15:00:00Z",
+                "option_exit_time": "2025-01-02T16:00:00Z",
+                "quantity": 1,
+            },
+            {
+                "trade_date": "2025-01-06",
+                "candidate_variant_id": "iwm_bear",
+                "option_pnl": -200.0,
+                "symbol": "IWM",
+                "contract_symbol": "IWM250106P00100000",
+                "option_entry_time": "2025-01-06T15:00:00Z",
+                "option_exit_time": "2025-01-06T16:00:00Z",
+                "quantity": 1,
+            },
+        ]
+    ).to_csv(profile_dir / "option_aware_trade_economics.csv", index=False)
+    portfolio_path = tmp_path / "portfolio_report.json"
+    portfolio_path.write_text(
+        json.dumps(
+            {
+                "capital_plan": [
+                    {
+                        "candidate_variant_id": "qqq_bull__profile_profile-a",
+                        "base_candidate_variant_id": "qqq_bull",
+                        "aggregate_profile": "profile_a",
+                        "symbol": "QQQ",
+                        "family": "single_leg_repair",
+                        "intended_regime": "bull",
+                        "research_only_weight": 0.5,
+                        "research_only_dollars": 12_500.0,
+                    },
+                    {
+                        "candidate_variant_id": "iwm_bear__profile_profile-a",
+                        "base_candidate_variant_id": "iwm_bear",
+                        "aggregate_profile": "profile_a",
+                        "symbol": "IWM",
+                        "family": "debit_put_vertical",
+                        "intended_regime": "bear",
+                        "research_only_weight": 0.5,
+                        "research_only_dollars": 12_500.0,
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "out_train_test"
+    packet = build_growth_projection(
+        portfolio_report_json=portfolio_path,
+        replay_root=replay_root,
+        output_dir=output_dir,
+        initial_cash=25_000.0,
+        target_equity=300_000.0,
+        backtest_allocation_fraction=0.05,
+        annual_trading_days=252,
+        projection_years=1,
+        bootstrap_runs=25,
+        seed=1,
+        optimization_train_end_date="2025-01-03",
+        optimization_min_train_trades=1,
+        optimization_min_test_trades=1,
+        optimization_max_per_symbol_regime=1,
+        diversification_min_families=3,
+    )
+
+    train_test = packet["projection_hardening"]["train_test_optimization"]
+    diversification = packet["projection_hardening"]["diversification_constraints"]
+    assert train_test["status"] == "enabled"
+    assert train_test["eligible_candidate_count"] == 1
+    assert train_test["selected_candidate_count"] == 1
+    assert train_test["blocker_counts"]["test_pnl_not_positive"] == 1
+    assert diversification["status"] == "failed"
+    assert "min_families" in diversification["failure_reasons"]
+    assert "diversification_constraints_failed" in packet["evidence_grade"]["blockers"]
+    assert (output_dir / "portfolio_growth_train_test_candidates.csv").exists()
