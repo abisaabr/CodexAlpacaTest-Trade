@@ -772,6 +772,8 @@ def _quality_column_map(frame: pd.DataFrame) -> dict[str, str | None]:
                 "entry_spread_pct",
                 "entry_relative_spread",
                 "entry_relative_spread_pct",
+                "entry_average_relative_spread",
+                "entry_max_relative_spread",
                 "entry_bid_ask_spread_pct",
                 "entry_option_spread_pct",
                 "spread_pct",
@@ -783,6 +785,8 @@ def _quality_column_map(frame: pd.DataFrame) -> dict[str, str | None]:
                 "exit_spread_pct",
                 "exit_relative_spread",
                 "exit_relative_spread_pct",
+                "exit_average_relative_spread",
+                "exit_max_relative_spread",
                 "exit_bid_ask_spread_pct",
                 "exit_option_spread_pct",
             ],
@@ -805,6 +809,19 @@ def _quality_column_map(frame: pd.DataFrame) -> dict[str, str | None]:
             ],
         ),
     }
+
+
+def _market_quality_output_fields(row: pd.Series) -> dict[str, Any]:
+    column_map = _quality_column_map(pd.DataFrame(columns=list(row.index)))
+    output: dict[str, Any] = {}
+    for field, source_column in column_map.items():
+        if source_column and source_column in row.index:
+            output[field] = row.get(source_column)
+            output[f"{field}_source_column"] = source_column
+    for source_field in ["entry_quote_source", "exit_quote_source"]:
+        if source_field in row.index:
+            output[source_field] = row.get(source_field)
+    return output
 
 
 def _hardening_rejection_row(
@@ -932,6 +949,16 @@ def _estimate_fill_probability(row: pd.Series, *, unknown_fill_probability: floa
         if not math.isnan(age):
             probability *= 1.0 if age <= 5.0 else max(0.2, 1.0 - (age - 5.0) / 120.0)
             components.append(f"entry_quote_age_seconds={round(age, 3)}")
+    for source_field, multiplier in [
+        ("entry_quote_source", 0.55),
+        ("exit_quote_source", 0.75),
+    ]:
+        if source_field in frame_columns:
+            source = str(row.get(source_field) or "").strip().lower()
+            if source:
+                components.append(f"{source_field}={source}")
+                if "no_bid_ask" in source or source in {"unknown", "missing", "none"}:
+                    probability *= multiplier
     print_column = _first_existing_column(
         pd.DataFrame(columns=list(frame_columns)),
         ["entry_selection_trade_print_count", "option_trade_print_count", "trade_print_count"],
@@ -1102,6 +1129,7 @@ def _build_daily_equity(
                     "source_option_pnl": round(_float(row.get("option_pnl")), 6),
                     "dynamic_scale_factor": round(scale, 8),
                     "scaled_option_pnl": round(scaled_pnl, 6),
+                    **_market_quality_output_fields(row),
                     "projected_fill_probability": row.get("projected_fill_probability"),
                     "fill_probability_components": row.get("fill_probability_components"),
                 }
@@ -1389,6 +1417,7 @@ def _build_daily_equity_production_runtime(
                     "scaled_option_pnl": round(scaled_pnl, 6),
                     "option_entry_time": str(row.get("entry_ts")),
                     "option_exit_time": str(row.get("exit_ts")),
+                    **_market_quality_output_fields(row),
                     "projected_fill_probability": row.get("projected_fill_probability"),
                     "fill_probability_components": row.get("fill_probability_components"),
                 }

@@ -4335,3 +4335,144 @@ def test_execute_attempts_records_cancel_failure_without_crashing(tmp_path: Path
     cancel_events = [event for event in events if event["event_type"] == "order_cancel"]
     assert cancel_events[0]["cancel_requested"] is False
     assert trader.logger.warnings
+
+
+def test_execute_attempts_records_submit_failure_without_crashing(tmp_path: Path) -> None:
+    class _LoggerStub:
+        def __init__(self) -> None:
+            self.warnings: list[tuple[object, ...]] = []
+
+        def warning(self, *args, **_kwargs) -> None:
+            self.warnings.append(args)
+
+    class _BrokerStub:
+        def submit_order(self, *_args, **_kwargs) -> dict[str, object]:
+            raise OSError("temporary submit outage")
+
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={
+                    "run_root": tmp_path / "runs",
+                    "state_root": tmp_path / "state",
+                    "order_fill_timeout_seconds": 0,
+                    "order_status_poll_seconds": 0,
+                }
+            )
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.run_root = tmp_path / "runs"
+    trader.broker = _BrokerStub()
+    trader.logger = _LoggerStub()
+    trader.submit_paper_orders = True
+    trade = OpenTrade(**_sample_open_trade(strategy_name="qqq_test", underlying_symbol="QQQ"))
+    request = OrderRequest(
+        symbol="QQQ260417C00600000",
+        side="sell",
+        strategy_name="qqq_test_exit",
+        asset_class="option",
+        qty=1,
+        order_type="limit",
+        time_in_force="day",
+        limit_price=1.0,
+        client_order_id="order-client-id",
+        extra={"position_intent": "sell_to_close"},
+    )
+
+    terminal, fill_price = trader._execute_attempts(
+        [request],
+        journal_name="test_orders",
+        trade=trade,
+        phase="exit",
+    )
+
+    assert terminal == {"status": "not_filled"}
+    assert fill_price == 0.0
+    journal = json.loads((tmp_path / "runs" / "2026-04-15" / "order_journal.json").read_text())
+    assert journal[0]["event_type"] == "order_submission_error"
+    assert journal[0]["response_status"] == "submit_error"
+    events = json.loads((tmp_path / "runs" / "2026-04-15" / "trade_reconciliation_events.json").read_text())
+    assert events[0]["event_type"] == "order_submission_error"
+    assert events[0]["error_type"] == "OSError"
+    assert trader.logger.warnings
+
+
+def test_submit_cleanup_order_retries_after_submit_failure(tmp_path: Path) -> None:
+    class _LoggerStub:
+        def __init__(self) -> None:
+            self.warnings: list[tuple[object, ...]] = []
+
+        def warning(self, *args, **_kwargs) -> None:
+            self.warnings.append(args)
+
+    class _BrokerStub:
+        def __init__(self) -> None:
+            self.submit_count = 0
+
+        def submit_order(self, request: OrderRequest, **_kwargs) -> dict[str, object]:
+            self.submit_count += 1
+            if self.submit_count == 1:
+                raise OSError("temporary cleanup submit outage")
+            return {"id": "cleanup-2", "status": "accepted", "client_order_id": request.client_order_id}
+
+        def get_order(self, order_id: str) -> dict[str, object]:
+            return {
+                "id": order_id,
+                "status": "filled",
+                "qty": "1",
+                "filled_qty": "1",
+                "filled_avg_price": "1.11",
+            }
+
+        def cancel_order(self, *_args, **_kwargs) -> dict[str, object]:
+            return {"status": "cancelled"}
+
+    config = default_portfolio_config().model_copy(
+        update={
+            "execution": default_portfolio_config().execution.model_copy(
+                update={
+                    "run_root": tmp_path / "runs",
+                    "state_root": tmp_path / "state",
+                }
+            )
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader.run_root = tmp_path / "runs"
+    trader.submit_paper_orders = True
+    trader.broker = _BrokerStub()
+    trader.logger = _LoggerStub()
+
+    request = OrderRequest(
+        symbol="QQQ260417C00600000",
+        side="sell",
+        qty=1.0,
+        order_type="market",
+        time_in_force="day",
+        client_order_id="cleanup-base-id",
+        asset_class="option",
+        strategy_name="cleanup_retry_test",
+        extra={"position_intent": "sell_to_close"},
+    )
+
+    result = trader._submit_cleanup_order(
+        trade_date=datetime(2026, 4, 15).date(),
+        request=request,
+        reason="auto_flatten_known_end_of_day_position",
+        metadata={"scope": "known_trade"},
+    )
+
+    assert result["status"] == "filled"
+    assert trader.broker.submit_count == 2
+    cleanup_entries = json.loads(
+        (tmp_path / "runs" / "2026-04-15" / "broker_position_cleanup.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert cleanup_entries[0]["response"]["status"] == "submit_error"
+    assert cleanup_entries[0]["terminal"]["status"] == "submit_error"
+    assert cleanup_entries[1]["terminal"]["status"] == "filled"
+    assert trader.logger.warnings

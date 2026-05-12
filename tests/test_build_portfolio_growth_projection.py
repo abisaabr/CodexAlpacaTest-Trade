@@ -527,6 +527,101 @@ def test_projection_filters_market_quality_and_fill_probability(tmp_path: Path) 
     assert (output_dir / "portfolio_growth_hardening_rejections.csv").exists()
     scaled_trades = pd.read_csv(output_dir / "portfolio_growth_scaled_trades.csv")
     assert scaled_trades["projected_fill_probability"].iloc[0] >= 0.5
+    assert scaled_trades["entry_spread_pct_source_column"].iloc[0] == "entry_spread_pct"
+
+
+def test_projection_uses_backtester_relative_spread_aliases_and_quote_source(tmp_path: Path) -> None:
+    replay_root = tmp_path / "replay"
+    profile_dir = replay_root / "profile_a"
+    profile_dir.mkdir(parents=True)
+    pd.DataFrame(
+        [
+            {
+                "trade_date": "2025-01-02",
+                "candidate_variant_id": "qqq_bull",
+                "option_pnl": 100.0,
+                "symbol": "QQQ",
+                "contract_symbol": "QQQ250102C00100000",
+                "option_entry_time": "2025-01-02T15:00:00Z",
+                "option_exit_time": "2025-01-02T16:00:00Z",
+                "quantity": 1,
+                "entry_average_relative_spread": 0.03,
+                "exit_max_relative_spread": 0.04,
+                "entry_quote_age_seconds": 0.0,
+                "exit_quote_age_seconds": 0.0,
+                "entry_quote_source": "option_quote_bid_ask",
+                "exit_quote_source": "option_quote_bid_ask",
+            },
+            {
+                "trade_date": "2025-01-03",
+                "candidate_variant_id": "qqq_bull",
+                "option_pnl": 75.0,
+                "symbol": "QQQ",
+                "contract_symbol": "QQQ250103C00100000",
+                "option_entry_time": "2025-01-03T15:00:00Z",
+                "option_exit_time": "2025-01-03T16:00:00Z",
+                "quantity": 1,
+                "entry_average_relative_spread": 0.03,
+                "exit_max_relative_spread": 0.04,
+                "entry_quote_age_seconds": 0.0,
+                "exit_quote_age_seconds": 0.0,
+                "entry_quote_source": "option_bar_close_no_bid_ask",
+                "exit_quote_source": "option_bar_close_no_bid_ask",
+            },
+        ]
+    ).to_csv(profile_dir / "option_aware_trade_economics.csv", index=False)
+    portfolio_path = tmp_path / "portfolio_report.json"
+    portfolio_path.write_text(
+        json.dumps(
+            {
+                "capital_plan": [
+                    {
+                        "candidate_variant_id": "qqq_bull__profile_profile-a",
+                        "base_candidate_variant_id": "qqq_bull",
+                        "aggregate_profile": "profile_a",
+                        "symbol": "QQQ",
+                        "family": "single_leg_repair",
+                        "intended_regime": "bull",
+                        "research_only_weight": 1.0,
+                        "research_only_dollars": 25_000.0,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "out_quality_aliases"
+    packet = build_growth_projection(
+        portfolio_report_json=portfolio_path,
+        replay_root=replay_root,
+        output_dir=output_dir,
+        initial_cash=25_000.0,
+        target_equity=300_000.0,
+        backtest_allocation_fraction=0.05,
+        annual_trading_days=252,
+        projection_years=1,
+        bootstrap_runs=25,
+        seed=1,
+        stress_max_entry_spread_pct=0.05,
+        stress_max_exit_spread_pct=0.05,
+        fill_model_enabled=True,
+        min_fill_probability=0.5,
+    )
+
+    hardening = packet["projection_hardening"]
+    assert hardening["market_quality_stress"]["source_columns"]["entry_spread_pct"] == (
+        "entry_average_relative_spread"
+    )
+    assert hardening["market_quality_stress"]["source_columns"]["exit_spread_pct"] == (
+        "exit_max_relative_spread"
+    )
+    assert hardening["fill_probability_model"]["rejected_trade_count"] == 1
+    scaled_trades = pd.read_csv(output_dir / "portfolio_growth_scaled_trades.csv")
+    assert scaled_trades["entry_quote_source"].tolist() == ["option_quote_bid_ask"]
+    assert scaled_trades["entry_spread_pct_source_column"].tolist() == [
+        "entry_average_relative_spread"
+    ]
 
 
 def test_train_test_and_diversification_constraints_report(tmp_path: Path) -> None:

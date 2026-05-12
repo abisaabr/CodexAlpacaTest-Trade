@@ -2229,11 +2229,54 @@ class MultiTickerPortfolioPaperTrader:
         event_base = self._event_base_for_trade(trade, phase=phase)
         for request_index, request in enumerate(requests, start=1):
             serialized_request = self._serialize_order_request(request)
-            response = self.broker.submit_order(
-                request,
-                dry_run=not self.submit_paper_orders,
-                explicitly_requested=self.submit_paper_orders,
-            )
+            try:
+                response = self.broker.submit_order(
+                    request,
+                    dry_run=not self.submit_paper_orders,
+                    explicitly_requested=self.submit_paper_orders,
+                )
+            except Exception as exc:
+                response = {
+                    "status": "submit_error",
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                }
+                self.logger.warning(
+                    "order submission failed strategy=%s phase=%s request_index=%s error=%s",
+                    trade.strategy_name,
+                    phase,
+                    request_index,
+                    exc,
+                )
+                append_journal_entry(
+                    run_dir / "order_journal.json",
+                    {
+                        **event_base,
+                        "journal": journal_name,
+                        "event_type": "order_submission_error",
+                        "request_index": request_index,
+                        "request": serialized_request,
+                        "response": response,
+                        "response_status": response["status"],
+                        "order_id": None,
+                        "client_order_id": request.client_order_id,
+                    },
+                )
+                self._append_trade_event(
+                    trade_date,
+                    {
+                        **event_base,
+                        "event_type": "order_submission_error",
+                        "request_index": request_index,
+                        "request": serialized_request,
+                        "response_status": response["status"],
+                        "error": response["error"],
+                        "error_type": response["error_type"],
+                        "order_id": None,
+                        "client_order_id": request.client_order_id,
+                    },
+                )
+                continue
             append_journal_entry(
                 run_dir / "order_journal.json",
                 {
@@ -2675,14 +2718,46 @@ class MultiTickerPortfolioPaperTrader:
                 request,
                 attempt_index=attempt_index,
             )
-            response = self.broker.submit_order(
-                request_for_attempt,
-                dry_run=not getattr(self, "submit_paper_orders", True),
-                explicitly_requested=getattr(self, "submit_paper_orders", True),
-            )
+            serialized_request = self._serialize_order_request(request_for_attempt)
+            try:
+                response = self.broker.submit_order(
+                    request_for_attempt,
+                    dry_run=not getattr(self, "submit_paper_orders", True),
+                    explicitly_requested=getattr(self, "submit_paper_orders", True),
+                )
+            except Exception as exc:
+                response = {
+                    "status": "submit_error",
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                }
+                self.logger.warning(
+                    "cleanup order submission failed reason=%s attempt_index=%s error=%s",
+                    reason,
+                    attempt_index,
+                    exc,
+                )
+                self._append_broker_position_cleanup_entry(
+                    trade_date,
+                    {
+                        "reason": reason,
+                        "request": serialized_request,
+                        "response": response,
+                        "terminal": response,
+                        "attempt_index": attempt_index,
+                        "max_attempts": max_attempts,
+                        **metadata,
+                    },
+                )
+                last_result = {
+                    "status": "submit_error",
+                    "order_id": None,
+                    "filled_avg_price": None,
+                }
+                continue
             journal_entry: dict[str, Any] = {
                 "reason": reason,
-                "request": self._serialize_order_request(request_for_attempt),
+                "request": serialized_request,
                 "response": response,
                 "attempt_index": attempt_index,
                 "max_attempts": max_attempts,
