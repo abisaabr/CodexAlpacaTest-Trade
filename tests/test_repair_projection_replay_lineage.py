@@ -60,4 +60,72 @@ def test_lineage_repair_finds_search_root_and_copies_missing_csv(tmp_path: Path)
     assert summary["matched_current_count"] == 1
     assert summary["repaired_from_search_count"] == 1
     assert summary["unmatched_count"] == 0
+    assert summary["quote_quality_status_counts"] == {"quote_quality_gap": 2}
     assert (tmp_path / "repaired" / "profile_b" / "option_aware_trade_economics.csv").exists()
+    quality = pd.read_csv(tmp_path / "out" / "quote_quality_lineage.csv")
+    assert set(quality["recommended_data_action"]) == {
+        "rerun_replay_with_bid_ask_spread_quote_age_and_trade_prints"
+    }
+
+
+def test_lineage_repair_marks_quote_backed_replay_ready(tmp_path: Path) -> None:
+    portfolio = tmp_path / "portfolio.json"
+    portfolio.write_text(
+        json.dumps(
+            {
+                "capital_plan": [
+                    {
+                        "candidate_variant_id": "qqq_bull__profile_profile-a",
+                        "base_candidate_variant_id": "qqq_bull",
+                        "aggregate_profile": "profile_a",
+                        "symbol": "QQQ",
+                        "family": "single_leg",
+                        "intended_regime": "bull",
+                    },
+                    {
+                        "candidate_variant_id": "missing__profile_profile-b",
+                        "base_candidate_variant_id": "missing",
+                        "aggregate_profile": "profile_b",
+                        "symbol": "IWM",
+                        "family": "single_leg",
+                        "intended_regime": "bear",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    current = tmp_path / "current" / "profile_a"
+    current.mkdir(parents=True)
+    pd.DataFrame(
+        [
+            {
+                "candidate_variant_id": "qqq_bull",
+                "option_pnl": 1.0,
+                "entry_quote_source": "option_quote_bid_ask",
+                "exit_quote_source": "option_quote_bid_ask",
+                "entry_average_relative_spread": 0.02,
+                "exit_max_relative_spread": 0.03,
+                "entry_quote_age_seconds": 0.2,
+                "exit_quote_age_seconds": 0.4,
+                "entry_selection_trade_print_count": 3,
+                "option_trade_print_count": 7,
+            }
+        ]
+    ).to_csv(current / "option_aware_trade_economics.csv", index=False)
+
+    summary = build_lineage_repair(
+        portfolio_report_json=portfolio,
+        replay_roots=[tmp_path / "current"],
+        search_roots=[],
+        output_dir=tmp_path / "out",
+    )
+
+    assert summary["quote_quality_status_counts"] == {
+        "quote_backed_replay": 1,
+        "replay_lineage_missing": 1,
+    }
+    quality = pd.read_csv(tmp_path / "out" / "quote_quality_lineage.csv")
+    ready = quality[quality["base_candidate_variant_id"] == "qqq_bull"].iloc[0]
+    assert ready["recommended_data_action"] == "projection_ready_quote_backed_replay"
+    assert ready["entry_bid_ask_rate"] == 1.0
