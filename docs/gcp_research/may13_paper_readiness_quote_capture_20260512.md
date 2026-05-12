@@ -62,6 +62,16 @@ Result:
 - Submit flag in config: `true`, still requires explicit runtime command and PAPER endpoint checks
 - Lease path: `D:\codexalpaca_runtime\state\multi_symbol_governed_realtime_20260513_ownership_lease.json`
 
+Run ID: `may13_strategy_inventory_20260512`
+
+Result:
+
+- Runtime strategies: `344`
+- Runtime symbols: `AMD,AMZN,AVGO,GOOGL,INTC,IWM,META,MSFT,NVDA,PLTR,QQQ,SPY,TSLA,TSM,XOM`
+- Regime counts: `bull=76`, `bear=125`, `choppy=143`
+- Multi-leg strategies: `47`
+- Main families: `Single-leg long call=194`, `Single-leg long put=103`, `debit_call_vertical=17`, `broken_wing_put_butterfly=11`, `debit_put_vertical=9`, `bull_put_credit_spread=7`, `bear_call_credit_spread=2`, `broken_wing_call_butterfly=1`
+
 Run ID: `realtime_quote_sidecar_plan_only_dryrun_20260512`
 
 ```powershell
