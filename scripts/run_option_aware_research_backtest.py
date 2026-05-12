@@ -685,9 +685,10 @@ def _choose_entry_delta_target_contract(
             return None, None, "no_selected_contract"
         if saw_entry_bar:
             return None, None, "no_greek_snapshot"
-        return [], "no_entry_bar"
+        return None, None, "no_entry_bar"
     choices.sort(key=lambda item: (item[0], item[1]))
-    return [(contract, entry_bar) for _, _, contract, entry_bar in choices], "selected"
+    _, _, contract, entry_bar = choices[0]
+    return contract, entry_bar, "selected"
 
 
 def _variant_parameters(queue_item: dict[str, Any], variant: dict[str, Any]) -> dict[str, Any]:
