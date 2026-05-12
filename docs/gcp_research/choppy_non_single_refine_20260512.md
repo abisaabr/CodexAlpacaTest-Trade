@@ -128,3 +128,47 @@ Capital-plan leaders:
 1. Review native multi-leg runtime compatibility for debit verticals and broken-wing butterflies before paper activation.
 2. Feed the eligible choppy candidates into the constrained optimizer as a choppy add-on to the existing `tt_top2_bull_choppy_up` benchmark.
 3. If optimizer results improve drawdown-adjusted return, create a separate governed-validation manifest update for review; do not edit live manifests from this packet alone.
+
+## Benchmark Add-On Optimizer Check
+
+After the full packet was mirrored, the new choppy candidates were tested locally as an add-on to the existing `tt_top2_bull_choppy_up` benchmark.
+
+- Local output root: `reports/gcp_research/next_eval_paper_benchmark_choppy_20260512/`
+- GCS output root: `gs://codexalpaca-control-us/gcp_research/next_eval_paper_benchmark_choppy_20260512/`
+- Benchmark plus choppy projection: `reports/gcp_research/next_eval_paper_benchmark_choppy_20260512/benchmark_plus_choppy_non_single/portfolio_growth_projection.json`
+- Strict `$200/day` optimizer: failed
+- Strict `$100/day` optimizer: failed
+- Strict `$50/day` optimizer: passed
+
+Benchmark-plus-choppy projection result:
+
+- Ending equity: `$35,516.95`
+- Total return: `42.0678%`
+- Max drawdown: `-19.1453%`
+- Accepted trades under production-runtime simulation: `1,679`
+- Rejected trades: `572`
+
+This did not improve the prior `tt_top2_bull_choppy_up` benchmark (`$35,949.02`, `43.7961%`, `-18.2398%` max drawdown). The choppy add-on should not be promoted as a portfolio improvement without further selection.
+
+Best passing constrained subset:
+
+- Output: `reports/gcp_research/next_eval_paper_benchmark_choppy_20260512/optimizer_benchmark_plus_choppy_strict_50_day/optimizer_summary.json`
+- Selected strategies: 5
+- Average daily PnL: `$60.31`
+- Ending equity: `$35,916.13`
+- Max drawdown: `-5.6384%`
+- Symbols: `MSFT`, `INTC`, `IWM`, `TSM`, `NVDA`
+- Regimes: bear, choppy, bull
+- Families: single-leg long put, debit-call vertical, single-leg long call
+
+Selected subset:
+
+| Symbol | Strategy | Family | Regime | Risk Fraction | Max Contracts |
+| --- | --- | --- | --- | ---: | ---: |
+| MSFT | `msft__bear__put__single_leg_repair` | `Single-leg long put` | bear | 0.018 | 3 |
+| INTC | `intc__bear__put__single_leg_repair` | `Single-leg long put` | bear | 0.018 | 3 |
+| IWM | `iwm__bear__put__single_leg_repair` | `Single-leg long put` | bear | 0.020 | 3 |
+| TSM | `tsm__choppy__call__debit_call_vertical` | `debit_call_vertical` | choppy | projection default | projection default |
+| NVDA | `nvda__bull__call__single_leg_repair` | `Single-leg long call` | bull | 0.020 | 2 |
+
+Conclusion: the new choppy candidates are useful as diversity inputs, but the combined benchmark-plus-choppy book does not reach the `$100/day` or `$200/day` targets under strict diversification and drawdown caps. The next research pass should look for additional train/test-positive bear and choppy structures outside AVGO/TSM concentration and then rerun this optimizer.
