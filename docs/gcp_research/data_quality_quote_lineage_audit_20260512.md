@@ -1,6 +1,7 @@
 # Data Quality Quote Lineage Audit - 2026-05-12
 
 - Source commit before this pass: `e62bd38f93c27d69453a69d25e778b065bfb2a32`
+- Source commit for quote-quality lineage audit tooling: `48ceca4d64f5ef06d99d9fad74f0d16b4ba79e35`
 - Broker mode impact: `none`
 - Paper-runner state changed: `false`
 - Live manifest effect: `none`
