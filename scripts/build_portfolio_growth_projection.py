@@ -216,13 +216,46 @@ def _profile_name(path: Path) -> str:
     return path.parent.name
 
 
-def _load_trade_economics(replay_root: Path) -> pd.DataFrame:
+def _capital_plan_trade_filters(
+    capital_plan: list[dict[str, Any]],
+) -> dict[str, set[str]] | None:
+    if not capital_plan:
+        return None
+    filters: dict[str, set[str]] = {}
+    for row in capital_plan:
+        profile = str(row.get("aggregate_profile") or "")
+        candidate_id = str(row.get("base_candidate_variant_id") or row.get("candidate_variant_id") or "")
+        candidate_id = candidate_id.split("__profile_", 1)[0]
+        if not profile or not candidate_id:
+            return None
+        filters.setdefault(profile, set()).add(candidate_id)
+    return filters
+
+
+def _load_trade_economics(
+    replay_root: Path,
+    *,
+    candidate_filters: dict[str, set[str]] | None = None,
+) -> pd.DataFrame:
     frames: list[pd.DataFrame] = []
     for path in sorted(replay_root.rglob("option_aware_trade_economics.csv")):
-        frame = pd.read_csv(path, low_memory=False)
+        profile = _profile_name(path)
+        wanted_candidates = candidate_filters.get(profile) if candidate_filters else None
+        if candidate_filters is not None and not wanted_candidates:
+            continue
+        try:
+            frame = pd.read_csv(path, low_memory=False)
+        except pd.errors.EmptyDataError:
+            continue
         if frame.empty:
             continue
-        frame["aggregate_profile"] = _profile_name(path)
+        if wanted_candidates is not None:
+            if "candidate_variant_id" not in frame.columns:
+                continue
+            frame = frame[frame["candidate_variant_id"].astype(str).isin(wanted_candidates)].copy()
+            if frame.empty:
+                continue
+        frame["aggregate_profile"] = profile
         frame["source_file"] = str(path)
         frames.append(frame)
     if not frames:
@@ -262,10 +295,14 @@ def _load_trade_economics(replay_root: Path) -> pd.DataFrame:
     return trades
 
 
-def _load_trade_economics_roots(replay_roots: list[Path]) -> pd.DataFrame:
+def _load_trade_economics_roots(
+    replay_roots: list[Path],
+    *,
+    candidate_filters: dict[str, set[str]] | None = None,
+) -> pd.DataFrame:
     frames = []
     for replay_root in replay_roots:
-        frame = _load_trade_economics(replay_root)
+        frame = _load_trade_economics(replay_root, candidate_filters=candidate_filters)
         if frame.empty:
             continue
         frame["replay_root"] = str(replay_root)
@@ -2976,7 +3013,10 @@ def build_growth_projection(
         initial_cash=initial_cash,
         max_symbol_weight=max_symbol_weight,
     )
-    trades = _load_trade_economics_roots(replay_roots)
+    trades = _load_trade_economics_roots(
+        replay_roots,
+        candidate_filters=_capital_plan_trade_filters(capital_plan),
+    )
     calendar = _load_projection_calendar(
         calendar_csv=calendar_csv,
         date_column=calendar_date_column,
