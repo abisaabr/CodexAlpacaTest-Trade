@@ -19,7 +19,9 @@ Added a PAPER-only May 13 runtime config:
 Added realtime quote-quality sidecar tooling:
 
 - `scripts/build_realtime_quote_quality_sidecar.py`
+- `scripts/apply_quote_sidecar_to_trade_economics.py`
 - `tests/test_build_realtime_quote_quality_sidecar.py`
+- `tests/test_apply_quote_sidecar_to_trade_economics.py`
 
 The sidecar builder converts no-submit websocket shadow logs into:
 
@@ -31,6 +33,14 @@ The sidecar builder converts no-submit websocket shadow logs into:
 
 The causal contract is explicit: use `option_quote_sidecar.csv` for as-of joins at or before the strategy decision timestamp. The minute aggregate is diagnostic only unless replay code treats its timestamp causally.
 
+The as-of join tool applies that contract to existing `option_aware_trade_economics.csv` files:
+
+```powershell
+python scripts/apply_quote_sidecar_to_trade_economics.py --trade-economics-csv <option_aware_trade_economics.csv> --quote-sidecar-csv <option_quote_sidecar.csv> --option-trades-csv <option_trade_prints.csv> --output-csv <quote_backed_option_aware_trade_economics.csv>
+```
+
+It writes bid/ask-backed `entry_*` and `exit_*` quote-source, spread, quote-age, leg coverage, and trade-print fields without using future quotes. Multi-leg rows are marked `option_quote_bid_ask` only when every leg has an as-of quote; partial multi-leg evidence is labeled `option_quote_partial_bid_ask`.
+
 ## Validation
 
 Run ID: `full_pytest_after_quote_sidecar_20260512`
@@ -39,7 +49,15 @@ Run ID: `full_pytest_after_quote_sidecar_20260512`
 python -m pytest -q
 ```
 
-Result: `317 passed, 1 warning`.
+Result before as-of join patch: `317 passed, 1 warning`.
+
+Run ID: `quote_sidecar_asof_join_tests_20260512`
+
+```powershell
+python -m pytest tests/test_apply_quote_sidecar_to_trade_economics.py tests/test_build_realtime_quote_quality_sidecar.py tests/test_repair_projection_replay_lineage.py tests/test_build_portfolio_growth_projection.py -q
+```
+
+Result: `17 passed`.
 
 Run ID: `may13_config_load_20260512`
 
@@ -127,6 +145,12 @@ After capture completes, convert the stream into quote-quality sidecars:
 python scripts/build_realtime_quote_quality_sidecar.py --events-jsonl D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260513\realtime_quote_shadow\realtime_shadow_events.jsonl --output-dir D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260513\realtime_quote_shadow\quote_quality_sidecar
 ```
 
+Apply sidecars to any same-day replay economics before projection:
+
+```powershell
+python scripts/apply_quote_sidecar_to_trade_economics.py --trade-economics-csv <option_aware_trade_economics.csv> --quote-sidecar-csv D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260513\realtime_quote_shadow\quote_quality_sidecar\option_quote_sidecar.csv --option-trades-csv D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260513\realtime_quote_shadow\quote_quality_sidecar\option_trade_prints.csv --output-csv <quote_backed_option_aware_trade_economics.csv>
+```
+
 Mirror durable outputs:
 
 ```powershell
@@ -145,7 +169,7 @@ gcloud storage cp --recursive D:\codexalpaca_runtime\runs\multi_symbol_governed_
 2. Start PAPER order submission only after the launch contract passes.
 3. Run the no-submit realtime quote shadow stream during the session.
 4. Convert the stream to quote-quality sidecars after RTH.
-5. Add a later replay patch that uses `option_quote_sidecar.csv` for as-of bid/ask joins into `option_aware_trade_economics.csv`.
+5. Apply `option_quote_sidecar.csv` to same-day replay economics with the as-of join script.
 6. Rerun projection and optimizer only after replay rows have quote-backed bid/ask, spread, quote-age, and trade-print evidence.
 
 No new strategy is eligible for paper-runner addition from this pass. The priority is quote-backed evidence collection and causal replay integration.
