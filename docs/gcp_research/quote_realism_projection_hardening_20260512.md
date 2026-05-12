@@ -1,6 +1,6 @@
 # Quote Realism Projection Hardening - 2026-05-12
 
-- Source commit: `fa6ba33ec3172ffc747ef5e47ab713444d97a278`
+- Source commit: `deb1ab93535e06f7c53eade8323943c6dd574247`
 - Broker mode impact: `none`
 - Paper-runner state changed: `false`
 - Live manifest effect: `none`
@@ -21,13 +21,19 @@ The projection packet also now records market-quality diagnostics:
 - trade-print coverage
 - rows with no-bid-ask quote sources when quote-source fields exist
 
+Additional hardening in source commit `deb1ab93535e06f7c53eade8323943c6dd574247`:
+
+- `--market-quality-cost-model-enabled` subtracts spread, quote-age, no-bid/ask, zero-print, and unknown-quality execution costs from `option_pnl` before equity curves, train/test scoring, and optimizer inputs.
+- Empty `option_aware_trade_economics.csv` artifacts are skipped instead of aborting all-history projection scans.
+- Replay loading now prefilters economics files by the capital-plan `(base_candidate_variant_id, aggregate_profile)` keys before concatenation, which avoids loading unrelated local research history into memory.
+
 Validation command:
 
 ```powershell
 python -m pytest tests/test_build_portfolio_growth_projection.py tests/test_optimize_portfolio_projection_candidates.py -q
 ```
 
-Result: `14 passed`.
+Result after the latest hardening: `16 passed`.
 
 ## Projection Runs
 
@@ -112,13 +118,129 @@ Market-quality diagnostics:
 - Trade-print coverage: `100.0%`
 - Zero-or-missing trade-print rows: `1801`
 
+## Quote-Cost Projection Runs
+
+The next pass enabled both `--market-quality-cost-model-enabled` and `--fill-model-haircut-positive-pnl`. Positive fills are still haircutted by fill probability, and execution-quality costs are subtracted first. The cost model used:
+
+- no-bid/ask proxy spread: `12%`
+- zero-print proxy spread: `8%`
+- unknown-quality proxy spread: `10%`
+- quote-age grace: `5 seconds`
+- quote-age penalty: `2% spread per minute after grace`
+- max applied spread: `50%`
+
+### Current May 8 Paper-Runner Strategy Set With Quote Costs
+
+- Local output: `reports/gcp_research/may8_paper_portfolio_projection_20260508T1255Z/projection_runtime_risk_quote_cost_20260512/`
+- GCS output: `gs://codexalpaca-control-us/gcp_research/quote_realism_projection_hardening_20260512/current_paper_runtime_risk_quote_cost_20260512/`
+- Command/run ID: `current_paper_runtime_risk_quote_cost_20260512`
+
+Result:
+
+- Capital-plan strategies: `344`
+- Matched simulated trades: `24918`
+- Matched capital-plan rate: `66.2791%`
+- Ending equity: `$3714.60`
+- Total return: `-85.1416%`
+- Max drawdown: `-85.3149%`
+- Market-quality PnL cost: `$2218488.46996`
+- Fill-probability positive-PnL haircut: `$1972814.567516`
+- Train/test candidates: `135`
+- Train/test eligible candidates: `0`
+- Main blockers: `test_pnl_not_positive=116`, `train_pnl_not_positive=115`, `min_test_trades=128`, `min_train_trades=57`
+
+### Benchmark `tt_top2_bull_choppy_up` With Quote Costs
+
+- Local output: `reports/gcp_research/portfolio_projection_hardening_sweep_20260508T1640Z/tt_top2_bull_choppy_up_quote_cost_20260512/`
+- GCS output: `gs://codexalpaca-control-us/gcp_research/quote_realism_projection_hardening_20260512/tt_top2_bull_choppy_up_quote_cost_20260512/`
+- Command/run ID: `tt_top2_bull_choppy_up_quote_cost_20260512`
+
+Result:
+
+- Capital-plan strategies: `14`
+- Matched simulated trades: `1805`
+- Matched capital-plan rate: `100.0%`
+- Ending equity: `$9111.91`
+- Total return: `-63.5524%`
+- Max drawdown: `-63.5524%`
+- Market-quality PnL cost: `$162997.57936`
+- Fill-probability positive-PnL haircut: `$144873.591304`
+- Train/test candidates: `14`
+- Train/test eligible candidates: `0`
+- Main blockers: `train_pnl_not_positive=13`, `test_pnl_not_positive=11`, `min_test_trades=9`, `min_train_trades=2`
+
+### Latest Bear/Choppy Non-Single `bc5` Candidate Pool With Quote Costs
+
+- Local output: `reports/gcp_research/bear_choppy_non_single_refine_20260512T1620ET/aggregate/growth_projection/optimizer_candidate_pool_projection_quote_cost_20260512/`
+- GCS output: `gs://codexalpaca-control-us/gcp_research/quote_realism_projection_hardening_20260512/bc5_optimizer_candidate_pool_projection_quote_cost_20260512/`
+- Command/run ID: `bc5_optimizer_candidate_pool_projection_quote_cost_20260512`
+
+Result:
+
+- Capital-plan strategies: `19`
+- Matched simulated trades: `1801`
+- Matched capital-plan rate: `100.0%`
+- Ending equity: `$0.00`
+- Total return: `-100.0%`
+- Max drawdown: `-100.0%`
+- Market-quality PnL cost: `$647526.405737`
+- Fill-probability positive-PnL haircut: `$1925446.775601`
+- Train/test candidates: `19`
+- Train/test eligible candidates: `0`
+- Main blockers: `train_pnl_not_positive=19`, `test_pnl_not_positive=19`
+
+### All Local Eligible Research Candidate Scan
+
+- Local input: `reports/gcp_research/quote_realism_projection_hardening_20260512/all_local_candidate_scan/combined_research_portfolio_report.json`
+- Local output: `reports/gcp_research/quote_realism_projection_hardening_20260512/all_local_candidate_scan/projection_quote_cost_prefilter_fullroot/`
+- Local optimizer output: `reports/gcp_research/quote_realism_projection_hardening_20260512/all_local_candidate_scan/constrained_optimizer_quote_cost/`
+- GCS output: `gs://codexalpaca-control-us/gcp_research/quote_realism_projection_hardening_20260512/all_local_candidate_scan/`
+- Command/run ID: `all_local_candidate_scan_projection_quote_cost_prefilter_fullroot`
+
+Input construction:
+
+- Scanned local portfolio reports: `529`
+- Candidate rows that cleared existing gates before dedupe: `505`
+- Unique `(base_candidate_variant_id, aggregate_profile)` candidates after dedupe: `203`
+- Excluded rows below fill gate: `97`
+- Duplicate eligible rows removed: `302`
+
+Projection result:
+
+- Capital-plan strategies: `203`
+- Matched capital-plan strategies: `201`
+- Matched simulated trades: `20799`
+- Matched capital-plan rate: `99.0148%`
+- Ending equity: `$0.00`
+- Total return: `-100.0%`
+- Max drawdown: `-100.0%`
+- Market-quality PnL cost: `$3874263.005437`
+- Fill-probability positive-PnL haircut: `$6670303.179088`
+- Train/test candidates: `201`
+- Train/test eligible candidates: `0`
+- Main blockers: `train_pnl_not_positive=200`, `test_pnl_not_positive=192`, `min_test_trades=4`
+
+Quote evidence:
+
+- Entry/exit spread coverage: `0.0%`
+- Entry quote-source rows: `9140 option_bar_close_no_bid_ask`, `11659 missing`
+- Exit quote-source rows: `9140 option_bar_close_no_bid_ask`, `11659 missing`
+- Trade-print coverage: `100.0%`
+- Zero-or-missing trade-print rows: `20799`
+
+Constrained optimizer result:
+
+- Status: `failed`
+- Selected candidates: `0`
+- Reason: no candidate survived train/test positive-PnL gates after quote-cost and fill-probability haircuts.
+
 ## Conclusion
 
-The old positive projection and the latest bear/choppy review-like candidates do not survive conservative quote-realism economics. The main blocker is not promotion packet formatting; it is insufficient execution-quality evidence:
+The old positive projection, the current paper-runner strategy set, the `tt_top2_bull_choppy_up` benchmark, the latest bear/choppy review-like candidates, and the full local eligible research history do not survive conservative quote-realism economics. The main blocker is not promotion packet formatting; it is insufficient execution-quality evidence:
 
 - Current replay-compatible paper lineage lacks bid/ask quote-source, spread, and quote-age fields.
 - The latest `bc5` lineage has quote-source fields, but every accepted row is no-bid-ask option-bar close.
-- After positive-PnL fill haircuts, no current paper, benchmark, or `bc5` candidate is train/test-positive.
+- The all-local eligible scan has zero spread coverage, all trade-print counts are zero/missing, and no train/test-positive candidate survives after quote-cost and fill-probability haircuts.
 
 No strategy should be added to the paper runner from this pass.
 
@@ -135,4 +257,9 @@ No strategy should be added to the paper runner from this pass.
 - Local synced path: `reports/gcp_research/microstructure_rare_event_overnight_20260507T2030ET/workers/micro_event_c92161_92672/`
 - GCS source path: `gs://codexalpaca-control-us/research_results/microstructure_rare_event_overnight_20260507T2030ET/workers/micro_event_c92161_92672/`
 - Deleted VM after artifact sync: `micro-event-c92161-92672-20260512m4` in `us-west1-a`
-- Still running at last check: `micro-event-c92673-93184-20260512m4` in `us-east4-a`, progress `350/512`, review-like count `0`
+- Synced completed worker: `micro-event-c92673-93184-20260512m4`
+- Local synced path: `reports/gcp_research/microstructure_rare_event_overnight_20260507T2030ET/workers/micro_event_c92673_93184/`
+- GCS source path: `gs://codexalpaca-control-us/research_results/microstructure_rare_event_overnight_20260507T2030ET/workers/micro_event_c92673_93184/`
+- Completion status: `512/512` grids, review-like count `0`, outputs uploaded at `2026-05-12T21:31:12+00:00`
+- Deleted VM after artifact sync: `micro-event-c92673-93184-20260512m4` in `us-east4-a`
+- Active research VMs at final check: `none`
