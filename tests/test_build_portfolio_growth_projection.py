@@ -715,6 +715,92 @@ def test_fill_probability_haircuts_positive_pnl_but_not_losses(tmp_path: Path) -
     assert scaled_trades["fill_probability_pnl_multiplier"].round(4).tolist() == [0.4125, 1.0]
 
 
+def test_market_quality_cost_model_subtracts_spread_costs(tmp_path: Path) -> None:
+    replay_root = tmp_path / "replay"
+    profile_dir = replay_root / "profile_a"
+    profile_dir.mkdir(parents=True)
+    pd.DataFrame(
+        [
+            {
+                "trade_date": "2025-01-02",
+                "candidate_variant_id": "qqq_bull",
+                "option_pnl": 100.0,
+                "symbol": "QQQ",
+                "contract_symbol": "QQQ250102C00100000",
+                "option_entry_time": "2025-01-02T15:00:00Z",
+                "option_exit_time": "2025-01-02T16:00:00Z",
+                "quantity": 1,
+                "entry_debit_per_unit": 100.0,
+                "exit_value_per_unit": 110.0,
+                "entry_average_relative_spread": 0.10,
+                "exit_max_relative_spread": 0.20,
+                "entry_quote_source": "option_quote_bid_ask",
+                "exit_quote_source": "option_quote_bid_ask",
+                "entry_selection_trade_print_count": 10,
+            },
+            {
+                "trade_date": "2025-01-03",
+                "candidate_variant_id": "qqq_bull",
+                "option_pnl": 50.0,
+                "symbol": "QQQ",
+                "contract_symbol": "QQQ250103C00100000",
+                "option_entry_time": "2025-01-03T15:00:00Z",
+                "option_exit_time": "2025-01-03T16:00:00Z",
+                "quantity": 1,
+                "entry_debit_per_unit": 100.0,
+                "exit_value_per_unit": 110.0,
+                "entry_selection_trade_print_count": 0,
+            },
+        ]
+    ).to_csv(profile_dir / "option_aware_trade_economics.csv", index=False)
+    portfolio_path = tmp_path / "portfolio_report.json"
+    portfolio_path.write_text(
+        json.dumps(
+            {
+                "capital_plan": [
+                    {
+                        "candidate_variant_id": "qqq_bull__profile_profile-a",
+                        "base_candidate_variant_id": "qqq_bull",
+                        "aggregate_profile": "profile_a",
+                        "symbol": "QQQ",
+                        "family": "single_leg_repair",
+                        "intended_regime": "bull",
+                        "research_only_weight": 1.0,
+                        "research_only_dollars": 25_000.0,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "out_quality_cost"
+    packet = build_growth_projection(
+        portfolio_report_json=portfolio_path,
+        replay_root=replay_root,
+        output_dir=output_dir,
+        initial_cash=25_000.0,
+        target_equity=300_000.0,
+        backtest_allocation_fraction=0.05,
+        annual_trading_days=252,
+        projection_years=1,
+        bootstrap_runs=25,
+        seed=1,
+        market_quality_cost_model_enabled=True,
+    )
+
+    cost_model = packet["projection_hardening"]["market_quality_pnl_cost_model"]
+    assert cost_model["status"] == "enabled"
+    assert cost_model["adjusted_trade_count"] == 2
+    scaled_trades = pd.read_csv(output_dir / "portfolio_growth_scaled_trades.csv")
+    assert scaled_trades["market_quality_pnl_cost"].round(2).tolist() == [16.0, 8.4]
+    assert scaled_trades["source_option_pnl"].round(2).tolist() == [84.0, 41.6]
+    assert scaled_trades["source_option_pnl_before_market_quality_cost"].round(2).tolist() == [
+        100.0,
+        50.0,
+    ]
+
+
 def test_train_test_and_diversification_constraints_report(tmp_path: Path) -> None:
     replay_root = tmp_path / "replay"
     profile_dir = replay_root / "profile_a"

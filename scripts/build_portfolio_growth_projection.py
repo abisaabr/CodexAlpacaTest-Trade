@@ -138,6 +138,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stress-max-entry-quote-age-seconds", type=float, default=None)
     parser.add_argument("--stress-max-exit-quote-age-seconds", type=float, default=None)
     parser.add_argument(
+        "--market-quality-cost-model-enabled",
+        action="store_true",
+        help=(
+            "Subtract an execution-quality cost from option PnL using observed or "
+            "proxy bid/ask spread, quote-age, and trade-print evidence."
+        ),
+    )
+    parser.add_argument("--market-quality-no-bid-ask-spread-pct", type=float, default=0.12)
+    parser.add_argument("--market-quality-zero-print-spread-pct", type=float, default=0.08)
+    parser.add_argument("--market-quality-unknown-spread-pct", type=float, default=0.10)
+    parser.add_argument("--market-quality-max-spread-pct", type=float, default=0.50)
+    parser.add_argument("--market-quality-quote-age-grace-seconds", type=float, default=5.0)
+    parser.add_argument("--market-quality-quote-age-spread-pct-per-minute", type=float, default=0.02)
+    parser.add_argument(
         "--fill-model-enabled",
         action="store_true",
         help="Annotate rows with a simple market-quality fill-probability estimate.",
@@ -940,6 +954,23 @@ def _fill_probability_haircut_output_fields(row: pd.Series) -> dict[str, Any]:
     return output
 
 
+def _market_quality_cost_output_fields(row: pd.Series) -> dict[str, Any]:
+    output: dict[str, Any] = {}
+    for field in [
+        "source_option_pnl_before_market_quality_cost",
+        "market_quality_pnl_cost",
+        "market_quality_entry_spread_pct_applied",
+        "market_quality_exit_spread_pct_applied",
+        "market_quality_entry_spread_reason",
+        "market_quality_exit_spread_reason",
+        "market_quality_entry_notional",
+        "market_quality_exit_notional",
+    ]:
+        if field in row.index:
+            output[field] = row.get(field)
+    return output
+
+
 def _hardening_rejection_row(
     *,
     row_id: int,
@@ -1041,6 +1072,193 @@ def _apply_market_quality_stress(
         "limits": configured,
         "source_columns": column_map,
         "rejection_reason_counts": dict(sorted(reason_counts.items())),
+    }
+
+
+def _quote_source_has_no_bid_ask(row: pd.Series, field: str) -> bool:
+    source = str(row.get(field) or "").strip().lower()
+    if not source:
+        return False
+    return "no_bid_ask" in source or source in {"unknown", "missing", "none"}
+
+
+def _quality_trade_print_column(frame: pd.DataFrame) -> str | None:
+    return _first_existing_column(
+        frame,
+        ["entry_selection_trade_print_count", "option_trade_print_count", "trade_print_count"],
+    )
+
+
+def _side_notional(row: pd.Series, *, side: str) -> float:
+    quantity = max(_int(row.get("quantity"), 1), 1)
+    if side == "entry":
+        for field in ["entry_debit_per_unit", "risk_per_unit"]:
+            value = abs(_float(row.get(field), default=math.nan))
+            if not math.isnan(value) and value > 0.0:
+                return value * quantity
+        price = abs(_float(row.get("entry_price_after_slippage"), default=math.nan))
+        if not math.isnan(price) and price > 0.0:
+            return price * 100.0 * quantity
+        return 0.0
+    for field in ["exit_value_per_unit", "entry_debit_per_unit", "risk_per_unit"]:
+        value = abs(_float(row.get(field), default=math.nan))
+        if not math.isnan(value) and value > 0.0:
+            return value * quantity
+    price = abs(_float(row.get("exit_price_after_slippage"), default=math.nan))
+    if not math.isnan(price) and price > 0.0:
+        return price * 100.0 * quantity
+    return 0.0
+
+
+def _applied_quality_spread(
+    *,
+    row: pd.Series,
+    side: str,
+    column_map: dict[str, str | None],
+    trade_print_column: str | None,
+    no_bid_ask_spread_pct: float,
+    zero_print_spread_pct: float,
+    unknown_spread_pct: float,
+    max_spread_pct: float,
+    quote_age_grace_seconds: float,
+    quote_age_spread_pct_per_minute: float,
+) -> tuple[float, str]:
+    reasons: list[str] = []
+    spread_column = column_map.get(f"{side}_spread_pct")
+    spread = _normalize_share(row.get(spread_column)) if spread_column else math.nan
+    if not math.isnan(spread):
+        applied = spread
+        reasons.append(f"observed_{spread_column}")
+    else:
+        applied = 0.0
+        reasons.append("missing_observed_spread")
+
+    source_field = f"{side}_quote_source"
+    if source_field in row.index and _quote_source_has_no_bid_ask(row, source_field):
+        applied = max(applied, no_bid_ask_spread_pct)
+        reasons.append("no_bid_ask_proxy")
+
+    if trade_print_column:
+        prints = _float(row.get(trade_print_column), default=math.nan)
+        if math.isnan(prints) or prints <= 0.0:
+            applied = max(applied, zero_print_spread_pct)
+            reasons.append("zero_trade_print_proxy")
+
+    if applied <= 0.0:
+        applied = unknown_spread_pct
+        reasons.append("unknown_spread_proxy")
+
+    age_column = column_map.get(f"{side}_quote_age_seconds")
+    if age_column:
+        age = _float(row.get(age_column), default=math.nan)
+        if not math.isnan(age) and age > quote_age_grace_seconds:
+            extra = ((age - quote_age_grace_seconds) / 60.0) * quote_age_spread_pct_per_minute
+            applied += max(extra, 0.0)
+            reasons.append("quote_age_penalty")
+
+    return min(max(applied, 0.0), max_spread_pct), "|".join(reasons)
+
+
+def _apply_market_quality_pnl_cost_model(
+    *,
+    selected_trades: pd.DataFrame,
+    enabled: bool,
+    no_bid_ask_spread_pct: float,
+    zero_print_spread_pct: float,
+    unknown_spread_pct: float,
+    max_spread_pct: float,
+    quote_age_grace_seconds: float,
+    quote_age_spread_pct_per_minute: float,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    if not enabled:
+        return selected_trades, {
+            "status": "not_configured",
+            "input_trade_count": int(len(selected_trades)),
+            "adjusted_trade_count": 0,
+        }
+    if selected_trades.empty:
+        return selected_trades, {
+            "status": "enabled",
+            "input_trade_count": 0,
+            "adjusted_trade_count": 0,
+            "total_market_quality_pnl_cost": 0.0,
+        }
+
+    adjusted = selected_trades.copy()
+    column_map = _quality_column_map(adjusted)
+    trade_print_column = _quality_trade_print_column(adjusted)
+    no_bid_ask_spread_pct = _threshold_share(no_bid_ask_spread_pct) or 0.0
+    zero_print_spread_pct = _threshold_share(zero_print_spread_pct) or 0.0
+    unknown_spread_pct = _threshold_share(unknown_spread_pct) or 0.0
+    max_spread_pct = _threshold_share(max_spread_pct) or 1.0
+    cost_rows: list[dict[str, Any]] = []
+    adjusted_pnl: list[float] = []
+    for _, row in adjusted.iterrows():
+        entry_spread, entry_reason = _applied_quality_spread(
+            row=row,
+            side="entry",
+            column_map=column_map,
+            trade_print_column=trade_print_column,
+            no_bid_ask_spread_pct=no_bid_ask_spread_pct,
+            zero_print_spread_pct=zero_print_spread_pct,
+            unknown_spread_pct=unknown_spread_pct,
+            max_spread_pct=max_spread_pct,
+            quote_age_grace_seconds=quote_age_grace_seconds,
+            quote_age_spread_pct_per_minute=quote_age_spread_pct_per_minute,
+        )
+        exit_spread, exit_reason = _applied_quality_spread(
+            row=row,
+            side="exit",
+            column_map=column_map,
+            trade_print_column=trade_print_column,
+            no_bid_ask_spread_pct=no_bid_ask_spread_pct,
+            zero_print_spread_pct=zero_print_spread_pct,
+            unknown_spread_pct=unknown_spread_pct,
+            max_spread_pct=max_spread_pct,
+            quote_age_grace_seconds=quote_age_grace_seconds,
+            quote_age_spread_pct_per_minute=quote_age_spread_pct_per_minute,
+        )
+        entry_notional = _side_notional(row, side="entry")
+        exit_notional = _side_notional(row, side="exit")
+        cost = (entry_notional * entry_spread * 0.5) + (exit_notional * exit_spread * 0.5)
+        raw_pnl = _float(row.get("option_pnl"))
+        adjusted_pnl.append(raw_pnl - cost)
+        cost_rows.append(
+            {
+                "source_option_pnl_before_market_quality_cost": raw_pnl,
+                "market_quality_pnl_cost": cost,
+                "market_quality_entry_spread_pct_applied": entry_spread,
+                "market_quality_exit_spread_pct_applied": exit_spread,
+                "market_quality_entry_spread_reason": entry_reason,
+                "market_quality_exit_spread_reason": exit_reason,
+                "market_quality_entry_notional": entry_notional,
+                "market_quality_exit_notional": exit_notional,
+            }
+        )
+
+    cost_frame = pd.DataFrame(cost_rows, index=adjusted.index)
+    for column in cost_frame.columns:
+        adjusted[column] = cost_frame[column]
+    adjusted["option_pnl"] = adjusted_pnl
+    total_cost = float(cost_frame["market_quality_pnl_cost"].sum()) if not cost_frame.empty else 0.0
+    return adjusted, {
+        "status": "enabled",
+        "input_trade_count": int(len(selected_trades)),
+        "adjusted_trade_count": int((cost_frame["market_quality_pnl_cost"] > 0.0).sum()),
+        "total_market_quality_pnl_cost": round(total_cost, 6),
+        "average_market_quality_pnl_cost": round(float(cost_frame["market_quality_pnl_cost"].mean()), 6)
+        if not cost_frame.empty
+        else None,
+        "source_columns": column_map,
+        "trade_print_source_column": trade_print_column,
+        "parameters": {
+            "no_bid_ask_spread_pct": no_bid_ask_spread_pct,
+            "zero_print_spread_pct": zero_print_spread_pct,
+            "unknown_spread_pct": unknown_spread_pct,
+            "max_spread_pct": max_spread_pct,
+            "quote_age_grace_seconds": quote_age_grace_seconds,
+            "quote_age_spread_pct_per_minute": quote_age_spread_pct_per_minute,
+        },
     }
 
 
@@ -1307,6 +1525,7 @@ def _build_daily_equity(
                     "dynamic_scale_factor": round(scale, 8),
                     "scaled_option_pnl": round(scaled_pnl, 6),
                     **_market_quality_output_fields(row),
+                    **_market_quality_cost_output_fields(row),
                     "projected_fill_probability": row.get("projected_fill_probability"),
                     "fill_probability_components": row.get("fill_probability_components"),
                     **_fill_probability_haircut_output_fields(row),
@@ -1596,6 +1815,7 @@ def _build_daily_equity_production_runtime(
                     "option_entry_time": str(row.get("entry_ts")),
                     "option_exit_time": str(row.get("exit_ts")),
                     **_market_quality_output_fields(row),
+                    **_market_quality_cost_output_fields(row),
                     "projected_fill_probability": row.get("projected_fill_probability"),
                     "fill_probability_components": row.get("fill_probability_components"),
                     **_fill_probability_haircut_output_fields(row),
@@ -2553,6 +2773,7 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
     match_coverage = projection_hardening.get("match_coverage") or {}
     market_stress = projection_hardening.get("market_quality_stress") or {}
     market_diagnostics = projection_hardening.get("market_quality_diagnostics") or {}
+    market_cost = projection_hardening.get("market_quality_pnl_cost_model") or {}
     fill_model = projection_hardening.get("fill_probability_model") or {}
     fill_haircut = projection_hardening.get("fill_probability_pnl_haircut") or {}
     train_test = projection_hardening.get("train_test_optimization") or {}
@@ -2566,6 +2787,8 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
             f"- Market-quality diagnostics status: `{market_diagnostics.get('status')}`",
             f"- Rows with any no-bid-ask source: `{market_diagnostics.get('rows_with_any_no_bid_ask_quote_source')}`",
             f"- Trade-print coverage: `{(market_diagnostics.get('trade_print_coverage') or {}).get('coverage_pct')}%`",
+            f"- Market-quality PnL cost status: `{market_cost.get('status')}`",
+            f"- Market-quality PnL cost: `${market_cost.get('total_market_quality_pnl_cost', 0.0)}`",
             f"- Fill-probability model status: `{fill_model.get('status')}`",
             f"- Fill-probability rejected trades: `{fill_model.get('rejected_trade_count')}`",
             f"- Fill-probability PnL haircut status: `{fill_haircut.get('status')}`",
@@ -2721,6 +2944,13 @@ def build_growth_projection(
     stress_max_exit_spread_pct: float | None = None,
     stress_max_entry_quote_age_seconds: float | None = None,
     stress_max_exit_quote_age_seconds: float | None = None,
+    market_quality_cost_model_enabled: bool = False,
+    market_quality_no_bid_ask_spread_pct: float = 0.12,
+    market_quality_zero_print_spread_pct: float = 0.08,
+    market_quality_unknown_spread_pct: float = 0.10,
+    market_quality_max_spread_pct: float = 0.50,
+    market_quality_quote_age_grace_seconds: float = 5.0,
+    market_quality_quote_age_spread_pct_per_minute: float = 0.02,
     fill_model_enabled: bool = False,
     min_fill_probability: float | None = None,
     unknown_fill_probability: float = 1.0,
@@ -2772,6 +3002,16 @@ def build_growth_projection(
         max_exit_spread_pct=stress_max_exit_spread_pct,
         max_entry_quote_age_seconds=stress_max_entry_quote_age_seconds,
         max_exit_quote_age_seconds=stress_max_exit_quote_age_seconds,
+    )
+    selected_trades, market_quality_pnl_cost_model = _apply_market_quality_pnl_cost_model(
+        selected_trades=selected_trades,
+        enabled=market_quality_cost_model_enabled,
+        no_bid_ask_spread_pct=market_quality_no_bid_ask_spread_pct,
+        zero_print_spread_pct=market_quality_zero_print_spread_pct,
+        unknown_spread_pct=market_quality_unknown_spread_pct,
+        max_spread_pct=market_quality_max_spread_pct,
+        quote_age_grace_seconds=market_quality_quote_age_grace_seconds,
+        quote_age_spread_pct_per_minute=market_quality_quote_age_spread_pct_per_minute,
     )
     selected_trades, fill_rejections, fill_probability_model = _apply_fill_probability_model(
         selected_trades=selected_trades,
@@ -2864,6 +3104,7 @@ def build_growth_projection(
         "match_coverage": match_coverage,
         "market_quality_stress": market_quality_stress,
         "market_quality_diagnostics": market_quality_diagnostics,
+        "market_quality_pnl_cost_model": market_quality_pnl_cost_model,
         "fill_probability_model": fill_probability_model,
         "fill_probability_pnl_haircut": fill_probability_pnl_haircut,
         "train_test_optimization": {
@@ -2986,6 +3227,13 @@ def main() -> None:
         stress_max_exit_spread_pct=args.stress_max_exit_spread_pct,
         stress_max_entry_quote_age_seconds=args.stress_max_entry_quote_age_seconds,
         stress_max_exit_quote_age_seconds=args.stress_max_exit_quote_age_seconds,
+        market_quality_cost_model_enabled=args.market_quality_cost_model_enabled,
+        market_quality_no_bid_ask_spread_pct=args.market_quality_no_bid_ask_spread_pct,
+        market_quality_zero_print_spread_pct=args.market_quality_zero_print_spread_pct,
+        market_quality_unknown_spread_pct=args.market_quality_unknown_spread_pct,
+        market_quality_max_spread_pct=args.market_quality_max_spread_pct,
+        market_quality_quote_age_grace_seconds=args.market_quality_quote_age_grace_seconds,
+        market_quality_quote_age_spread_pct_per_minute=args.market_quality_quote_age_spread_pct_per_minute,
         fill_model_enabled=args.fill_model_enabled,
         min_fill_probability=args.min_fill_probability,
         unknown_fill_probability=args.unknown_fill_probability,
