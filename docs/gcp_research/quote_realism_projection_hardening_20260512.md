@@ -263,3 +263,18 @@ No strategy should be added to the paper runner from this pass.
 - Completion status: `512/512` grids, review-like count `0`, outputs uploaded at `2026-05-12T21:31:12+00:00`
 - Deleted VM after artifact sync: `micro-event-c92673-93184-20260512m4` in `us-east4-a`
 - Active research VMs at final check: `none`
+
+## Microstructure Discovery Aggregate
+
+- Local output: `reports/gcp_research/microstructure_rare_event_overnight_20260507T2030ET/aggregate_discovery_20260512T2136Z/`
+- GCS output: `gs://codexalpaca-control-us/research_results/microstructure_rare_event_overnight_20260507T2030ET/aggregate_discovery_20260512T2136Z/`
+- Command/run ID: `aggregate_discovery_20260512T2136Z`
+- Decision: `research_only_blocked`
+- Promotion status: `not_paper_eligible_without_longer_tick_quote_history_and_governed_packet`
+- Source summary files: `46`
+- Grid result count: `23552`
+- Eligible microstructure review candidates: `0`
+- Blockers: `avg_net_pnl_not_positive=23552`, `net_pnl_not_positive=23552`, `fill_coverage_below_gate=22840`, `trade_count_below_gate=23072`
+- Broker-facing: `false`
+- Paper orders: `false`
+- Paper-runner state changed: `false`
