@@ -128,3 +128,11 @@ No strategy should be added to the paper runner from this pass.
 2. Prefer quote-backed replays over broad parameter expansion; otherwise the new hardening correctly converts apparent edge into negative expectancy.
 3. Continue GCP sweeps only when outputs are evaluated with `--fill-model-haircut-positive-pnl`.
 4. Treat microstructure websocket data as discovery-only until it has multi-day quote coverage and train/test split evidence.
+
+## GCP Worker Cleanup
+
+- Synced terminated worker: `micro-event-c92161-92672-20260512m4`
+- Local synced path: `reports/gcp_research/microstructure_rare_event_overnight_20260507T2030ET/workers/micro_event_c92161_92672/`
+- GCS source path: `gs://codexalpaca-control-us/research_results/microstructure_rare_event_overnight_20260507T2030ET/workers/micro_event_c92161_92672/`
+- Deleted VM after artifact sync: `micro-event-c92161-92672-20260512m4` in `us-west1-a`
+- Still running at last check: `micro-event-c92673-93184-20260512m4` in `us-east4-a`, progress `350/512`, review-like count `0`
