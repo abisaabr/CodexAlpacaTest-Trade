@@ -1,0 +1,141 @@
+# May 13 Paper Readiness And Quote Capture - 2026-05-12
+
+- Source commit: `1b2a467acfe6a938fa052c5f676a2e134366718d`
+- Broker mode impact: `none`
+- Paper-runner state changed: `false`
+- Live manifest effect: `none`
+- Risk policy effect: `none`
+- Promotion decision: `no new strategy is eligible for paper-runner addition from this pass`
+
+## What Changed
+
+Added a PAPER-only May 13 runtime config:
+
+- `config/multi_symbol_governed_realtime_paper_portfolio_20260513_armed.yaml`
+- Same strategy manifest list as the May 8 armed config
+- Same risk gates as the May 8 armed config
+- New May 13 ownership lease, state root, run root, task name, and machine label
+
+Added realtime quote-quality sidecar tooling:
+
+- `scripts/build_realtime_quote_quality_sidecar.py`
+- `tests/test_build_realtime_quote_quality_sidecar.py`
+
+The sidecar builder converts no-submit websocket shadow logs into:
+
+- `option_quote_sidecar.csv`
+- `option_quote_quality_by_minute.csv`
+- `option_trade_prints.csv`
+- `stock_quote_sidecar.csv`
+- `quote_quality_sidecar_summary.json`
+
+The causal contract is explicit: use `option_quote_sidecar.csv` for as-of joins at or before the strategy decision timestamp. The minute aggregate is diagnostic only unless replay code treats its timestamp causally.
+
+## Validation
+
+Run ID: `full_pytest_after_quote_sidecar_20260512`
+
+```powershell
+python -m pytest -q
+```
+
+Result: `317 passed, 1 warning`.
+
+Run ID: `may13_config_load_20260512`
+
+```powershell
+python - <<'PY'
+from alpaca_lab.multi_ticker_portfolio import load_portfolio_config
+cfg = load_portfolio_config('config/multi_symbol_governed_realtime_paper_portfolio_20260513_armed.yaml')
+print(cfg.name)
+print(len(cfg.execution.underlying_symbols), cfg.execution.underlying_symbols)
+print(cfg.execution.option_feed, cfg.execution.stock_feed, cfg.execution.submit_paper_orders)
+print(cfg.ownership.lease_path)
+PY
+```
+
+Result:
+
+- Config name: `multi_symbol_governed_realtime_paper_trader_20260513_armed`
+- Symbols: `15`
+- Feeds: `opra` options, `sip` stock
+- Submit flag in config: `true`, still requires explicit runtime command and PAPER endpoint checks
+- Lease path: `D:\codexalpaca_runtime\state\multi_symbol_governed_realtime_20260513_ownership_lease.json`
+
+Run ID: `realtime_quote_sidecar_plan_only_dryrun_20260512`
+
+```powershell
+python scripts/build_realtime_quote_quality_sidecar.py --events-jsonl reports/gcp_research/quote_realism_projection_hardening_20260512/realtime_quote_capture_plan_20260512/realtime_shadow_events.jsonl --output-dir reports/gcp_research/quote_realism_projection_hardening_20260512/realtime_quote_capture_plan_20260512/quote_quality_sidecar_dryrun
+```
+
+Result: `quality_status=no_option_quote_events`, expected because the prior artifact was a plan-only shadow run, not an RTH stream capture.
+
+## May 13 RTH Launch Contract
+
+Do not start live trading. Do not add strategies. Do not lower fill, risk, or quote gates.
+
+Before RTH launch, set:
+
+```powershell
+$env:MULTI_TICKER_MACHINE_LABEL = "local-primary-paper-20260513"
+$env:MULTI_TICKER_OWNERSHIP_LEASE_PATH = "D:\codexalpaca_runtime\state\multi_symbol_governed_realtime_20260513_ownership_lease.json"
+```
+
+Run startup preflight only after fresh SIP stock bars are available:
+
+```powershell
+python scripts/run_multi_ticker_portfolio_paper_trader.py --portfolio-config config/multi_symbol_governed_realtime_paper_portfolio_20260513_armed.yaml --startup-preflight --no-submit-paper-orders
+```
+
+Start PAPER order submission only if:
+
+- Startup preflight passes
+- Broker endpoint is PAPER
+- No duplicate broker-facing process exists
+- No unexpected PAPER open orders or positions exist
+- Ownership lease is valid
+- State and run roots are writable
+- EOD flatten guards remain active at 10 and 2 minutes before close
+
+Runtime command:
+
+```powershell
+python scripts/run_multi_ticker_portfolio_paper_trader.py --portfolio-config config/multi_symbol_governed_realtime_paper_portfolio_20260513_armed.yaml --submit-paper-orders
+```
+
+## May 13 Quote Capture Contract
+
+Run this no-submit shadow capture during RTH, preferably in a separate process from the PAPER trader:
+
+```powershell
+python scripts/run_multi_ticker_realtime_shadow_monitor.py --portfolio-config config/multi_symbol_governed_realtime_paper_portfolio_20260513_armed.yaml --output-dir D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260513\realtime_quote_shadow --max-option-symbols 900 --duration-seconds 23400 --stream --include-stock-quotes --include-option-trades --no-trade-updates
+```
+
+After capture completes, convert the stream into quote-quality sidecars:
+
+```powershell
+python scripts/build_realtime_quote_quality_sidecar.py --events-jsonl D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260513\realtime_quote_shadow\realtime_shadow_events.jsonl --output-dir D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260513\realtime_quote_shadow\quote_quality_sidecar
+```
+
+Mirror durable outputs:
+
+```powershell
+gcloud storage cp --recursive D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260513\realtime_quote_shadow gs://codexalpaca-control-us/paper_runs/multi_symbol_governed_realtime_20260513/realtime_quote_shadow
+```
+
+## GCS Mirror Paths
+
+- Dry-run sidecar output: `gs://codexalpaca-control-us/gcp_research/quote_realism_projection_hardening_20260512/realtime_quote_capture_plan_20260512/quote_quality_sidecar_dryrun/`
+- Handoff doc: `gs://codexalpaca-control-us/gcp_research/quote_realism_projection_hardening_20260512/docs/may13_paper_readiness_quote_capture_20260512.md`
+- Planned May 13 quote capture: `gs://codexalpaca-control-us/paper_runs/multi_symbol_governed_realtime_20260513/realtime_quote_shadow/`
+
+## Next Best Steps
+
+1. Run May 13 PAPER preflight after fresh RTH SIP bars.
+2. Start PAPER order submission only after the launch contract passes.
+3. Run the no-submit realtime quote shadow stream during the session.
+4. Convert the stream to quote-quality sidecars after RTH.
+5. Add a later replay patch that uses `option_quote_sidecar.csv` for as-of bid/ask joins into `option_aware_trade_economics.csv`.
+6. Rerun projection and optimizer only after replay rows have quote-backed bid/ask, spread, quote-age, and trade-print evidence.
+
+No new strategy is eligible for paper-runner addition from this pass. The priority is quote-backed evidence collection and causal replay integration.
