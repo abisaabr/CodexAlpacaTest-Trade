@@ -154,6 +154,15 @@ def parse_args() -> argparse.Namespace:
         default=1.0,
         help="Fill probability assigned when no spread, age, or trade-print inputs are present.",
     )
+    parser.add_argument(
+        "--fill-model-haircut-positive-pnl",
+        action="store_true",
+        help=(
+            "Conservatively multiply positive option PnL by projected_fill_probability "
+            "before equity, train/test, and optimizer calculations. Losses are left "
+            "unreduced so low-quality quote inputs cannot make losing trades look safer."
+        ),
+    )
     parser.add_argument("--diversification-min-symbols", type=int, default=None)
     parser.add_argument("--diversification-min-regimes", type=int, default=None)
     parser.add_argument("--diversification-min-families", type=int, default=None)
@@ -824,6 +833,113 @@ def _market_quality_output_fields(row: pd.Series) -> dict[str, Any]:
     return output
 
 
+def _market_quality_diagnostics(selected_trades: pd.DataFrame) -> dict[str, Any]:
+    if selected_trades.empty:
+        return {
+            "status": "no_trades",
+            "input_trade_count": 0,
+        }
+    column_map = {
+        key: value
+        for key, value in _quality_column_map(selected_trades).items()
+        if value
+    }
+    diagnostics: dict[str, Any] = {
+        "status": "complete",
+        "input_trade_count": int(len(selected_trades)),
+        "source_columns": column_map,
+        "quote_source_counts": {},
+        "spread_coverage": {},
+        "quote_age_seconds": {},
+        "trade_print_coverage": {},
+    }
+    for source_field in ["entry_quote_source", "exit_quote_source"]:
+        if source_field in selected_trades.columns:
+            diagnostics["quote_source_counts"][source_field] = {
+                str(key): int(value)
+                for key, value in selected_trades[source_field]
+                .fillna("")
+                .astype(str)
+                .str.strip()
+                .replace("", "missing")
+                .value_counts()
+                .sort_index()
+                .items()
+            }
+    for canonical_field in ["entry_spread_pct", "exit_spread_pct"]:
+        source_column = column_map.get(canonical_field)
+        if not source_column:
+            continue
+        values = pd.to_numeric(selected_trades[source_column], errors="coerce")
+        present = values.dropna()
+        diagnostics["spread_coverage"][canonical_field] = {
+            "source_column": source_column,
+            "present_count": int(present.size),
+            "coverage_pct": round(float(present.size) / float(len(selected_trades)) * 100.0, 4),
+            "p50": round(float(present.quantile(0.50)), 8) if not present.empty else None,
+            "p95": round(float(present.quantile(0.95)), 8) if not present.empty else None,
+        }
+    for canonical_field in ["entry_quote_age_seconds", "exit_quote_age_seconds"]:
+        source_column = column_map.get(canonical_field)
+        if not source_column:
+            continue
+        values = pd.to_numeric(selected_trades[source_column], errors="coerce")
+        present = values.dropna()
+        diagnostics["quote_age_seconds"][canonical_field] = {
+            "source_column": source_column,
+            "present_count": int(present.size),
+            "coverage_pct": round(float(present.size) / float(len(selected_trades)) * 100.0, 4),
+            "p50": round(float(present.quantile(0.50)), 6) if not present.empty else None,
+            "p95": round(float(present.quantile(0.95)), 6) if not present.empty else None,
+            "max": round(float(present.max()), 6) if not present.empty else None,
+        }
+    source_frame = pd.DataFrame(
+        {
+            field: selected_trades[field].fillna("").astype(str).str.lower()
+            for field in ["entry_quote_source", "exit_quote_source"]
+            if field in selected_trades.columns
+        }
+    )
+    if not source_frame.empty:
+        no_bid_ask_mask = source_frame.apply(
+            lambda row: any("no_bid_ask" in str(value) for value in row),
+            axis=1,
+        )
+        diagnostics["rows_with_any_no_bid_ask_quote_source"] = int(no_bid_ask_mask.sum())
+        diagnostics["rows_with_any_no_bid_ask_quote_source_pct"] = round(
+            float(no_bid_ask_mask.sum()) / float(len(selected_trades)) * 100.0,
+            4,
+        )
+    print_column = _first_existing_column(
+        selected_trades,
+        ["entry_selection_trade_print_count", "option_trade_print_count", "trade_print_count"],
+    )
+    if print_column:
+        values = pd.to_numeric(selected_trades[print_column], errors="coerce")
+        present = values.dropna()
+        diagnostics["trade_print_coverage"] = {
+            "source_column": print_column,
+            "present_count": int(present.size),
+            "coverage_pct": round(float(present.size) / float(len(selected_trades)) * 100.0, 4),
+            "zero_or_missing_count": int((values.fillna(0.0) <= 0.0).sum()),
+            "p50": round(float(present.quantile(0.50)), 6) if not present.empty else None,
+            "p95": round(float(present.quantile(0.95)), 6) if not present.empty else None,
+        }
+    return diagnostics
+
+
+def _fill_probability_haircut_output_fields(row: pd.Series) -> dict[str, Any]:
+    output: dict[str, Any] = {}
+    for field in [
+        "source_option_pnl_before_fill_haircut",
+        "fill_probability_pnl_multiplier",
+        "fill_probability_pnl_haircut_amount",
+    ]:
+        if field in row.index:
+            output[field] = row.get(field)
+    return output
+
+
 def _hardening_rejection_row(
     *,
     row_id: int,
@@ -1072,6 +1188,67 @@ def _apply_fill_probability_model(
     }
 
 
+def _apply_fill_probability_pnl_haircut(
+    *,
+    selected_trades: pd.DataFrame,
+    enabled: bool,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    if not enabled:
+        return selected_trades, {
+            "status": "not_configured",
+            "input_trade_count": int(len(selected_trades)),
+            "adjusted_trade_count": 0,
+        }
+    if selected_trades.empty:
+        return selected_trades, {
+            "status": "enabled",
+            "input_trade_count": 0,
+            "adjusted_trade_count": 0,
+            "total_positive_pnl_before_haircut": 0.0,
+            "total_positive_pnl_after_haircut": 0.0,
+            "total_positive_pnl_haircut": 0.0,
+        }
+    if "projected_fill_probability" not in selected_trades.columns:
+        return selected_trades, {
+            "status": "not_applied_missing_projected_fill_probability",
+            "input_trade_count": int(len(selected_trades)),
+            "adjusted_trade_count": 0,
+        }
+
+    adjusted = selected_trades.copy()
+    raw_pnl = pd.to_numeric(adjusted.get("option_pnl"), errors="coerce").fillna(0.0)
+    probabilities = (
+        pd.to_numeric(adjusted.get("projected_fill_probability"), errors="coerce")
+        .fillna(1.0)
+        .clip(lower=0.0, upper=1.0)
+    )
+    positive_mask = raw_pnl > 0.0
+    multipliers = pd.Series(1.0, index=adjusted.index, dtype=float)
+    multipliers.loc[positive_mask] = probabilities.loc[positive_mask]
+    adjusted_pnl = raw_pnl * multipliers
+    haircut_amount = raw_pnl - adjusted_pnl
+
+    adjusted["source_option_pnl_before_fill_haircut"] = raw_pnl
+    adjusted["fill_probability_pnl_multiplier"] = multipliers
+    adjusted["fill_probability_pnl_haircut_amount"] = haircut_amount
+    adjusted["option_pnl"] = adjusted_pnl
+
+    positive_before = float(raw_pnl.loc[positive_mask].sum())
+    positive_after = float(adjusted_pnl.loc[positive_mask].sum())
+    return adjusted, {
+        "status": "enabled",
+        "mode": "positive_pnl_only",
+        "input_trade_count": int(len(selected_trades)),
+        "adjusted_trade_count": int(positive_mask.sum()),
+        "total_positive_pnl_before_haircut": round(positive_before, 6),
+        "total_positive_pnl_after_haircut": round(positive_after, 6),
+        "total_positive_pnl_haircut": round(positive_before - positive_after, 6),
+        "average_positive_pnl_multiplier": round(float(multipliers.loc[positive_mask].mean()), 6)
+        if bool(positive_mask.any())
+        else None,
+    }
+
+
 def _build_daily_equity(
     *,
     selected_trades: pd.DataFrame,
@@ -1132,6 +1309,7 @@ def _build_daily_equity(
                     **_market_quality_output_fields(row),
                     "projected_fill_probability": row.get("projected_fill_probability"),
                     "fill_probability_components": row.get("fill_probability_components"),
+                    **_fill_probability_haircut_output_fields(row),
                 }
             )
         equity = max(start_equity + daily_pnl, 0.0)
@@ -1420,6 +1598,7 @@ def _build_daily_equity_production_runtime(
                     **_market_quality_output_fields(row),
                     "projected_fill_probability": row.get("projected_fill_probability"),
                     "fill_probability_components": row.get("fill_probability_components"),
+                    **_fill_probability_haircut_output_fields(row),
                 }
             )
             risk_events.append(
@@ -2373,7 +2552,9 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
     )
     match_coverage = projection_hardening.get("match_coverage") or {}
     market_stress = projection_hardening.get("market_quality_stress") or {}
+    market_diagnostics = projection_hardening.get("market_quality_diagnostics") or {}
     fill_model = projection_hardening.get("fill_probability_model") or {}
+    fill_haircut = projection_hardening.get("fill_probability_pnl_haircut") or {}
     train_test = projection_hardening.get("train_test_optimization") or {}
     diversification = projection_hardening.get("diversification_constraints") or {}
     lines.extend(
@@ -2382,8 +2563,13 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
             f"- Unmatched capital-plan strategies: `{match_coverage.get('unmatched_capital_plan_count')}`",
             f"- Market-quality stress status: `{market_stress.get('status')}`",
             f"- Market-quality stress rejected trades: `{market_stress.get('rejected_trade_count')}`",
+            f"- Market-quality diagnostics status: `{market_diagnostics.get('status')}`",
+            f"- Rows with any no-bid-ask source: `{market_diagnostics.get('rows_with_any_no_bid_ask_quote_source')}`",
+            f"- Trade-print coverage: `{(market_diagnostics.get('trade_print_coverage') or {}).get('coverage_pct')}%`",
             f"- Fill-probability model status: `{fill_model.get('status')}`",
             f"- Fill-probability rejected trades: `{fill_model.get('rejected_trade_count')}`",
+            f"- Fill-probability PnL haircut status: `{fill_haircut.get('status')}`",
+            f"- Fill-probability PnL haircut amount: `${fill_haircut.get('total_positive_pnl_haircut', 0.0)}`",
             f"- Train/test optimization status: `{train_test.get('status')}`",
             f"- Train/test eligible candidates: `{train_test.get('eligible_candidate_count')}`",
             f"- Train/test selected candidates: `{train_test.get('selected_candidate_count')}`",
@@ -2538,6 +2724,7 @@ def build_growth_projection(
     fill_model_enabled: bool = False,
     min_fill_probability: float | None = None,
     unknown_fill_probability: float = 1.0,
+    fill_model_haircut_positive_pnl: bool = False,
     diversification_min_symbols: int | None = None,
     diversification_min_regimes: int | None = None,
     diversification_min_families: int | None = None,
@@ -2592,6 +2779,11 @@ def build_growth_projection(
         min_fill_probability=min_fill_probability,
         unknown_fill_probability=unknown_fill_probability,
     )
+    selected_trades, fill_probability_pnl_haircut = _apply_fill_probability_pnl_haircut(
+        selected_trades=selected_trades,
+        enabled=fill_model_haircut_positive_pnl,
+    )
+    market_quality_diagnostics = _market_quality_diagnostics(selected_trades)
     hardening_rejections = pd.concat(
         [frame for frame in [market_rejections, fill_rejections] if not frame.empty],
         ignore_index=True,
@@ -2671,7 +2863,9 @@ def build_growth_projection(
     projection_hardening = {
         "match_coverage": match_coverage,
         "market_quality_stress": market_quality_stress,
+        "market_quality_diagnostics": market_quality_diagnostics,
         "fill_probability_model": fill_probability_model,
+        "fill_probability_pnl_haircut": fill_probability_pnl_haircut,
         "train_test_optimization": {
             key: value
             for key, value in train_test_optimization.items()
@@ -2795,6 +2989,7 @@ def main() -> None:
         fill_model_enabled=args.fill_model_enabled,
         min_fill_probability=args.min_fill_probability,
         unknown_fill_probability=args.unknown_fill_probability,
+        fill_model_haircut_positive_pnl=args.fill_model_haircut_positive_pnl,
         diversification_min_symbols=args.diversification_min_symbols,
         diversification_min_regimes=args.diversification_min_regimes,
         diversification_min_families=args.diversification_min_families,
