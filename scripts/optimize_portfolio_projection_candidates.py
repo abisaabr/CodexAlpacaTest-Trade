@@ -44,9 +44,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-symbol-trade-share", type=float, default=None)
     parser.add_argument("--max-regime-trade-share", type=float, default=None)
     parser.add_argument("--max-family-trade-share", type=float, default=None)
+    parser.add_argument("--max-candidate-trade-share", type=float, default=None)
     parser.add_argument("--max-symbol-pnl-share", type=float, default=None)
     parser.add_argument("--max-regime-pnl-share", type=float, default=None)
     parser.add_argument("--max-family-pnl-share", type=float, default=None)
+    parser.add_argument("--max-candidate-pnl-share", type=float, default=None)
     parser.add_argument(
         "--objective",
         choices=["test_pnl", "total_pnl", "risk_adjusted"],
@@ -360,9 +362,11 @@ def _concentration_metrics(rows: pd.DataFrame) -> dict[str, Any]:
             "symbol_trade_share": {},
             "regime_trade_share": {},
             "family_trade_share": {},
+            "candidate_trade_share": {},
             "symbol_abs_pnl_share": {},
             "regime_abs_pnl_share": {},
             "family_abs_pnl_share": {},
+            "candidate_abs_pnl_share": {},
         }
 
     frame = rows.copy()
@@ -383,9 +387,11 @@ def _concentration_metrics(rows: pd.DataFrame) -> dict[str, Any]:
         "symbol_trade_share": shares("symbol", "total_trades"),
         "regime_trade_share": shares("intended_regime", "total_trades"),
         "family_trade_share": shares("family", "total_trades"),
+        "candidate_trade_share": shares("base_candidate_variant_id", "total_trades"),
         "symbol_abs_pnl_share": shares("symbol", "abs_total_pnl"),
         "regime_abs_pnl_share": shares("intended_regime", "abs_total_pnl"),
         "family_abs_pnl_share": shares("family", "abs_total_pnl"),
+        "candidate_abs_pnl_share": shares("base_candidate_variant_id", "abs_total_pnl"),
     }
 
 
@@ -399,18 +405,22 @@ def _concentration_failures(
     max_symbol_trade_share: float | None,
     max_regime_trade_share: float | None,
     max_family_trade_share: float | None,
+    max_candidate_trade_share: float | None,
     max_symbol_pnl_share: float | None,
     max_regime_pnl_share: float | None,
     max_family_pnl_share: float | None,
+    max_candidate_pnl_share: float | None,
 ) -> list[str]:
     metrics = _concentration_metrics(rows)
     checks = [
         ("max_symbol_trade_share", max_symbol_trade_share, "symbol_trade_share"),
         ("max_regime_trade_share", max_regime_trade_share, "regime_trade_share"),
         ("max_family_trade_share", max_family_trade_share, "family_trade_share"),
+        ("max_candidate_trade_share", max_candidate_trade_share, "candidate_trade_share"),
         ("max_symbol_pnl_share", max_symbol_pnl_share, "symbol_abs_pnl_share"),
         ("max_regime_pnl_share", max_regime_pnl_share, "regime_abs_pnl_share"),
         ("max_family_pnl_share", max_family_pnl_share, "family_abs_pnl_share"),
+        ("max_candidate_pnl_share", max_candidate_pnl_share, "candidate_abs_pnl_share"),
     ]
     failures: list[str] = []
     for reason, limit, metric_key in checks:
@@ -439,9 +449,11 @@ def _select_exact_subset(
     max_symbol_trade_share: float | None,
     max_regime_trade_share: float | None,
     max_family_trade_share: float | None,
+    max_candidate_trade_share: float | None,
     max_symbol_pnl_share: float | None,
     max_regime_pnl_share: float | None,
     max_family_pnl_share: float | None,
+    max_candidate_pnl_share: float | None,
     objective: str = "risk_adjusted",
 ) -> tuple[set[tuple[str, str]], list[dict[str, Any]], dict[str, Any]]:
     rows = eligible.reset_index(drop=True)
@@ -457,6 +469,7 @@ def _select_exact_subset(
     symbols = [str(record["symbol"]) for record in records]
     regimes = [str(record["intended_regime"]) for record in records]
     families = [str(record["family"]) for record in records]
+    candidate_ids = [str(record["base_candidate_variant_id"]) for record in records]
     total_trades = [float(record.get("total_trades") or 0.0) for record in records]
     abs_total_pnls = [abs(float(record.get("total_pnl") or 0.0)) for record in records]
     test_pnls = [float(record.get("test_pnl") or 0.0) for record in records]
@@ -492,6 +505,7 @@ def _select_exact_subset(
             ("symbol", symbols, max_symbol_trade_share, max_symbol_pnl_share),
             ("regime", regimes, max_regime_trade_share, max_regime_pnl_share),
             ("family", families, max_family_trade_share, max_family_pnl_share),
+            ("candidate", candidate_ids, max_candidate_trade_share, max_candidate_pnl_share),
         ]
         for name, labels, max_trade_share, max_pnl_share in share_specs:
             if max_trade_share is not None:
@@ -592,9 +606,11 @@ def _select_greedy(
     max_symbol_trade_share: float | None,
     max_regime_trade_share: float | None,
     max_family_trade_share: float | None,
+    max_candidate_trade_share: float | None,
     max_symbol_pnl_share: float | None,
     max_regime_pnl_share: float | None,
     max_family_pnl_share: float | None,
+    max_candidate_pnl_share: float | None,
 ) -> tuple[set[tuple[str, str]], list[dict[str, Any]], dict[str, Any]]:
     selected_keys: set[tuple[str, str]] = set()
     symbol_counts: Counter[str] = Counter()
@@ -627,9 +643,11 @@ def _select_greedy(
                 max_symbol_trade_share=max_symbol_trade_share,
                 max_regime_trade_share=max_regime_trade_share,
                 max_family_trade_share=max_family_trade_share,
+                max_candidate_trade_share=max_candidate_trade_share,
                 max_symbol_pnl_share=max_symbol_pnl_share,
                 max_regime_pnl_share=max_regime_pnl_share,
                 max_family_pnl_share=max_family_pnl_share,
+                max_candidate_pnl_share=max_candidate_pnl_share,
             )
             if concentration:
                 rejected.append(
@@ -686,9 +704,11 @@ def optimize_portfolio_candidates(
     max_symbol_trade_share: float | None = None,
     max_regime_trade_share: float | None = None,
     max_family_trade_share: float | None = None,
+    max_candidate_trade_share: float | None = None,
     max_symbol_pnl_share: float | None = None,
     max_regime_pnl_share: float | None = None,
     max_family_pnl_share: float | None = None,
+    max_candidate_pnl_share: float | None = None,
     objective: str = "risk_adjusted",
     max_exact_candidates: int = 20,
 ) -> dict[str, Any]:
@@ -723,9 +743,11 @@ def optimize_portfolio_candidates(
             max_symbol_trade_share=max_symbol_trade_share,
             max_regime_trade_share=max_regime_trade_share,
             max_family_trade_share=max_family_trade_share,
+            max_candidate_trade_share=max_candidate_trade_share,
             max_symbol_pnl_share=max_symbol_pnl_share,
             max_regime_pnl_share=max_regime_pnl_share,
             max_family_pnl_share=max_family_pnl_share,
+            max_candidate_pnl_share=max_candidate_pnl_share,
             objective=objective,
         )
     else:
@@ -746,9 +768,11 @@ def optimize_portfolio_candidates(
             max_symbol_trade_share=max_symbol_trade_share,
             max_regime_trade_share=max_regime_trade_share,
             max_family_trade_share=max_family_trade_share,
+            max_candidate_trade_share=max_candidate_trade_share,
             max_symbol_pnl_share=max_symbol_pnl_share,
             max_regime_pnl_share=max_regime_pnl_share,
             max_family_pnl_share=max_family_pnl_share,
+            max_candidate_pnl_share=max_candidate_pnl_share,
         )
     selected_stats = stats[stats["_optimizer_key"].isin(selected_keys)].copy()
     selected_stats = selected_stats.sort_values("_objective", ascending=False)
@@ -778,9 +802,11 @@ def optimize_portfolio_candidates(
         max_symbol_trade_share=max_symbol_trade_share,
         max_regime_trade_share=max_regime_trade_share,
         max_family_trade_share=max_family_trade_share,
+        max_candidate_trade_share=max_candidate_trade_share,
         max_symbol_pnl_share=max_symbol_pnl_share,
         max_regime_pnl_share=max_regime_pnl_share,
         max_family_pnl_share=max_family_pnl_share,
+        max_candidate_pnl_share=max_candidate_pnl_share,
     )
     failures.extend(reason for reason in concentration_failures if reason not in failures)
     concentration_metrics = _concentration_metrics(selected_stats)
@@ -814,9 +840,11 @@ def optimize_portfolio_candidates(
             "max_symbol_trade_share": max_symbol_trade_share,
             "max_regime_trade_share": max_regime_trade_share,
             "max_family_trade_share": max_family_trade_share,
+            "max_candidate_trade_share": max_candidate_trade_share,
             "max_symbol_pnl_share": max_symbol_pnl_share,
             "max_regime_pnl_share": max_regime_pnl_share,
             "max_family_pnl_share": max_family_pnl_share,
+            "max_candidate_pnl_share": max_candidate_pnl_share,
             "objective": objective,
             "max_exact_candidates": max_exact_candidates,
         },
@@ -883,9 +911,11 @@ def main() -> None:
         max_symbol_trade_share=args.max_symbol_trade_share,
         max_regime_trade_share=args.max_regime_trade_share,
         max_family_trade_share=args.max_family_trade_share,
+        max_candidate_trade_share=args.max_candidate_trade_share,
         max_symbol_pnl_share=args.max_symbol_pnl_share,
         max_regime_pnl_share=args.max_regime_pnl_share,
         max_family_pnl_share=args.max_family_pnl_share,
+        max_candidate_pnl_share=args.max_candidate_pnl_share,
         objective=args.objective,
         max_exact_candidates=args.max_exact_candidates,
     )

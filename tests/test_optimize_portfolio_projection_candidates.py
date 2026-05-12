@@ -155,6 +155,77 @@ def test_optimizer_enforces_concentration_limits_during_exact_search(tmp_path: P
     )
 
 
+def test_optimizer_enforces_single_candidate_pnl_concentration(tmp_path: Path) -> None:
+    portfolio = tmp_path / "portfolio.json"
+    capital_plan = []
+    rows = []
+    specs = [
+        ("qqq_dominator", "QQQ", "bull", "single_leg", [1000, 1000, 1000, 1000]),
+        ("iwm_bear", "IWM", "bear", "vertical", [80, 80, 80, 80]),
+        ("spy_choppy", "SPY", "choppy", "condor", [70, 70, 70, 70]),
+    ]
+    dates = ["2025-01-02", "2025-01-03", "2025-01-06", "2025-01-07"]
+    for candidate, symbol, regime, family, pnls in specs:
+        capital_plan.append(
+            {
+                "candidate_variant_id": f"{candidate}__profile_profile-a",
+                "base_candidate_variant_id": candidate,
+                "aggregate_profile": "profile_a",
+                "symbol": symbol,
+                "family": family,
+                "intended_regime": regime,
+                "research_only_weight": 1 / 3,
+                "research_only_dollars": 8333.33,
+            }
+        )
+        for trade_date, pnl in zip(dates, pnls, strict=True):
+            rows.append(
+                {
+                    "trade_date": trade_date,
+                    "candidate_variant_id": f"{candidate}__profile_profile-a",
+                    "base_candidate_variant_id": candidate,
+                    "aggregate_profile": "profile_a",
+                    "symbol": symbol,
+                    "family": family,
+                    "intended_regime": regime,
+                    "source_pnl_per_combo": pnl,
+                    "scaled_option_pnl": pnl,
+                }
+            )
+    portfolio.write_text(json.dumps({"capital_plan": capital_plan}), encoding="utf-8")
+    trades = tmp_path / "scaled.csv"
+    pd.DataFrame(rows).to_csv(trades, index=False)
+
+    summary = optimize_portfolio_candidates(
+        portfolio_report_json=portfolio,
+        scaled_trades_csv=trades,
+        output_dir=tmp_path / "out_candidate_concentration",
+        initial_cash=25_000.0,
+        backtest_allocation_fraction=0.05,
+        train_end_date="2025-01-03",
+        min_train_trades=2,
+        min_test_trades=2,
+        max_candidates=2,
+        max_per_symbol=2,
+        max_per_regime=2,
+        max_per_family=2,
+        min_symbols=2,
+        min_regimes=2,
+        min_families=2,
+        max_drawdown_pct=50.0,
+        max_candidate_pnl_share=0.60,
+        objective="total_pnl",
+    )
+
+    assert summary["status"] == "passed"
+    assert summary["selected_symbol_counts"] == {"IWM": 1, "SPY": 1}
+    assert "qqq_dominator" not in summary["selected_concentration"]["candidate_abs_pnl_share"]
+    assert (
+        summary["optimizer_metadata"]["infeasible_reason_counts"]["max_candidate_pnl_share"]
+        >= 1
+    )
+
+
 def test_optimizer_can_fail_on_minimum_average_daily_pnl(tmp_path: Path) -> None:
     portfolio = tmp_path / "portfolio.json"
     capital_plan = []
