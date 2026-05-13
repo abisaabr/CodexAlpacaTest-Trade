@@ -36,6 +36,8 @@ The installed Alpaca SDK exposes historical option bars/trades and latest option
 
 - `scripts/diagnose_quote_sidecar_gaps.py` classifies quote-sidecar misses by date coverage, contract coverage, and quote-age/as-of availability.
 - `scripts/build_quote_acquisition_manifest.py` converts replay trade economics into exact OPRA acquisition requirements by contract, trade date, entry/exit decision time, requested quote window, strategy family, and sidecar coverage status.
+- `scripts/download_option_trade_prints_from_acquisition_manifest.py` downloads historical Alpaca option trade prints for the exact contract/date/window records in an acquisition manifest. This repairs liquidity/fill evidence only; it does not create historical bid/ask quote or quote-age evidence.
+- `scripts/diagnose_option_trade_print_coverage.py` measures requested-window, forward-window, and prior-window option trade-print coverage for every missing OPRA leg event in an acquisition manifest.
 - `scripts/run_multi_ticker_realtime_shadow_monitor.py` now supports `--underlying` and `--extra-option-symbols-file` so no-submit OPRA/SIP shadow capture can target the exact runtime/review universe.
 - `alpaca_lab/multi_ticker_portfolio/realtime_shadow.py` now preserves forced option symbols ahead of the normal symbol cap, which prevents targeted repair contracts from being truncated out of the websocket subscription.
 
@@ -88,6 +90,30 @@ The QQQ replay gap was converted from a diagnosis into an actionable acquisition
 
 This manifest is the practical QQQ repair artifact. It lists the exact contract/date/window records needed for historical OPRA quote backfill or for validating same-day forward capture. Until those windows are filled with matching OPRA/SIP quotes, QQQ replay results remain proxy-priced and should not be treated as quote-backed.
 
+## QQQ Trade-Print Liquidity Repair
+
+The QQQ acquisition manifest was also repaired with historical option trade prints from Alpaca's historical option trades endpoint.
+
+- Local: `reports/gcp_research/evidence_repair_sweep_20260513/qqq_trade_print_backfill_20260513Tlocal/`
+- GCS: `gs://codexalpaca-control-us/gcp_research/evidence_repair_sweep_20260513/qqq_trade_print_backfill_20260513Tlocal/`
+- Contract/date rows requested: `455`
+- Alpaca request count: `120`
+- Option trade-print rows downloaded: `106484`
+- Unique contracts with trade prints: `455`
+- Failed requests: `0`
+
+Coverage diagnostic:
+
+- Local: `reports/gcp_research/evidence_repair_sweep_20260513/qqq_trade_print_coverage_20260513Tlocal/`
+- GCS: `gs://codexalpaca-control-us/gcp_research/evidence_repair_sweep_20260513/qqq_trade_print_coverage_20260513Tlocal/`
+- Manifest leg events: `148788`
+- Events with requested-window trade print: `148788`
+- Events with forward-window trade print: `148788`
+- Events with recent-prior trade print: `136621`
+- Coverage statuses: `forward_and_prior_prints=136621`, `forward_print_only=12167`
+
+Conclusion: QQQ had actual option trading around every replay decision. The remaining blocker is not option-trade liquidity; it is missing historical OPRA bid/ask quote, spread, and quote-age evidence for the replay dates.
+
 ## Choppy c001-c144 Result
 
 The QQQ/SPY/IWM c121-c144 GCP tranche completed, was synced, aggregated into c001-c144, mirrored, and cleaned up. It did not add new eligible QQQ/SPY/IWM candidates.
@@ -104,15 +130,85 @@ The QQQ/SPY/IWM c121-c144 GCP tranche completed, was synced, aggregated into c00
 
 Decision: do not add the c001-c144 choppy candidates to the paper runner without matching-date OPRA/SIP sidecars and a positive quote-backed train/test projection.
 
-## Active Follow-On Discovery
+## Choppy c001-c144 Trade-Print Liquidity Repair
 
-After c001-c144 cleanup, a non-overlapping research-only c145-c168 tranche was launched for QQQ, SPY, and IWM under the same wave with suffix `20260513bc6g`.
+The QQQ/SPY/IWM choppy c001-c144 acquisition manifest was repaired with historical option trade prints.
 
-- Expected workers: `qqq-rescue-c145-168-20260513bc6g`, `spy-rescue-c145-168-20260513bc6g`, `iwm-rescue-c145-168-20260513bc6g`
-- Scope: QQQ/SPY/IWM choppy non-single-leg discovery only.
-- Broker-facing: `false`
-- Paper orders: `false`
-- Live manifest effect: `none`
-- Risk policy effect: `none`
+- Local: `reports/gcp_research/choppy_non_single_train_test_refine_20260512T1925ET/aggregate_c001_144/qqq_spy_iwm_trade_print_backfill_20260513Tlocal/`
+- GCS: `gs://codexalpaca-control-us/research_results/choppy_non_single_train_test_refine_20260512T1925ET/aggregate_c001_144/qqq_spy_iwm_trade_print_backfill_20260513Tlocal/`
+- Contract/date rows requested: `1554`
+- Alpaca request count: `382`
+- Option trade-print rows downloaded: `361327`
+- Unique contracts with trade prints: `1554`
+- Failed requests: `0`
 
-These workers can find additional research candidates, but they do not repair quote-backed evidence by themselves. Any candidate from this tranche still requires matching-date OPRA/SIP sidecars before paper-runner activation.
+Coverage diagnostic:
+
+- Local: `reports/gcp_research/choppy_non_single_train_test_refine_20260512T1925ET/aggregate_c001_144/qqq_spy_iwm_trade_print_coverage_20260513Tlocal/`
+- GCS: `gs://codexalpaca-control-us/research_results/choppy_non_single_train_test_refine_20260512T1925ET/aggregate_c001_144/qqq_spy_iwm_trade_print_coverage_20260513Tlocal/`
+- Manifest leg events: `542928`
+- Events with requested-window trade print: `542928`
+- Events with forward-window trade print: `542928`
+- Events with recent-prior trade print: `432493`
+- Coverage statuses: `forward_and_prior_prints=432493`, `forward_print_only=110435`
+
+Conclusion: liquidity evidence is broad enough for the QQQ/SPY/IWM c001-c144 replay set, but quote-backed economics remain blocked until historical bid/ask quote windows are filled.
+
+## Choppy c001-c168 Result
+
+The non-overlapping QQQ/SPY/IWM c145-c168 research-only tranche completed, was synced, aggregated into c001-c168, mirrored, and cleaned up. No active `20260513bc6g` research VMs remain.
+
+- GCS aggregate: `gs://codexalpaca-control-us/research_results/choppy_non_single_train_test_refine_20260512T1925ET/aggregate_c001_168/`
+- Candidate count: `1872`
+- Eligible governed-review candidates: `4`
+- Eligible candidates remained the prior TSM choppy debit-call-vertical set from c001-c024.
+- New QQQ c145-c168 candidates showed strong full-period PnL and fill coverage, but failed the positive test-PnL gate and remain research-only blocked.
+- Portfolio report blocker counts: `min_net_pnl_not_positive=1856`, `test_net_pnl_not_above_0=1802`, `fill_coverage_below_0.90=40`.
+- Promotion packet decision: `ready_for_governed_validation_review` for the four existing TSM candidates only.
+- QQQ/SPY/IWM quote-gap diagnostic: `126324` diagnosed trade rows, `1570` replay contracts, `0` replay contracts present in the 2026-05-07 sidecar, and every entry/exit miss was `trade_date_not_in_sidecar`.
+- QQQ/SPY/IWM acquisition manifest: `631588` missing OPRA leg events across `1570` contract/date pairs; all currently replay from `option_bar_close_no_bid_ask`.
+- Quote-lineage audit: `2` current capital-plan rows matched replay lineage, but both are still `quote_quality_gap`.
+
+Trade-print liquidity repair for c001-c168:
+
+- Local: `reports/gcp_research/choppy_non_single_train_test_refine_20260512T1925ET/aggregate_c001_168/qqq_spy_iwm_trade_print_backfill_20260513Tlocal/`
+- Contract/date rows requested: `1570`
+- Alpaca request count: `382`
+- Option trade-print rows downloaded: `373871`
+- Unique contracts with trade prints: `1570`
+- Failed requests: `0`
+- Coverage diagnostic local: `reports/gcp_research/choppy_non_single_train_test_refine_20260512T1925ET/aggregate_c001_168/qqq_spy_iwm_trade_print_coverage_20260513Tlocal/`
+- Manifest leg events: `631588`
+- Events with requested-window trade print: `631588`
+- Events with forward-window trade print: `631588`
+- Events with recent-prior trade print: `503239`
+- Coverage statuses: `forward_and_prior_prints=503239`, `forward_print_only=128349`
+
+Hardened projection and optimizer result:
+
+- Projection output: `reports/gcp_research/choppy_non_single_train_test_refine_20260512T1925ET/aggregate_c001_168/growth_projection/benchmark_plus_choppy_quote_cost/`
+- Starting equity: `$25000`
+- Ending equity: `$4941.71`
+- Total return: `-80.2332%`
+- Max drawdown: `-80.2332%`
+- Target hit probability: `0.0%`
+- Train/test selected candidates: `0`
+- Strict `$200/day` constrained optimizer selected candidates: `0`
+- Relaxed `$25/day` constrained optimizer selected candidates: `0`
+
+Decision: do not add the c001-c168 choppy candidates to the paper runner. The trade-print repair shows option liquidity exists, but quote-backed economics still require matching historical OPRA bid/ask quote windows or same-day forward OPRA capture before promotion.
+
+## Updated Repair Path
+
+The immediate QQQ example is now split cleanly:
+
+- Solved: exact contract/date/window acquisition manifest exists for missing QQQ OPRA evidence.
+- Solved: historical option trade prints are available for every QQQ replay leg event, confirming liquidity around each decision.
+- Unsolved: historical OPRA bid/ask quotes are not available through the current Alpaca SDK path for the 2025-04-29 through 2026-04-28 replay dates.
+
+Next operational repair path:
+
+- Acquire external historical OPRA BBO quote data for the contract/date/window rows in the acquisition manifests, or capture OPRA/SIP forward during RTH and only replay same-day strategy decisions against those sidecars.
+- Enrich trade economics with bid, ask, midpoint, spread, quote age, quote source, and trade-print liquidity fields before projection.
+- Reject candidates with incomplete quote lineage.
+- Optimize only quote-backed survivors under train/test-positive, drawdown, diversification, and real paper-trader risk constraints.
