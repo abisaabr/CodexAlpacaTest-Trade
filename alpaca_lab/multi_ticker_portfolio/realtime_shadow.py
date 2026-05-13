@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 import time
 from decimal import Decimal
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -182,6 +183,79 @@ def _normalise_option_symbols(symbols: list[str] | None) -> list[str]:
     return sorted({str(symbol).strip().upper() for symbol in symbols if str(symbol).strip()})
 
 
+_OPTION_SYMBOL_RE = re.compile(r"^(.+?)(\d{6})([CP])(\d{8})$")
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedOptionSymbol:
+    root: str
+    expiration: str
+    right: str
+    strike: int
+
+
+def _parse_option_symbol(symbol: str) -> ParsedOptionSymbol | None:
+    match = _OPTION_SYMBOL_RE.match(str(symbol).strip().upper())
+    if not match:
+        return None
+    root, expiration, right, raw_strike = match.groups()
+    return ParsedOptionSymbol(
+        root=root,
+        expiration=expiration,
+        right=right,
+        strike=int(raw_strike),
+    )
+
+
+def _prioritise_discovered_symbols(
+    *,
+    discovered_symbols: list[str],
+    extra_symbols: list[str],
+) -> list[str]:
+    if not extra_symbols:
+        return discovered_symbols
+    exact_groups: dict[tuple[str, str, str], list[int]] = {}
+    expiry_groups: dict[tuple[str, str], list[int]] = {}
+    root_groups: dict[str, list[int]] = {}
+    for symbol in extra_symbols:
+        parsed = _parse_option_symbol(symbol)
+        if parsed is None:
+            continue
+        exact_groups.setdefault((parsed.root, parsed.expiration, parsed.right), []).append(
+            parsed.strike
+        )
+        expiry_groups.setdefault((parsed.root, parsed.expiration), []).append(parsed.strike)
+        root_groups.setdefault(parsed.root, []).append(parsed.strike)
+
+    def rank(symbol: str) -> tuple[int, int, str]:
+        parsed = _parse_option_symbol(symbol)
+        if parsed is None:
+            return (4, 10**12, symbol)
+        exact_key = (parsed.root, parsed.expiration, parsed.right)
+        if exact_key in exact_groups:
+            return (
+                0,
+                min(abs(parsed.strike - extra_strike) for extra_strike in exact_groups[exact_key]),
+                symbol,
+            )
+        expiry_key = (parsed.root, parsed.expiration)
+        if expiry_key in expiry_groups:
+            return (
+                1,
+                min(abs(parsed.strike - extra_strike) for extra_strike in expiry_groups[expiry_key]),
+                symbol,
+            )
+        if parsed.root in root_groups:
+            return (
+                2,
+                min(abs(parsed.strike - extra_strike) for extra_strike in root_groups[parsed.root]),
+                symbol,
+            )
+        return (3, 10**12, symbol)
+
+    return sorted(discovered_symbols, key=rank)
+
+
 def merge_option_subscription_symbols(
     *,
     discovered_symbols: list[str],
@@ -201,6 +275,10 @@ def merge_option_subscription_symbols(
         for symbol in _normalise_option_symbols(discovered_symbols)
         if symbol not in set(extras)
     ]
+    discovered = _prioritise_discovered_symbols(
+        discovered_symbols=discovered,
+        extra_symbols=extras,
+    )
     merged = extras + discovered
     if len(merged) > max_option_symbols:
         notes.append(
@@ -300,6 +378,7 @@ class JsonlEventWriter:
         line = json.dumps(_json_safe(payload), sort_keys=True)
         with self._lock:
             self._handle.write(line + "\n")
+            self._handle.flush()
 
     def close(self) -> None:
         with self._lock:
@@ -328,6 +407,8 @@ class RealtimeShadowMonitor:
         include_stock_quotes: bool = False,
         include_option_trades: bool = False,
         include_trade_updates: bool = True,
+        runtime_refresh_seconds: int = 0,
+        runtime_refresh_max_total_symbols: int | None = None,
     ) -> None:
         self.settings = settings
         self.portfolio_config = portfolio_config
@@ -338,6 +419,8 @@ class RealtimeShadowMonitor:
         self.include_stock_quotes = include_stock_quotes
         self.include_option_trades = include_option_trades
         self.include_trade_updates = include_trade_updates
+        self.runtime_refresh_seconds = max(0, int(runtime_refresh_seconds or 0))
+        self.runtime_refresh_max_total_symbols = runtime_refresh_max_total_symbols
         self.stats = RealtimeShadowStats()
         self.writer = JsonlEventWriter(output_dir / "realtime_shadow_events.jsonl")
 
@@ -428,6 +511,59 @@ class RealtimeShadowMonitor:
             }
         )
 
+    def _current_runtime_option_symbols(self) -> tuple[list[str], list[dict[str, str]]]:
+        from scripts.build_runtime_leg_quote_capture_symbols import (
+            build_runtime_leg_quote_capture_rows,
+        )
+
+        _trade_date, rows, errors = build_runtime_leg_quote_capture_rows(
+            self.settings,
+            self.portfolio_config,
+        )
+        requested_underlyings = set(self.underlyings)
+        if requested_underlyings:
+            rows = [
+                row
+                for row in rows
+                if str(row.get("underlying_symbol") or "").strip().upper()
+                in requested_underlyings
+            ]
+        symbols = sorted(
+            {
+                str(row.get("option_symbol") or "").strip().upper()
+                for row in rows
+                if str(row.get("option_symbol") or "").strip()
+            }
+        )
+        return symbols, errors
+
+    def _write_subscription_update(
+        self,
+        *,
+        status: str,
+        active_symbol_count: int,
+        missing_symbols: list[str],
+        added_symbols: list[str],
+        errors: list[dict[str, str]],
+        max_total_symbols: int,
+    ) -> None:
+        payload = {
+            "status": status,
+            "generated_at_utc": datetime.now(UTC).isoformat(),
+            "active_symbol_count": active_symbol_count,
+            "missing_symbol_count": len(missing_symbols),
+            "missing_symbols": missing_symbols,
+            "added_symbol_count": len(added_symbols),
+            "added_symbols": added_symbols,
+            "runtime_error_count": len(errors),
+            "runtime_errors": errors,
+            "max_total_symbols": max_total_symbols,
+        }
+        path = self.output_dir / "runtime_quote_subscription_updates.jsonl"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True) + "\n")
+        self.writer.write({"event_type": "subscription_update", "payload": payload})
+
     def run_stream(self, plan: RealtimeShadowPlan, *, duration_seconds: int) -> Path:
         api_key = _secret_value(self.settings.alpaca_api_key, name="alpaca_api_key")
         secret_key = _secret_value(self.settings.alpaca_secret_key, name="alpaca_secret_key")
@@ -484,9 +620,72 @@ class RealtimeShadowMonitor:
         for thread in threads:
             thread.start()
         started_at = time.monotonic()
+        active_plan = plan
+        active_option_symbols = set(plan.option_symbols)
+        refresh_interval = self.runtime_refresh_seconds
+        refresh_max_total = int(
+            self.runtime_refresh_max_total_symbols
+            or max(self.max_option_symbols, len(active_option_symbols))
+        )
+        next_refresh_at = started_at + refresh_interval if refresh_interval > 0 else None
         status = "completed"
         try:
             while time.monotonic() - started_at < duration_seconds:
+                if next_refresh_at is not None and time.monotonic() >= next_refresh_at:
+                    try:
+                        runtime_symbols, runtime_errors = self._current_runtime_option_symbols()
+                        missing_symbols = [
+                            symbol
+                            for symbol in runtime_symbols
+                            if symbol not in active_option_symbols
+                        ]
+                        available_slots = max(0, refresh_max_total - len(active_option_symbols))
+                        added_symbols = missing_symbols[:available_slots]
+                        if added_symbols:
+                            option_stream.subscribe_quotes(on_option_quote, *added_symbols)
+                            active_option_symbols.update(added_symbols)
+                            active_plan = replace(
+                                active_plan,
+                                option_symbols=sorted(active_option_symbols),
+                                option_symbol_limit=max(
+                                    active_plan.option_symbol_limit,
+                                    len(active_option_symbols),
+                                ),
+                                notes=[
+                                    *active_plan.notes,
+                                    (
+                                        "runtime refresh added "
+                                        f"{len(added_symbols)} OPRA symbols at "
+                                        f"{datetime.now(UTC).isoformat()}"
+                                    ),
+                                ],
+                            )
+                            self.write_plan(active_plan)
+                        refresh_status = (
+                            "runtime_refresh_added_symbols"
+                            if added_symbols
+                            else "runtime_refresh_no_new_symbols"
+                        )
+                        if missing_symbols and not added_symbols and available_slots <= 0:
+                            refresh_status = "runtime_refresh_symbol_cap_reached"
+                        self._write_subscription_update(
+                            status=refresh_status,
+                            active_symbol_count=len(active_option_symbols),
+                            missing_symbols=missing_symbols,
+                            added_symbols=added_symbols,
+                            errors=runtime_errors,
+                            max_total_symbols=refresh_max_total,
+                        )
+                    except Exception as exc:  # noqa: BLE001 - shadow capture should keep running.
+                        self._write_subscription_update(
+                            status=f"runtime_refresh_failed:{exc!r}",
+                            active_symbol_count=len(active_option_symbols),
+                            missing_symbols=[],
+                            added_symbols=[],
+                            errors=[],
+                            max_total_symbols=refresh_max_total,
+                        )
+                    next_refresh_at = time.monotonic() + refresh_interval
                 time.sleep(min(1.0, max(0.1, duration_seconds / 30)))
         except KeyboardInterrupt:
             status = "interrupted"
@@ -500,4 +699,4 @@ class RealtimeShadowMonitor:
                     except Exception:  # noqa: BLE001
                         pass
             self.writer.close()
-        return self.write_summary(plan, status=status)
+        return self.write_summary(active_plan, status=status)

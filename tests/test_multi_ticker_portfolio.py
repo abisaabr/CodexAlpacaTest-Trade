@@ -705,7 +705,28 @@ def test_run_exit_multileg_not_filled_falls_back_to_cleanup() -> None:
         underlying_symbol="QQQ",
         trade_date=datetime(2026, 4, 15, 15, 15, tzinfo=ZoneInfo("America/New_York")).date(),
         stock_frame=pd.DataFrame([{"minute_index": 345, "close": 501.0}]),
-        option_chain=pd.DataFrame(),
+        option_chain=pd.DataFrame(
+            [
+                {
+                    "symbol": "QQQ260417C00500000",
+                    "bid": 3.1,
+                    "ask": 3.3,
+                    "mark": 3.2,
+                    "quote_time": "2026-04-15T19:15:00Z",
+                    "spread_pct": 0.0625,
+                    "freshness_seconds": 0.5,
+                },
+                {
+                    "symbol": "QQQ260417C00510000",
+                    "bid": 1.5,
+                    "ask": 1.7,
+                    "mark": 1.6,
+                    "quote_time": "2026-04-15T19:15:01Z",
+                    "spread_pct": 0.125,
+                    "freshness_seconds": 0.75,
+                },
+            ]
+        ),
         mark_map={},
         latest_close=501.0,
         current_minute=345,
@@ -716,6 +737,8 @@ def test_run_exit_multileg_not_filled_falls_back_to_cleanup() -> None:
     assert session.open_trades == []
     assert session.completed_trades[0]["exit_reason"] == "profit_target"
     assert session.completed_trades[0]["via_cleanup"] is True
+    assert session.completed_trades[0]["legs"][0]["exit_quote_time"] == "2026-04-15T19:15:00Z"
+    assert session.completed_trades[0]["legs"][1]["exit_bid"] == 1.5
     assert sum(event["event_type"] == "exit_trigger" for event in events) == 1
     assert any(event["event_type"] == "exit_cleanup_fallback" for event in events)
     assert any(

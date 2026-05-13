@@ -2590,6 +2590,7 @@ class MultiTickerPortfolioPaperTrader:
                     session=session,
                     trade_date=trade_date,
                     stock_frames={snapshot.underlying_symbol: snapshot.stock_frame},
+                    option_chain=snapshot.option_chain,
                     reason=exit_reason,
                     emit_exit_trigger=False,
                     expected_exit_fill_price=float(expected_exit_fill_price),
@@ -2888,6 +2889,7 @@ class MultiTickerPortfolioPaperTrader:
         session: SessionState,
         trade_date: date,
         stock_frames: dict[str, pd.DataFrame] | None,
+        option_chain: pd.DataFrame | None = None,
         reason: str,
         emit_exit_trigger: bool = True,
         expected_exit_fill_price: float | None = None,
@@ -3007,6 +3009,28 @@ class MultiTickerPortfolioPaperTrader:
             _entry_cashflow_from_debit(float(trade.entry_debit), quantity, trade.legs)
             + exit_cashflow
         )
+        exit_leg_quality = {}
+        if option_chain is not None and not option_chain.empty and "symbol" in option_chain.columns:
+            for row in option_chain.to_dict("records"):
+                symbol = str(row.get("symbol") or "")
+                if symbol:
+                    exit_leg_quality[symbol] = row
+        completed_legs: list[dict[str, Any]] = []
+        for leg in trade.legs:
+            completed_leg = dict(leg)
+            quality = exit_leg_quality.get(str(leg.get("symbol") or ""))
+            if quality:
+                completed_leg.update(
+                    {
+                        "exit_bid": quality.get("bid"),
+                        "exit_ask": quality.get("ask"),
+                        "exit_mark": quality.get("mark"),
+                        "exit_quote_time": quality.get("quote_time"),
+                        "exit_spread_pct": quality.get("spread_pct"),
+                        "exit_freshness_seconds": quality.get("freshness_seconds"),
+                    }
+                )
+            completed_legs.append(completed_leg)
         completed = CompletedTrade(
             strategy_name=trade.strategy_name,
             underlying_symbol=trade.underlying_symbol,
@@ -3028,7 +3052,7 @@ class MultiTickerPortfolioPaperTrader:
             max_profit_per_combo=float(trade.max_profit_per_combo),
             delta_shares_at_entry=round(delta_shares, 4),
             vega_dollars_1pct_at_entry=round(vega_dollars, 4),
-            legs=list(trade.legs),
+            legs=completed_legs,
             entry_attempt_id=trade.entry_attempt_id,
             candidate_variant_id=trade.candidate_variant_id,
             source_strategy_id=trade.source_strategy_id,

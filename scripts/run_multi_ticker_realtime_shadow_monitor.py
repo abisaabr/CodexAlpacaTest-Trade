@@ -18,6 +18,26 @@ from alpaca_lab.multi_ticker_portfolio import load_portfolio_config
 from alpaca_lab.multi_ticker_portfolio.realtime_shadow import RealtimeShadowMonitor
 
 
+RUNTIME_LEG_FIELDNAMES = [
+    "option_symbol",
+    "underlying_symbol",
+    "strategy_name",
+    "regime",
+    "family",
+    "dte_mode",
+    "leg_index",
+    "option_type",
+    "side",
+    "target_delta",
+    "delta",
+    "bid",
+    "ask",
+    "spread_pct",
+    "freshness_seconds",
+    "quote_time",
+]
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -102,6 +122,21 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Disable paper trade-update stream subscription.",
     )
+    parser.add_argument(
+        "--runtime-refresh-seconds",
+        type=int,
+        default=0,
+        help=(
+            "When streaming with runtime-selected legs, periodically recompute current "
+            "runtime legs and subscribe any missing OPRA symbols without restarting."
+        ),
+    )
+    parser.add_argument(
+        "--runtime-refresh-max-total-symbols",
+        type=int,
+        default=None,
+        help="Hard cap for dynamic OPRA option symbols after runtime refreshes.",
+    )
     return parser.parse_args()
 
 
@@ -128,6 +163,42 @@ def _load_extra_option_symbols(paths: list[str]) -> list[str]:
             if value and not value.startswith("#"):
                 symbols.append(value)
     return sorted(set(symbols))
+
+
+def _write_runtime_leg_lineage(
+    *,
+    output_dir: Path,
+    rows: list[dict[str, object]],
+    errors: list[dict[str, str]],
+) -> tuple[Path | None, Path | None]:
+    if not rows and not errors:
+        return None, None
+    output_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = output_dir / "runtime_selected_leg_lineage.csv"
+    with csv_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=RUNTIME_LEG_FIELDNAMES)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({key: row.get(key) for key in RUNTIME_LEG_FIELDNAMES})
+    summary_path = output_dir / "runtime_selected_leg_lineage_summary.json"
+    summary = {
+        "runtime_selected_leg_row_count": len(rows),
+        "runtime_selected_leg_error_count": len(errors),
+        "unique_option_symbols": len(
+            {
+                str(row.get("option_symbol") or "").strip().upper()
+                for row in rows
+                if str(row.get("option_symbol") or "").strip()
+            }
+        ),
+        "errors": errors,
+        "broker_facing": False,
+        "paper_runner_state_changed": False,
+        "live_manifest_effect": "none",
+        "risk_policy_effect": "none",
+    }
+    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
+    return csv_path, summary_path
 
 
 def main() -> None:
@@ -165,6 +236,11 @@ def main() -> None:
         extra_option_symbols = sorted(set(extra_option_symbols).union(runtime_symbols))
         if args.runtime_selected_leg_symbols_only:
             args.max_option_symbols = len(extra_option_symbols)
+    runtime_lineage_csv, runtime_lineage_summary = _write_runtime_leg_lineage(
+        output_dir=Path(args.output_dir),
+        rows=runtime_leg_rows,
+        errors=runtime_leg_errors,
+    )
     monitor = RealtimeShadowMonitor(
         settings,
         portfolio_config,
@@ -175,6 +251,8 @@ def main() -> None:
         include_stock_quotes=args.include_stock_quotes,
         include_option_trades=args.include_option_trades,
         include_trade_updates=not args.no_trade_updates,
+        runtime_refresh_seconds=args.runtime_refresh_seconds,
+        runtime_refresh_max_total_symbols=args.runtime_refresh_max_total_symbols,
     )
     plan = monitor.build_plan()
     plan_path = monitor.write_plan(plan)
@@ -197,9 +275,17 @@ def main() -> None:
                 "runtime_selected_leg_row_count": len(runtime_leg_rows),
                 "runtime_selected_leg_error_count": len(runtime_leg_errors),
                 "runtime_selected_leg_symbols_only": bool(args.runtime_selected_leg_symbols_only),
+                "runtime_selected_leg_lineage_csv": (
+                    str(runtime_lineage_csv) if runtime_lineage_csv else None
+                ),
+                "runtime_selected_leg_lineage_summary": (
+                    str(runtime_lineage_summary) if runtime_lineage_summary else None
+                ),
                 "stock_feed": plan.stock_feed,
                 "option_feed": plan.option_feed,
                 "stream_requested": bool(args.stream),
+                "runtime_refresh_seconds": int(args.runtime_refresh_seconds or 0),
+                "runtime_refresh_max_total_symbols": args.runtime_refresh_max_total_symbols,
             },
             indent=2,
             sort_keys=True,

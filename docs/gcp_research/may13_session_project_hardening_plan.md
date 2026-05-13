@@ -12,8 +12,11 @@
 - Added built-in runtime-selected leg quote-capture mode to `scripts/run_multi_ticker_realtime_shadow_monitor.py` via `--runtime-selected-leg-symbols` and `--runtime-selected-leg-symbols-only`.
 - Added `scripts/build_multi_ticker_session_health_snapshot.py` for broker-safe health snapshots covering process uniqueness, PAPER-only lock, ownership lease, session state, broker orders/positions, quote-capture latency, and EOD flatten readiness.
 - Added `scripts/build_paper_trade_quote_sidecar_coverage.py` to fail-closed completed PAPER trade evidence unless every completed leg has session quote fields and raw OPRA websocket sidecar coverage at entry and exit.
+- Added `scripts/build_runtime_quote_capture_gap_report.py` to compare current runtime-selected legs, session trade legs, OPRA subscription plans, and observed quote sidecars so capture drift is visible during RTH.
 - Validated the new runtime-leg shadow mode in plan-only mode. It selected `55` unique option symbols from `415` runtime-selected legs without opening a websocket or touching orders.
 - Logged the early QQQ quote-sidecar gap: the first two completed stop-outs cannot be used for quote-backed optimizer evidence because exact OPRA capture started after the entry/exit timestamps.
+- Added neighbor-prioritized OPRA subscription buffering, runtime-selected leg lineage files, dynamic no-submit runtime-leg refresh, and per-line JSONL flushing for quote evidence.
+- Patched multi-leg cleanup fallback exits to persist per-leg exit quote fields when a normal broker exit is not filled and the cleanup path completes the trade.
 
 ## Data: 5 High-Impact Changes
 
@@ -83,6 +86,7 @@
 - Add launch-controller unique output paths to avoid the May 13 preflight redirection race.
 - Add cooldown logic for repeated same-symbol/same-family stop-outs after postmortem confirms this is not expected behavior.
 - Persist every order decision with selected strategy, selected legs, quote time, spread, freshness, fill attempt, and broker order id.
+- Tune runtime-leg refresh after RTH. The current RTH-safe setting is a delayed no-submit refresh, not aggressive per-minute websocket mutation.
 
 ### Phase 5: GCP Parallel Work
 

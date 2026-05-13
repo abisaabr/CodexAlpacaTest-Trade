@@ -49,3 +49,19 @@
 - Sidecar audit still fails closed: `0/16` completed legs have complete raw OPRA sidecar coverage. The AMD symbols were not in the forced OPRA sidecar universe, and one AMD stop-out is missing exit quote fields in session state.
 - Output: `D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260513\paper_trade_quote_sidecar_coverage_20260513_heartbeat.json`.
 - Follow-up: include any runtime-selected legs for newly triggered symbols in quote capture before orders can fire, and investigate why one completed AMD stop-out missed exit quote field persistence.
+
+## 2026-05-13 10:24-11:02 ET - Runtime-Leg Quote Capture Drift Hardening
+
+- Added a broker-free runtime quote-capture gap report to compare current runtime-selected legs, completed/open session trade legs, the active OPRA subscription plan, and observed OPRA tail symbols.
+- The exact-only 55-symbol stream missed new current runtime legs as selected strikes drifted intraday. A 100-symbol neighbor-buffer plan improved coverage from about `81.8%` to about `96.4%`, but still missed some current runtime legs.
+- Added neighbor-prioritized option-universe merging so forced runtime legs stay first and remaining capacity fills nearby same-root/same-expiry strikes rather than alphabetically overloading early tickers.
+- Added dynamic no-submit runtime-leg refresh support with a hard symbol cap. The active quote shadow was restarted to `--max-option-symbols 120 --runtime-refresh-seconds 300 --runtime-refresh-max-total-symbols 180`; it added three drifted OPRA symbols at `11:01 ET` without touching the broker-facing trader.
+- Current active quote shadow path: `D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260513\realtime_quote_shadow_runtime_legs_neighbor_120_delayed_refresh_20260513T145514Z`.
+- Latest health snapshot remained PAPER-safe: one trader PID `12976`, one no-submit quote shadow PID `12616`, zero broker orders, zero broker positions, option quote p50/p90/p99 about `0.16s/0.64s/0.83s`, and fresh lease/session writes.
+- Follow-up: after RTH, tune runtime refresh interval and dynamic subscription behavior under a no-submit canary before making shorter refresh intervals the default. During RTH, avoid further quote-shadow restarts unless capture becomes stale or broker safety requires it.
+
+## 2026-05-13 10:24 ET - Cleanup Fallback Exit Quote Persistence
+
+- Patched the multi-leg cleanup fallback so forced cleanup exits preserve exit bid/ask/mark/quote-time/spread/freshness fields from the current option chain.
+- This addresses the AMD cleanup path where one completed stop-out had missing exit quote fields even though the normal `_run_exit` path enriches quote evidence.
+- Follow-up: rerun EOD completed-trade quote evidence report and verify any future cleanup exits include per-leg exit quote fields before using them in quote-backed projections.

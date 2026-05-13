@@ -138,6 +138,35 @@ def test_merge_option_subscription_symbols_keeps_forced_symbols_first() -> None:
     assert "truncated option subscriptions from 4 to 3" in notes
 
 
+def test_merge_option_subscription_symbols_buffers_nearby_runtime_strikes() -> None:
+    symbols, notes = merge_option_subscription_symbols(
+        discovered_symbols=[
+            "AMD260515P00425000",
+            "AVGO260515P00412500",
+            "QQQ260514C00708000",
+            "QQQ260514P00710000",
+            "QQQ260514P00715000",
+            "SPY260514P00743000",
+            "TSM260515C00400000",
+        ],
+        extra_symbols=[
+            "QQQ260514P00711000",
+            "SPY260514P00739000",
+        ],
+        max_option_symbols=5,
+    )
+
+    assert symbols == [
+        "QQQ260514P00711000",
+        "SPY260514P00739000",
+        "QQQ260514P00710000",
+        "QQQ260514P00715000",
+        "SPY260514P00743000",
+    ]
+    assert "truncated option subscriptions from 9 to 5" in notes
+    assert "AMD260515P00425000" not in symbols
+
+
 def test_jsonl_event_writer_keeps_valid_lines_until_close(tmp_path) -> None:
     path = tmp_path / "events.jsonl"
     writer = JsonlEventWriter(path)
@@ -152,3 +181,13 @@ def test_jsonl_event_writer_keeps_valid_lines_until_close(tmp_path) -> None:
         {"event_type": "stock_quote", "symbol": "QQQ"},
         {"event_type": "option_quote", "symbol": "QQQ260508C00697000"},
     ]
+
+
+def test_jsonl_event_writer_flushes_each_line_before_close(tmp_path) -> None:
+    path = tmp_path / "events.jsonl"
+    writer = JsonlEventWriter(path)
+
+    writer.write({"event_type": "option_quote", "symbol": "QQQ260508C00697000"})
+
+    assert path.read_text(encoding="utf-8").strip()
+    writer.close()
