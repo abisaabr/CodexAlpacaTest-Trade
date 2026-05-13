@@ -281,7 +281,10 @@ def _apply_quote_sidecar_tree(
 def _quote_backed_keys(lineage_csv: Path) -> set[tuple[str, str]]:
     if not lineage_csv.exists():
         return set()
-    frame = pd.read_csv(lineage_csv, low_memory=False)
+    try:
+        frame = pd.read_csv(lineage_csv, low_memory=False)
+    except pd.errors.EmptyDataError:
+        return set()
     if frame.empty or "quote_quality_status" not in frame.columns:
         return set()
     backed = frame[frame["quote_quality_status"].astype(str).eq("quote_backed_replay")]
@@ -298,7 +301,10 @@ def _all_lineage_rows(paths: list[Path]) -> pd.DataFrame:
     frames = []
     for path in paths:
         if path.exists():
-            frames.append(pd.read_csv(path, low_memory=False))
+            try:
+                frames.append(pd.read_csv(path, low_memory=False))
+            except pd.errors.EmptyDataError:
+                continue
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 

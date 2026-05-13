@@ -62,8 +62,19 @@ def _safe_float(value: Any) -> float | None:
 
 
 def _contract_symbols(row: pd.Series) -> list[str]:
+    symbols: list[str] = []
     raw = str(row.get("contract_symbol") or "")
-    return [item.strip().upper() for item in raw.split(";") if item.strip()]
+    symbols.extend(item.strip().upper() for item in raw.split(";") if item.strip())
+    for leg in _parse_leg_details(row):
+        symbol = str(
+            leg.get("contract_symbol")
+            or leg.get("option_symbol")
+            or leg.get("symbol")
+            or ""
+        ).strip().upper()
+        if symbol:
+            symbols.append(symbol)
+    return list(dict.fromkeys(symbols))
 
 
 def _parse_leg_details(row: pd.Series) -> list[dict[str, Any]]:

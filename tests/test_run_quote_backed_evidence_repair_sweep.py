@@ -4,7 +4,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from scripts.run_quote_backed_evidence_repair_sweep import _apply_quote_sidecar_tree
+from scripts.run_quote_backed_evidence_repair_sweep import (
+    _all_lineage_rows,
+    _apply_quote_sidecar_tree,
+    _quote_backed_keys,
+)
 
 
 def test_apply_quote_sidecar_tree_writes_side_aware_replay_fields(tmp_path: Path) -> None:
@@ -58,3 +62,11 @@ def test_apply_quote_sidecar_tree_writes_side_aware_replay_fields(tmp_path: Path
     assert row["quote_backed_replay_status"] == "quote_backed_replay"
     assert row["quote_backed_option_pnl"] == 15.0
     assert row["quote_backed_max_quote_age_seconds"] == 15.0
+
+
+def test_empty_lineage_files_fail_closed(tmp_path: Path) -> None:
+    empty = tmp_path / "quote_quality_lineage.csv"
+    empty.write_text("", encoding="utf-8")
+
+    assert _quote_backed_keys(empty) == set()
+    assert _all_lineage_rows([empty]).empty

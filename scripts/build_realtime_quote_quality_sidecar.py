@@ -107,6 +107,14 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Optional comma-separated exact OPRA option symbol filter.",
     )
+    parser.add_argument(
+        "--option-symbols-file",
+        default="",
+        help=(
+            "Optional file containing exact OPRA option symbols, separated by "
+            "newlines, commas, semicolons, or whitespace. Merged with --option-symbols."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -150,6 +158,13 @@ def _underlying_from_option_symbol(symbol: str) -> str:
 
 def _csv_set(value: str) -> set[str]:
     return {item.strip().upper() for item in value.split(",") if item.strip()}
+
+
+def _symbol_file_set(path: Path | None) -> set[str]:
+    if path is None:
+        return set()
+    text = path.read_text(encoding="utf-8")
+    return {item.strip().upper() for item in re.split(r"[\s,;]+", text) if item.strip()}
 
 
 def _quote_row(
@@ -405,11 +420,13 @@ def build_realtime_quote_quality_sidecar(
 
 def main() -> None:
     args = parse_args()
+    option_symbols = _csv_set(args.option_symbols)
+    option_symbols.update(_symbol_file_set(Path(args.option_symbols_file) if args.option_symbols_file else None))
     summary = build_realtime_quote_quality_sidecar(
         events_jsonl=Path(args.events_jsonl),
         output_dir=Path(args.output_dir),
         underlyings=_csv_set(args.underlyings) or None,
-        option_symbols=_csv_set(args.option_symbols) or None,
+        option_symbols=option_symbols or None,
     )
     print(json.dumps(summary, indent=2, sort_keys=True))
 

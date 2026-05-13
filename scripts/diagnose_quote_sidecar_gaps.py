@@ -85,6 +85,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--trade-economics-root", action="append", default=[])
     parser.add_argument("--trade-economics-csv", action="append", default=[])
     parser.add_argument("--quote-sidecar-csv", required=True)
+    parser.add_argument(
+        "--capture-plan-json",
+        action="append",
+        default=[],
+        help=(
+            "Optional realtime shadow subscription/capture plan JSON. When present, "
+            "the diagnostic reports exact replay-contract overlap with the captured OPRA universe."
+        ),
+    )
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--underlying", action="append", default=[])
     parser.add_argument("--max-quote-age-seconds", type=float, default=60.0)
@@ -164,10 +173,27 @@ def _occ_parts(symbol: str) -> dict[str, Any]:
 
 
 def _contract_symbols(row: pd.Series) -> list[str]:
+    symbols: list[str] = []
     raw = _clean_symbol(row.get("contract_symbol"))
-    if not raw:
-        return []
-    return [_clean_symbol(item) for item in raw.replace(",", ";").split(";") if _clean_symbol(item)]
+    symbols.extend(_clean_symbol(item) for item in raw.replace(",", ";").split(";") if _clean_symbol(item))
+    leg_details = row.get("leg_details_json")
+    if leg_details not in (None, ""):
+        try:
+            parsed = json.loads(str(leg_details))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            parsed = []
+        if isinstance(parsed, list):
+            for leg in parsed:
+                if not isinstance(leg, dict):
+                    continue
+                symbol = _clean_symbol(
+                    leg.get("contract_symbol")
+                    or leg.get("option_symbol")
+                    or leg.get("symbol")
+                )
+                if symbol:
+                    symbols.append(symbol)
+    return list(dict.fromkeys(symbols))
 
 
 def _row_underlyings(row: pd.Series) -> set[str]:
@@ -442,6 +468,53 @@ def _sidecar_coverage_rows(quote_frame: pd.DataFrame) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda item: (str(item.get("underlying") or ""), str(item["option_symbol"])))
 
 
+def _capture_plan_symbols(paths: list[Path]) -> set[str]:
+    symbols: set[str] = set()
+    for path in paths:
+        if not path.exists():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        for key in ("option_symbols", "forced_option_symbols", "runtime_option_symbols"):
+            values = payload.get(key)
+            if isinstance(values, list):
+                for value in values:
+                    cleaned = _clean_symbol(value)
+                    if cleaned:
+                        symbols.add(cleaned)
+    return symbols
+
+
+def _symbol_coverage_rows(symbols: set[str]) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for symbol in sorted(symbols):
+        parts = _occ_parts(symbol)
+        item = grouped.setdefault(
+            symbol,
+            {
+                "option_symbol": symbol,
+                "underlying": parts.get("underlying"),
+                "expiration": parts.get("expiration"),
+                "option_type": parts.get("option_type"),
+                "strike": parts.get("strike"),
+            },
+        )
+        item["option_symbol"] = symbol
+    return sorted(grouped.values(), key=lambda item: (str(item.get("underlying") or ""), str(item["option_symbol"])))
+
+
+def _expiration_summary_by_underlying(rows: list[dict[str, Any]], symbol_key: str) -> dict[str, list[str]]:
+    output: dict[str, set[str]] = defaultdict(set)
+    for row in rows:
+        underlying = str(row.get("underlying") or "UNKNOWN")
+        expiration = str(row.get("expiration") or "")
+        if symbol_key in row and expiration:
+            output[underlying].add(expiration)
+    return {key: sorted(values) for key, values in sorted(output.items())}
+
+
 def _guidance_for_reason(reason: str) -> dict[str, Any]:
     return ROOT_CAUSE_GUIDANCE.get(
         reason,
@@ -525,6 +598,7 @@ def diagnose_quote_sidecar_gaps(
     trade_economics_roots: list[Path],
     trade_economics_csvs: list[Path],
     quote_sidecar_csv: Path,
+    capture_plan_jsons: list[Path] | None = None,
     output_dir: Path,
     underlyings: set[str] | None = None,
     max_quote_age_seconds: float = 60.0,
@@ -569,7 +643,7 @@ def diagnose_quote_sidecar_gaps(
                     "symbol": row.get("symbol"),
                     "family": row.get("family"),
                     "intended_regime": row.get("intended_regime"),
-                    "contract_symbol": row.get("contract_symbol"),
+                    "contract_symbol": ";".join(contracts),
                     "trade_date": row.get("trade_date"),
                     "entry_time_utc": entry_time.isoformat() if entry_time is not None else "",
                     "exit_time_utc": exit_time.isoformat() if exit_time is not None else "",
@@ -598,6 +672,9 @@ def diagnose_quote_sidecar_gaps(
     )
     sidecar_coverage = _sidecar_coverage_rows(quote_frame)
     pd.DataFrame(sidecar_coverage).to_csv(output_dir / "sidecar_symbol_coverage.csv", index=False)
+    capture_plan_symbols = _capture_plan_symbols(capture_plan_jsons or [])
+    capture_plan_coverage = _symbol_coverage_rows(capture_plan_symbols)
+    pd.DataFrame(capture_plan_coverage).to_csv(output_dir / "capture_plan_symbol_coverage.csv", index=False)
     root_cause_action_rows = _root_cause_action_rows(diagnostics)
     pd.DataFrame(root_cause_action_rows).to_csv(output_dir / "quote_gap_root_cause_action_plan.csv", index=False)
 
@@ -627,6 +704,21 @@ def diagnose_quote_sidecar_gaps(
     }
     sidecar_by_underlying = Counter(str(item.get("underlying") or "UNKNOWN") for item in sidecar_coverage)
     replay_by_underlying = Counter(str(item.get("underlying") or "UNKNOWN") for item in universe)
+    capture_plan_contracts = {str(item["option_symbol"]) for item in capture_plan_coverage}
+    capture_plan_by_underlying = Counter(str(item.get("underlying") or "UNKNOWN") for item in capture_plan_coverage)
+    capture_plan_overlap = len(replay_contracts.intersection(capture_plan_contracts))
+    if not capture_plan_jsons:
+        capture_plan_overlap_status = "capture_plan_not_provided"
+        capture_plan_root_cause_hint = ""
+    elif capture_plan_overlap:
+        capture_plan_overlap_status = "exact_replay_contract_overlap_present"
+        capture_plan_root_cause_hint = ""
+    elif replay_contracts:
+        capture_plan_overlap_status = "no_exact_replay_contract_overlap"
+        capture_plan_root_cause_hint = "historical_or_offline_replay_contracts_not_in_runtime_opra_capture_plan"
+    else:
+        capture_plan_overlap_status = "no_replay_contracts_to_compare"
+        capture_plan_root_cause_hint = ""
     if diagnostics.empty:
         strict_quote_backed_rows = 0
     else:
@@ -642,6 +734,7 @@ def diagnose_quote_sidecar_gaps(
         "broker_facing": False,
         "paper_runner_state_changed": False,
         "quote_sidecar_csv": str(quote_sidecar_csv),
+        "capture_plan_jsons": [str(path) for path in capture_plan_jsons or []],
         "trade_economics_roots": [str(path) for path in trade_economics_roots],
         "trade_economics_csvs": [str(path) for path in trade_economics_csvs],
         "underlying_filter": sorted(underlyings),
@@ -663,10 +756,22 @@ def diagnose_quote_sidecar_gaps(
         "replay_contract_count": len(replay_contracts),
         "sidecar_contract_count": len(sidecar_contracts),
         "replay_contracts_present_in_sidecar": len(replay_contracts.intersection(sidecar_contracts)),
+        "capture_plan_contract_count": len(capture_plan_contracts),
+        "replay_contracts_present_in_capture_plan": capture_plan_overlap,
+        "capture_plan_overlap_status": capture_plan_overlap_status,
+        "capture_plan_root_cause_hint": capture_plan_root_cause_hint,
         "replay_trade_dates": sorted(replay_dates),
         "sidecar_quote_dates": sorted(sidecar_dates),
         "replay_contract_count_by_underlying": {str(key): int(value) for key, value in replay_by_underlying.items()},
         "sidecar_contract_count_by_underlying": {str(key): int(value) for key, value in sidecar_by_underlying.items()},
+        "capture_plan_contract_count_by_underlying": {
+            str(key): int(value) for key, value in capture_plan_by_underlying.items()
+        },
+        "replay_expirations_by_underlying": _expiration_summary_by_underlying(universe, "contract_symbol"),
+        "capture_plan_expirations_by_underlying": _expiration_summary_by_underlying(
+            capture_plan_coverage,
+            "option_symbol",
+        ),
         "outputs": {
             "quote_gap_rows_csv": str(output_dir / "quote_gap_rows.csv"),
             "quote_gap_examples_csv": str(output_dir / "quote_gap_examples.csv"),
@@ -674,6 +779,7 @@ def diagnose_quote_sidecar_gaps(
             "replay_contract_universe_csv": str(output_dir / "replay_contract_universe.csv"),
             "replay_contract_symbols_txt": str(output_dir / "replay_contract_symbols.txt"),
             "sidecar_symbol_coverage_csv": str(output_dir / "sidecar_symbol_coverage.csv"),
+            "capture_plan_symbol_coverage_csv": str(output_dir / "capture_plan_symbol_coverage.csv"),
             "summary_json": str(output_dir / "quote_gap_diagnostic_summary.json"),
         },
     }
@@ -690,6 +796,7 @@ def main() -> None:
         trade_economics_roots=[Path(path) for path in args.trade_economics_root],
         trade_economics_csvs=[Path(path) for path in args.trade_economics_csv],
         quote_sidecar_csv=Path(args.quote_sidecar_csv),
+        capture_plan_jsons=[Path(path) for path in args.capture_plan_json],
         output_dir=Path(args.output_dir),
         underlyings={item.upper() for item in args.underlying},
         max_quote_age_seconds=args.max_quote_age_seconds,

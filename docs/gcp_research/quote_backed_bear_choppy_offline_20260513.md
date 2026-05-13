@@ -20,14 +20,34 @@ This is a research-only GCP sweep for tomorrow's optimizer candidate pool. It do
 
 ## Active Workers
 
-- `qqq-rescue-c217-240-20260513qb1`
-- `spy-rescue-c217-240-20260513qb1`
-- `iwm-rescue-c217-240-20260513qb1`
-- `avgo-rescue-c217-240-20260513qb1`
-- `googl-rescue-c217-240-20260513qb1`
-- `msft-rescue-c217-240-20260513qb1`
-- `amzn-rescue-c217-240-20260513qb1`
-- `tsm-rescue-c217-240-20260513qb1`
+Complete, synced, aggregated, mirrored locally, and cleaned from GCP.
+
+## Strict Aggregate
+
+- Candidate profiles: `576`
+- Eligible for governed-validation review before quote evidence: `38`
+- Unique eligible base candidates: `22`
+- Required regimes: `bear,choppy`
+- Eligible regimes found: `bear,choppy`
+- Promotion packet status: `ready_for_governed_validation_review`
+- Paper-runner authorization: `false`
+- Optimizer authorization: `false` until quote-backed evidence passes
+
+## Quote Evidence Result
+
+The May 13 runtime OPRA capture plan does not overlap the offline replay contracts.
+
+- Replay rows diagnosed: `38,746`
+- Replay contracts diagnosed: `5,389`
+- May 13 capture-plan contracts: `169`
+- Exact replay contracts present in capture plan: `0`
+- Capture-plan overlap status: `no_exact_replay_contract_overlap`
+- Root-cause hint: `historical_or_offline_replay_contracts_not_in_runtime_opra_capture_plan`
+- Strict quote-backed replay rows: `0`
+- Quote-backed survivor candidates after widened review audit: `0`
+- Optimizer status: `skipped_no_quote_backed_survivors`
+
+This wave produced useful bear/choppy research candidates, but none may feed tomorrow's optimizer or paper runner until historical OPRA/SIP quote sidecars are available for the replay decision dates/contracts.
 
 ## Follow-Up Commands
 
@@ -54,7 +74,7 @@ python scripts/build_research_promotion_review_packet.py `
   --max-review-candidates 20
 ```
 
-After strict aggregation, run the quote-gap diagnostic and evidence repair sweep with the May 13 exact runtime-leg sidecar. Do not feed the optimizer from this wave unless `quote_backed_survivor_count > 0`.
+After strict aggregation, run the quote-gap diagnostic and evidence repair sweep with a sidecar that covers the replay contract/date universe. Do not feed the optimizer from this wave unless `quote_backed_survivor_count > 0`.
 
 ```powershell
 python scripts/diagnose_quote_sidecar_gaps.py `
@@ -74,3 +94,9 @@ python scripts/run_quote_backed_evidence_repair_sweep.py `
 ```
 
 If candidates survive the evidence repair gate, use `quote_backed_survivor_report.json` as the only projection/optimizer input for tomorrow's candidate comparison.
+
+Current evidence outputs:
+
+- `reports/gcp_research/bear_choppy_quote_backed_offline_20260513T1255ET/aggregate/quote_gap_diagnostic_capture_plan/quote_gap_diagnostic_summary.json`
+- `reports/gcp_research/bear_choppy_quote_backed_offline_20260513T1255ET/aggregate/evidence_repair_capture_plan_no_overlap_max50/evidence_repair_sweep_summary.json`
+- `reports/gcp_research/bear_choppy_quote_backed_offline_20260513T1255ET/aggregate/evidence_repair_capture_plan_no_overlap_max50/quote_backed_survivor_report.json`

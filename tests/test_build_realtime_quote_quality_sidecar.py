@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -165,3 +167,55 @@ def test_build_realtime_quote_quality_sidecar_filters_exact_option_symbols(tmp_p
     assert summary["stats"]["option_symbol_filter"] == ["QQQ260515C00450000"]
     quotes = pd.read_csv(tmp_path / "out_exact_symbols" / "option_quote_sidecar.csv")
     assert quotes["option_symbol"].tolist() == ["QQQ260515C00450000"]
+
+
+def test_build_realtime_quote_quality_sidecar_cli_filters_option_symbols_file(tmp_path: Path) -> None:
+    events = tmp_path / "events.jsonl"
+    _write_events(
+        events,
+        [
+            {
+                "event_type": "option_quote",
+                "observed_at_utc": "2026-05-13T14:30:00.250000+00:00",
+                "payload": {
+                    "symbol": "QQQ260515C00450000",
+                    "timestamp": "2026-05-13T14:30:00+00:00",
+                    "bid_price": 1.00,
+                    "ask_price": 1.04,
+                },
+            },
+            {
+                "event_type": "option_quote",
+                "observed_at_utc": "2026-05-13T14:30:00.250000+00:00",
+                "payload": {
+                    "symbol": "SPY260515P00500000",
+                    "timestamp": "2026-05-13T14:30:00+00:00",
+                    "bid_price": 1.10,
+                    "ask_price": 1.14,
+                },
+            },
+        ],
+    )
+    symbols_file = tmp_path / "symbols.txt"
+    symbols_file.write_text("spy260515p00500000\n", encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/build_realtime_quote_quality_sidecar.py",
+            "--events-jsonl",
+            str(events),
+            "--output-dir",
+            str(tmp_path / "out_symbols_file"),
+            "--option-symbols-file",
+            str(symbols_file),
+        ],
+        check=True,
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+    )
+
+    assert "SPY260515P00500000" in completed.stdout
+    quotes = pd.read_csv(tmp_path / "out_symbols_file" / "option_quote_sidecar.csv")
+    assert quotes["option_symbol"].tolist() == ["SPY260515P00500000"]

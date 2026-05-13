@@ -144,7 +144,7 @@ def test_apply_quote_sidecar_computes_side_aware_multileg_quote_backed_pnl(
         [
             {
                 "candidate_variant_id": "qqq_credit_spread",
-                "contract_symbol": f"{short_call};{long_call}",
+                "contract_symbol": short_call,
                 "stock_entry_time": "2026-05-13T14:30:15+00:00",
                 "stock_exit_time": "2026-05-13T14:45:00+00:00",
                 "quantity": 2,
@@ -199,6 +199,8 @@ def test_apply_quote_sidecar_computes_side_aware_multileg_quote_backed_pnl(
     assert summary["quote_backed_replay_status_counts"] == {"quote_backed_replay": 1}
     enriched = pd.read_csv(tmp_path / "out" / "option_aware_trade_economics.csv")
     row = enriched.iloc[0]
+    assert row["entry_quote_sidecar_leg_count"] == 2
+    assert row["entry_legs_with_bid_ask"] == 2
     assert row["quote_backed_replay_status"] == "quote_backed_replay"
     assert row["quote_backed_entry_debit_per_unit"] == -110.0
     assert row["quote_backed_exit_value_per_unit"] == -80.0
