@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 from bisect import bisect_right
 from collections import Counter
 from dataclasses import dataclass
@@ -10,6 +11,9 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+
+
+OCC_SYMBOL_RE = re.compile(r"^([A-Z]{1,6})(\d{6})([CP])(\d{8})$")
 
 
 def parse_args() -> argparse.Namespace:
@@ -60,6 +64,15 @@ def _clean_symbol(value: Any) -> str:
     return str(value).strip().upper()
 
 
+def _compact_symbol(value: Any) -> str:
+    return re.sub(r"[^A-Z0-9]", "", _clean_symbol(value))
+
+
+def _occ_underlying(symbol: str) -> str:
+    match = OCC_SYMBOL_RE.match(_compact_symbol(symbol))
+    return match.group(1) if match else ""
+
+
 def _safe_float(value: Any) -> float | None:
     try:
         parsed = float(value)
@@ -100,6 +113,88 @@ def _build_quote_index(quotes: pd.DataFrame) -> dict[str, QuoteIndex]:
         group = group.reset_index(drop=True)
         output[str(symbol)] = QuoteIndex(frame=group, times=list(group["_event_ts"]))
     return output
+
+
+def _sidecar_symbol_column(quotes: pd.DataFrame) -> str | None:
+    if "option_symbol" in quotes.columns:
+        return "option_symbol"
+    if "symbol" in quotes.columns:
+        return "symbol"
+    return None
+
+
+def _coverage_diagnostics(manifest: pd.DataFrame, quotes: pd.DataFrame) -> dict[str, Any]:
+    manifest_frame = manifest.copy()
+    manifest_frame["_contract"] = manifest_frame["contract_symbol"].map(_clean_symbol)
+    manifest_frame["_decision_ts"] = pd.to_datetime(manifest_frame["decision_time_utc"], utc=True, errors="coerce")
+    manifest_frame["_date"] = manifest_frame["_decision_ts"].dt.date.astype(str)
+    manifest_contracts = set(manifest_frame["_contract"])
+    manifest_dates = set(manifest_frame["_date"])
+    manifest_contract_dates = set(zip(manifest_frame["_contract"], manifest_frame["_date"]))
+    manifest_underlying_dates = set(
+        zip(manifest_frame["underlying"].map(_clean_symbol), manifest_frame["_date"])
+    )
+
+    quote_symbol_column = _sidecar_symbol_column(quotes)
+    if quotes.empty or quote_symbol_column is None or "event_time_utc" not in quotes.columns:
+        return {
+            "manifest_contract_count": int(len(manifest_contracts)),
+            "manifest_trade_date_count": int(len(manifest_dates)),
+            "manifest_contract_date_count": int(len(manifest_contract_dates)),
+            "sidecar_time_min_utc": "",
+            "sidecar_time_max_utc": "",
+            "sidecar_trade_date_count": 0,
+            "sidecar_underlying_count": 0,
+            "contract_overlap_count": 0,
+            "trade_date_overlap_count": 0,
+            "contract_date_overlap_count": 0,
+            "underlying_date_overlap_count": 0,
+            "likely_gap_category": "empty_or_invalid_sidecar",
+        }
+
+    quote_frame = quotes[[quote_symbol_column, "event_time_utc"]].copy()
+    quote_frame["_contract"] = quote_frame[quote_symbol_column].map(_clean_symbol)
+    quote_frame["_event_ts"] = pd.to_datetime(quote_frame["event_time_utc"], utc=True, errors="coerce")
+    quote_frame = quote_frame.dropna(subset=["_event_ts"])
+    quote_frame = quote_frame[quote_frame["_contract"] != ""]
+    quote_frame["_date"] = quote_frame["_event_ts"].dt.date.astype(str)
+    quote_frame["_underlying"] = quote_frame["_contract"].map(_occ_underlying)
+    sidecar_contracts = set(quote_frame["_contract"])
+    sidecar_dates = set(quote_frame["_date"])
+    sidecar_contract_dates = set(zip(quote_frame["_contract"], quote_frame["_date"]))
+    sidecar_underlying_dates = set(zip(quote_frame["_underlying"], quote_frame["_date"]))
+
+    contract_overlap = manifest_contracts & sidecar_contracts
+    date_overlap = manifest_dates & sidecar_dates
+    contract_date_overlap = manifest_contract_dates & sidecar_contract_dates
+    underlying_date_overlap = manifest_underlying_dates & sidecar_underlying_dates
+    if not sidecar_contracts:
+        likely_gap_category = "empty_or_invalid_sidecar"
+    elif not contract_overlap and not date_overlap:
+        likely_gap_category = "wrong_contract_set_and_date_range"
+    elif not date_overlap:
+        likely_gap_category = "wrong_date_range"
+    elif not contract_overlap:
+        likely_gap_category = "wrong_contract_set"
+    elif not contract_date_overlap:
+        likely_gap_category = "wrong_contract_dates"
+    else:
+        likely_gap_category = "event_time_or_quote_quality_gap"
+
+    return {
+        "manifest_contract_count": int(len(manifest_contracts)),
+        "manifest_trade_date_count": int(len(manifest_dates)),
+        "manifest_contract_date_count": int(len(manifest_contract_dates)),
+        "sidecar_time_min_utc": _iso(quote_frame["_event_ts"].min()) if not quote_frame.empty else "",
+        "sidecar_time_max_utc": _iso(quote_frame["_event_ts"].max()) if not quote_frame.empty else "",
+        "sidecar_trade_date_count": int(len(sidecar_dates)),
+        "sidecar_underlying_count": int(len({value for value in quote_frame["_underlying"] if value})),
+        "contract_overlap_count": int(len(contract_overlap)),
+        "trade_date_overlap_count": int(len(date_overlap)),
+        "contract_date_overlap_count": int(len(contract_date_overlap)),
+        "underlying_date_overlap_count": int(len(underlying_date_overlap)),
+        "likely_gap_category": likely_gap_category,
+    }
 
 
 def _quote_prices(quote: pd.Series) -> tuple[float | None, float | None]:
@@ -208,6 +303,7 @@ def audit_quote_manifest_backfill(
 
     quotes = _load_quotes(quote_sidecar_csv)
     quote_index = _build_quote_index(quotes)
+    diagnostics = _coverage_diagnostics(manifest, quotes)
     audit_rows = [
         _audit_row(
             row,
@@ -253,6 +349,7 @@ def audit_quote_manifest_backfill(
         "audit_status_counts": dict(sorted(status_counts.items())),
         "underlying_counts": dict(sorted(symbol_counts.items())),
         "family_counts": dict(sorted(family_counts.items())),
+        "coverage_diagnostics": diagnostics,
     }
     summary_json = output_dir / "quote_manifest_backfill_audit_summary.json"
     summary_json.write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")

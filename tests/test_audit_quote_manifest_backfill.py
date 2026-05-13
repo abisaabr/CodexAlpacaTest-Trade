@@ -88,6 +88,9 @@ def test_audit_quote_manifest_backfill_requires_fresh_valid_bid_ask(tmp_path: Pa
         "quote_backed_event": 1,
         "wide_spread": 1,
     }
+    assert summary["coverage_diagnostics"]["contract_overlap_count"] == 2
+    assert summary["coverage_diagnostics"]["contract_date_overlap_count"] == 2
+    assert summary["coverage_diagnostics"]["likely_gap_category"] == "event_time_or_quote_quality_gap"
 
     rows = pd.read_csv(tmp_path / "out" / "quote_manifest_backfill_audit_rows.csv")
     covered = rows[rows["audit_status"] == "quote_backed_event"].iloc[0]
