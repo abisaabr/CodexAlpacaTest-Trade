@@ -57,6 +57,11 @@ def test_build_paper_session_quote_evidence_report_counts_entry_exit_fields(tmp_
 
     assert summary["status"] == "paper_session_quote_evidence_complete"
     assert summary["evidence_status"] == "complete_entry_exit_quote_fields"
+    assert summary["session_quote_field_gate"] == "pass"
+    assert summary["sidecar_quote_evidence_required"] is True
+    assert summary["quote_backed_projection_input_allowed"] is False
+    assert summary["quote_backed_optimizer_input_allowed"] is False
+    assert summary["quote_backed_promotion_input_allowed"] is False
     assert summary["entry_bid_ask_coverage_pct"] == 100.0
     assert summary["completed_exit_quote_time_coverage_pct"] == 100.0
     assert summary["broker_facing"] is False
@@ -105,5 +110,7 @@ def test_build_paper_session_quote_evidence_report_flags_missing_exit_fields(tmp
     )
 
     assert summary["evidence_status"] == "quote_field_gaps_present"
+    assert summary["session_quote_field_gate"] == "fail"
+    assert summary["quote_backed_optimizer_input_allowed"] is False
     assert summary["entry_bid_ask_coverage_pct"] == 100.0
     assert summary["completed_exit_bid_ask_coverage_pct"] == 0.0

@@ -261,6 +261,7 @@ def build_sidecar_coverage(
         and row["entry_has_session_quote_time"]
         and row["exit_has_session_quote_time"]
     )
+    evidence_complete = leg_count > 0 and complete_legs == leg_count
     summary = {
         "status": "paper_trade_quote_sidecar_coverage_complete",
         "generated_at_utc": datetime.now(UTC).isoformat(),
@@ -280,8 +281,17 @@ def build_sidecar_coverage(
         "complete_quote_backed_leg_pct": _pct(complete_legs, leg_count),
         "evidence_status": (
             "complete_session_and_sidecar_quote_evidence"
-            if leg_count > 0 and complete_legs == leg_count
+            if evidence_complete
             else "quote_sidecar_gaps_present"
+        ),
+        "quote_backed_evidence_gate": "pass" if evidence_complete else "fail",
+        "quote_backed_projection_input_allowed": evidence_complete,
+        "quote_backed_optimizer_input_allowed": evidence_complete,
+        "quote_backed_promotion_input_allowed": evidence_complete,
+        "gate_policy": (
+            "Completed PAPER trades may feed projection/optimizer/promotion only when every "
+            "completed leg has entry and exit session quote fields plus raw OPRA sidecar quotes "
+            "inside the configured time window."
         ),
         "rows": detailed_rows,
         "broker_facing": False,

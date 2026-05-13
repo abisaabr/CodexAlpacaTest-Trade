@@ -17,6 +17,7 @@
 - Logged the early QQQ quote-sidecar gap: the first two completed stop-outs cannot be used for quote-backed optimizer evidence because exact OPRA capture started after the entry/exit timestamps.
 - Added neighbor-prioritized OPRA subscription buffering, runtime-selected leg lineage files, dynamic no-submit runtime-leg refresh, and per-line JSONL flushing for quote evidence.
 - Patched multi-leg cleanup fallback exits to persist per-leg exit quote fields when a normal broker exit is not filled and the cleanup path completes the trade.
+- Added explicit `quote_backed_*_input_allowed` gates to session quote-field and raw OPRA sidecar coverage reports so incomplete evidence cannot be accidentally consumed by projection, optimizer, or promotion steps.
 
 ## Data: 5 High-Impact Changes
 

@@ -203,6 +203,16 @@ def build_paper_session_quote_evidence_report(
         "completed_exit_spread_count": exit_spread,
         "completed_exit_spread_coverage_pct": _pct(exit_spread, completed_leg_count),
         "evidence_status": "complete_entry_exit_quote_fields" if evidence_complete else "quote_field_gaps_present",
+        "session_quote_field_gate": "pass" if evidence_complete else "fail",
+        "sidecar_quote_evidence_required": True,
+        "quote_backed_projection_input_allowed": False,
+        "quote_backed_optimizer_input_allowed": False,
+        "quote_backed_promotion_input_allowed": False,
+        "gate_policy": (
+            "This report validates session quote fields only. Projection, optimizer, and "
+            "promotion inputs remain blocked until raw OPRA sidecar coverage also passes "
+            "with complete_session_and_sidecar_quote_evidence."
+        ),
         "broker_facing": False,
         "paper_runner_state_changed": False,
         "live_manifest_effect": "none",

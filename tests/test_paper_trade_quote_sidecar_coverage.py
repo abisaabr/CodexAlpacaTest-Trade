@@ -73,6 +73,10 @@ def test_build_sidecar_coverage_matches_completed_trade_entry_and_exit(tmp_path)
     assert summary["exit_sidecar_coverage_pct"] == 100.0
     assert summary["complete_quote_backed_leg_pct"] == 100.0
     assert summary["evidence_status"] == "complete_session_and_sidecar_quote_evidence"
+    assert summary["quote_backed_evidence_gate"] == "pass"
+    assert summary["quote_backed_projection_input_allowed"] is True
+    assert summary["quote_backed_optimizer_input_allowed"] is True
+    assert summary["quote_backed_promotion_input_allowed"] is True
 
 
 def test_build_sidecar_coverage_fails_closed_when_sidecar_event_is_missing(tmp_path) -> None:
@@ -113,3 +117,7 @@ def test_build_sidecar_coverage_fails_closed_when_sidecar_event_is_missing(tmp_p
     assert summary["completed_leg_count"] == 1
     assert summary["complete_quote_backed_leg_pct"] == 0.0
     assert summary["evidence_status"] == "quote_sidecar_gaps_present"
+    assert summary["quote_backed_evidence_gate"] == "fail"
+    assert summary["quote_backed_projection_input_allowed"] is False
+    assert summary["quote_backed_optimizer_input_allowed"] is False
+    assert summary["quote_backed_promotion_input_allowed"] is False

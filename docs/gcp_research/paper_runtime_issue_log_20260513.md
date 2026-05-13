@@ -65,3 +65,12 @@
 - Patched the multi-leg cleanup fallback so forced cleanup exits preserve exit bid/ask/mark/quote-time/spread/freshness fields from the current option chain.
 - This addresses the AMD cleanup path where one completed stop-out had missing exit quote fields even though the normal `_run_exit` path enriches quote evidence.
 - Follow-up: rerun EOD completed-trade quote evidence report and verify any future cleanup exits include per-leg exit quote fields before using them in quote-backed projections.
+
+## 2026-05-13 11:10 ET - Quote Evidence Gates Are Explicit
+
+- Added explicit gate fields to the PAPER session quote-field report and raw OPRA sidecar coverage report: `quote_backed_projection_input_allowed`, `quote_backed_optimizer_input_allowed`, and `quote_backed_promotion_input_allowed`.
+- Current May 13 completed trades remain blocked from quote-backed projection/optimizer input: session quote-field gate is `fail` because only `12/16` completed legs have exit fields, and raw OPRA sidecar gate is `fail` with `0/16` complete quote-backed legs.
+- Output reports:
+  - `D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260513\2026-05-13\paper_session_quote_evidence_2026-05-13.json`
+  - `D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260513\paper_trade_quote_sidecar_coverage_dynamic_20260513.json`
+- Follow-up: only future trades with pre-entry runtime-leg capture plus complete exit quote persistence should be eligible for quote-backed optimizer input.
