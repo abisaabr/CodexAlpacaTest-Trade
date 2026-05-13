@@ -86,8 +86,14 @@ function Invoke-Gcloud {
 
 function Test-GcsObject {
     param([string]$Uri)
-    & gcloud storage ls $Uri --project $Project *> $null
-    return ($LASTEXITCODE -eq 0)
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & gcloud storage ls $Uri --project $Project *> $null
+        return ($LASTEXITCODE -eq 0)
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
 }
 
 function Invoke-GcloudCreateInstance {
