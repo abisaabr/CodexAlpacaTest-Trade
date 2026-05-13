@@ -35,6 +35,7 @@ The installed Alpaca SDK exposes historical option bars/trades and latest option
 ## Implemented Repair Tools
 
 - `scripts/diagnose_quote_sidecar_gaps.py` classifies quote-sidecar misses by date coverage, contract coverage, and quote-age/as-of availability.
+- `scripts/build_quote_acquisition_manifest.py` converts replay trade economics into exact OPRA acquisition requirements by contract, trade date, entry/exit decision time, requested quote window, strategy family, and sidecar coverage status.
 - `scripts/run_multi_ticker_realtime_shadow_monitor.py` now supports `--underlying` and `--extra-option-symbols-file` so no-submit OPRA/SIP shadow capture can target the exact runtime/review universe.
 - `alpaca_lab/multi_ticker_portfolio/realtime_shadow.py` now preserves forced option symbols ahead of the normal symbol cap, which prevents targeted repair contracts from being truncated out of the websocket subscription.
 
@@ -69,3 +70,49 @@ The QQQ/SPY/IWM c097-c120 GCP tranche for `choppy_non_single_train_test_refine_2
 - Strict `$200/day` and relaxed `$25/day` constrained optimizers both selected `0` candidates.
 
 Decision: do not add the c001-c120 choppy candidates to the paper runner without matching-date OPRA/SIP sidecars and a positive quote-backed train/test projection.
+
+## QQQ Acquisition Manifest
+
+The QQQ replay gap was converted from a diagnosis into an actionable acquisition manifest:
+
+- Local: `reports/gcp_research/evidence_repair_sweep_20260513/qqq_quote_acquisition_manifest_20260513Tlocal/`
+- GCS: `gs://codexalpaca-control-us/gcp_research/evidence_repair_sweep_20260513/qqq_quote_acquisition_manifest_20260513Tlocal/`
+- Trade-economics CSVs scanned: `60`
+- Input trade rows scanned: `134846`
+- Missing OPRA leg events requested: `148788`
+- Unique QQQ contract/date pairs: `455`
+- QQQ trade dates needing OPRA coverage: `120`
+- Replay quote source count: `option_bar_close_no_bid_ask=148788`
+- Sidecar coverage status: `trade_date_not_in_sidecar=148788`
+- Families represented: `debit_call_vertical=59592`, `broken_wing_call_butterfly=89196`
+
+This manifest is the practical QQQ repair artifact. It lists the exact contract/date/window records needed for historical OPRA quote backfill or for validating same-day forward capture. Until those windows are filled with matching OPRA/SIP quotes, QQQ replay results remain proxy-priced and should not be treated as quote-backed.
+
+## Choppy c001-c144 Result
+
+The QQQ/SPY/IWM c121-c144 GCP tranche completed, was synced, aggregated into c001-c144, mirrored, and cleaned up. It did not add new eligible QQQ/SPY/IWM candidates.
+
+- GCS aggregate: `gs://codexalpaca-control-us/research_results/choppy_non_single_train_test_refine_20260512T1925ET/aggregate_c001_144/`
+- Candidate count: `1656`
+- Eligible governed-review candidates: `4`
+- Eligible candidates remained the prior TSM choppy debit-call-vertical set from c001-c024.
+- QQQ/SPY/IWM quote-gap diagnostic: `108592` diagnosed trade rows, `1554` replay contracts, `0` replay contracts present in the 2026-05-07 sidecar, and every entry/exit miss was `trade_date_not_in_sidecar`.
+- QQQ/SPY/IWM acquisition manifest: `542928` missing OPRA leg events across `1554` contract/date pairs; all currently replay from `option_bar_close_no_bid_ask`.
+- Quote-lineage audit: `2` current capital-plan rows matched replay lineage, but both are still `quote_quality_gap`.
+- Hardened quote-cost/fill-haircut projection: ending equity stayed near `$4941.71` from `$25000`, with train/test optimizer selecting `0` candidates.
+- Strict `$200/day` and relaxed `$25/day` constrained optimizers both selected `0` candidates.
+
+Decision: do not add the c001-c144 choppy candidates to the paper runner without matching-date OPRA/SIP sidecars and a positive quote-backed train/test projection.
+
+## Active Follow-On Discovery
+
+After c001-c144 cleanup, a non-overlapping research-only c145-c168 tranche was launched for QQQ, SPY, and IWM under the same wave with suffix `20260513bc6g`.
+
+- Expected workers: `qqq-rescue-c145-168-20260513bc6g`, `spy-rescue-c145-168-20260513bc6g`, `iwm-rescue-c145-168-20260513bc6g`
+- Scope: QQQ/SPY/IWM choppy non-single-leg discovery only.
+- Broker-facing: `false`
+- Paper orders: `false`
+- Live manifest effect: `none`
+- Risk policy effect: `none`
+
+These workers can find additional research candidates, but they do not repair quote-backed evidence by themselves. Any candidate from this tranche still requires matching-date OPRA/SIP sidecars before paper-runner activation.
