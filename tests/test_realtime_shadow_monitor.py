@@ -117,6 +117,8 @@ def test_shadow_plan_serializes_subscription_scope() -> None:
     assert payload["trade_date"] == "2026-05-06"
     assert payload["underlyings"] == ["QQQ", "SPY"]
     assert payload["option_symbols"] == ["QQQ260507C00400000"]
+    assert payload["forced_option_symbols"] == []
+    assert payload["missing_forced_option_symbols"] == []
     assert payload["source"] == "rest_bootstrap_for_realtime_shadow"
 
 

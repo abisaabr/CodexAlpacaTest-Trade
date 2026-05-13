@@ -30,6 +30,8 @@ class RealtimeShadowPlan:
     option_feed: str
     option_symbol_limit: int
     generated_at_utc: str
+    forced_option_symbols: list[str] = field(default_factory=list)
+    missing_forced_option_symbols: list[str] = field(default_factory=list)
     source: str = "rest_bootstrap_for_realtime_shadow"
     notes: list[str] = field(default_factory=list)
 
@@ -497,12 +499,23 @@ class RealtimeShadowMonitor:
             max_option_symbols=self.max_option_symbols,
         )
         notes.extend(merge_notes)
+        selected_option_set = set(unique_options)
+        missing_forced_symbols = [
+            symbol for symbol in extra_symbols if symbol not in selected_option_set
+        ]
+        if missing_forced_symbols:
+            notes.append(
+                "missing forced option symbols after subscription merge: "
+                f"{len(missing_forced_symbols)}"
+            )
         if session_trade_symbols:
             notes.append(f"forced session trade leg symbols into capture plan: {len(session_trade_symbols)}")
         return RealtimeShadowPlan(
             trade_date=trade_date.isoformat(),
             underlyings=selected_underlyings,
             option_symbols=unique_options,
+            forced_option_symbols=extra_symbols,
+            missing_forced_option_symbols=missing_forced_symbols,
             stock_feed=(
                 self.portfolio_config.execution.stock_feed or self.settings.alpaca_data_feed
             ),
