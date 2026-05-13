@@ -40,3 +40,12 @@
 - Primary cause: the exact runtime-leg OPRA shadow stream began after the QQQ entry/exit quote timestamps. One selected short leg, `QQQ260514P00709000`, was also not present in the initial forced-symbol file, so the sidecar is not complete enough for quote-backed optimizer use.
 - Output: `D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260513\paper_trade_quote_sidecar_coverage_20260513_current.json`.
 - Follow-up: start exact runtime-leg quote capture before order submission on future sessions and require `complete_session_and_sidecar_quote_evidence` before using completed PAPER trades in projections or promotion decisions.
+
+## 2026-05-13 10:15 ET - AMD Bear Butterfly Stop-Outs And Broker Flat
+
+- Health snapshot found exactly one broker-facing PAPER trader, exactly one no-submit quote shadow, PAPER-only runtime, fresh lease/session, zero broker orders, and zero broker positions.
+- Session advanced to `4` completed trades and `0` open trades. The two new completed trades were AMD bear broken-wing put butterfly stop-outs with net PnL `-195.40` and `-215.40`; cumulative completed-trade PnL is `-467.20`.
+- Exact runtime-leg quote capture is healthy: 55 OPRA symbols, option quote p50/p90/p99 about `0.34s/0.77s/1.04s`, no stale capture.
+- Sidecar audit still fails closed: `0/16` completed legs have complete raw OPRA sidecar coverage. The AMD symbols were not in the forced OPRA sidecar universe, and one AMD stop-out is missing exit quote fields in session state.
+- Output: `D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260513\paper_trade_quote_sidecar_coverage_20260513_heartbeat.json`.
+- Follow-up: include any runtime-selected legs for newly triggered symbols in quote capture before orders can fire, and investigate why one completed AMD stop-out missed exit quote field persistence.
