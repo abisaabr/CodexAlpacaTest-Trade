@@ -4,7 +4,7 @@ import argparse
 import csv
 import json
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -63,11 +63,12 @@ def _counter_payload(counter: Counter[str]) -> dict[str, int]:
     return {key: int(value) for key, value in sorted(counter.items())}
 
 
-def main() -> None:
-    args = parse_args()
-    settings = load_settings(config_file=args.config)
-    configure_logging(settings.log_level)
-    portfolio_config = load_portfolio_config(args.portfolio_config)
+def build_runtime_leg_quote_capture_rows(
+    settings: Any,
+    portfolio_config: Any,
+) -> tuple[date, list[dict[str, Any]], list[dict[str, str]]]:
+    """Return current runtime-selected option legs for targeted OPRA capture."""
+
     trader = MultiTickerPortfolioPaperTrader(
         settings,
         portfolio_config,
@@ -147,6 +148,15 @@ def main() -> None:
                         "quote_time": leg.quote_time,
                     }
                 )
+    return trade_date, rows, errors
+
+
+def main() -> None:
+    args = parse_args()
+    settings = load_settings(config_file=args.config)
+    configure_logging(settings.log_level)
+    portfolio_config = load_portfolio_config(args.portfolio_config)
+    trade_date, rows, errors = build_runtime_leg_quote_capture_rows(settings, portfolio_config)
 
     output_dir = (
         Path(args.output_dir)

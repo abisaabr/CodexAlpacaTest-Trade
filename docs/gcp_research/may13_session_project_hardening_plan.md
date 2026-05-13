@@ -7,6 +7,14 @@
 - Active quote capture is no-submit and narrowed to exact runtime-selected OPRA legs.
 - Do not pause or restart the PAPER trader during RTH unless there is a safety defect, stale lease, duplicate process, or broker reconciliation failure.
 
+## Completed During May 13 RTH Hardening
+
+- Added built-in runtime-selected leg quote-capture mode to `scripts/run_multi_ticker_realtime_shadow_monitor.py` via `--runtime-selected-leg-symbols` and `--runtime-selected-leg-symbols-only`.
+- Added `scripts/build_multi_ticker_session_health_snapshot.py` for broker-safe health snapshots covering process uniqueness, PAPER-only lock, ownership lease, session state, broker orders/positions, quote-capture latency, and EOD flatten readiness.
+- Added `scripts/build_paper_trade_quote_sidecar_coverage.py` to fail-closed completed PAPER trade evidence unless every completed leg has session quote fields and raw OPRA websocket sidecar coverage at entry and exit.
+- Validated the new runtime-leg shadow mode in plan-only mode. It selected `55` unique option symbols from `415` runtime-selected legs without opening a websocket or touching orders.
+- Logged the early QQQ quote-sidecar gap: the first two completed stop-outs cannot be used for quote-backed optimizer evidence because exact OPRA capture started after the entry/exit timestamps.
+
 ## Data: 5 High-Impact Changes
 
 1. Start each session with exact runtime-leg OPRA capture, not broad chain capture.
@@ -46,6 +54,42 @@
 3. Log material trades, stop-outs, order failures, stale quotes, and broker mismatches.
 4. After RTH, build sidecars, postmortem, quote evidence report, and replay diagnostics.
 5. Only after postmortem, decide whether to restart tomorrow from local or GCP.
+
+## Multi-Agent Multi-Phase Execution Plan
+
+### Phase 1: RTH Safety And Evidence Capture
+
+- Agent A: Monitor PAPER-only process count, ownership lease, session freshness, broker orders/positions, and EOD flatten readiness with the health snapshot tool.
+- Agent B: Monitor exact runtime-leg quote-capture latency and spread quality; do not launch additional Alpaca websocket streams during RTH because the account has already hit websocket connection limits.
+- Agent C: Track material trade events and run sidecar coverage audits on completed trades. Completed trades without raw OPRA sidecar coverage are excluded from projection/promotion input.
+
+### Phase 2: Data And Backtester Hardening
+
+- Build post-session quote sidecars from the exact runtime-leg capture and apply them to completed PAPER trade economics.
+- Repair unmatched strategy replay lineage before any optimizer run; fail closed if a paper strategy cannot map to replay evidence.
+- Add quote-age, spread, and fill-probability stress buckets to candidate economics before train/test comparison.
+- Use GCP only for offline replay/backtest shards during RTH; defer any GCP websocket latency canary until after the local stream is stopped or websocket capacity is confirmed.
+
+### Phase 3: Promoter And Optimizer Hardening
+
+- Require quote-backed replay status before adding any new strategy to a paper manifest.
+- Produce portfolio tiers: unconstrained, current-risk, strict-institutional, drawdown-minimized, and `$200/day target relaxed-but-controlled`.
+- Enforce diversification constraints across symbols, regimes, and families so one ticker or one family cannot dominate projected PnL.
+- Compare all new candidates against `tt_top2_bull_choppy_up` and the current paper-runner risk profile before considering paper activation.
+
+### Phase 4: Trader Hardening
+
+- Use `--runtime-selected-leg-symbols-only` at launch so exact OPRA capture starts before order submission.
+- Add launch-controller unique output paths to avoid the May 13 preflight redirection race.
+- Add cooldown logic for repeated same-symbol/same-family stop-outs after postmortem confirms this is not expected behavior.
+- Persist every order decision with selected strategy, selected legs, quote time, spread, freshness, fill attempt, and broker order id.
+
+### Phase 5: GCP Parallel Work
+
+- During RTH: run only broker-free offline replay/backtest workers on GCP.
+- After RTH: run one local-vs-GCP no-submit latency canary at a time with exact runtime legs only; no stock quote flood, no option trades, and no trade-update stream.
+- Use `-PrepareOnly` and `scripts/audit_gcp_paper_runtime_safety.py` before launching any GCP worker that touches market data or strategy configs.
+- Mirror durable artifacts to `gs://codexalpaca-control-us/` and keep raw large sidecars on `D:` unless needed for GCS replay.
 
 ## Restart Criteria
 

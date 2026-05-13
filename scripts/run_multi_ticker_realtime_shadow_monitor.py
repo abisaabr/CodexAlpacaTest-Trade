@@ -61,6 +61,22 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--runtime-selected-leg-symbols",
+        action="store_true",
+        help=(
+            "Force the current option legs selected by the portfolio runner into the "
+            "OPRA subscription plan."
+        ),
+    )
+    parser.add_argument(
+        "--runtime-selected-leg-symbols-only",
+        action="store_true",
+        help=(
+            "Subscribe only to the current runtime-selected option legs. This is the "
+            "lowest-latency quote-evidence mode for the active paper strategy set."
+        ),
+    )
+    parser.add_argument(
         "--duration-seconds",
         type=int,
         default=300,
@@ -120,6 +136,35 @@ def main() -> None:
     configure_logging(settings.log_level)
     portfolio_config = load_portfolio_config(args.portfolio_config)
     extra_option_symbols = _load_extra_option_symbols(args.extra_option_symbols_file)
+    runtime_leg_rows: list[dict[str, object]] = []
+    runtime_leg_errors: list[dict[str, str]] = []
+    if args.runtime_selected_leg_symbols or args.runtime_selected_leg_symbols_only:
+        from scripts.build_runtime_leg_quote_capture_symbols import (
+            build_runtime_leg_quote_capture_rows,
+        )
+
+        _trade_date, runtime_leg_rows, runtime_leg_errors = build_runtime_leg_quote_capture_rows(
+            settings,
+            portfolio_config,
+        )
+        requested_underlyings = {str(symbol).strip().upper() for symbol in args.underlying}
+        if requested_underlyings:
+            runtime_leg_rows = [
+                row
+                for row in runtime_leg_rows
+                if str(row.get("underlying_symbol") or "").strip().upper()
+                in requested_underlyings
+            ]
+        runtime_symbols = sorted(
+            {
+                str(row.get("option_symbol") or "").strip().upper()
+                for row in runtime_leg_rows
+                if str(row.get("option_symbol") or "").strip()
+            }
+        )
+        extra_option_symbols = sorted(set(extra_option_symbols).union(runtime_symbols))
+        if args.runtime_selected_leg_symbols_only:
+            args.max_option_symbols = len(extra_option_symbols)
     monitor = RealtimeShadowMonitor(
         settings,
         portfolio_config,
@@ -149,6 +194,9 @@ def main() -> None:
                 "underlying_count": len(plan.underlyings),
                 "option_symbol_count": len(plan.option_symbols),
                 "extra_option_symbol_count": len(extra_option_symbols),
+                "runtime_selected_leg_row_count": len(runtime_leg_rows),
+                "runtime_selected_leg_error_count": len(runtime_leg_errors),
+                "runtime_selected_leg_symbols_only": bool(args.runtime_selected_leg_symbols_only),
                 "stock_feed": plan.stock_feed,
                 "option_feed": plan.option_feed,
                 "stream_requested": bool(args.stream),

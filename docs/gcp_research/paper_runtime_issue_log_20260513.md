@@ -33,3 +33,10 @@
 
 - `scripts/run_multi_ticker_health_check.py` was hardened to avoid crashing when the Windows scheduled task is missing and to detect manually launched system-Python PAPER trader processes.
 - Commit: `f4b466d Harden multi-ticker health check process detection`.
+
+## 2026-05-13 10:10 ET - Completed Trade Sidecar Evidence Gap
+
+- New completed-trade sidecar audit found the two early QQQ stop-outs have session-level entry/exit bid/ask and quote timestamps, but `0/8` completed legs have matching raw OPRA websocket sidecar quotes within five seconds.
+- Primary cause: the exact runtime-leg OPRA shadow stream began after the QQQ entry/exit quote timestamps. One selected short leg, `QQQ260514P00709000`, was also not present in the initial forced-symbol file, so the sidecar is not complete enough for quote-backed optimizer use.
+- Output: `D:\codexalpaca_runtime\runs\multi_symbol_governed_realtime_20260513\paper_trade_quote_sidecar_coverage_20260513_current.json`.
+- Follow-up: start exact runtime-leg quote capture before order submission on future sessions and require `complete_session_and_sidecar_quote_evidence` before using completed PAPER trades in projections or promotion decisions.
