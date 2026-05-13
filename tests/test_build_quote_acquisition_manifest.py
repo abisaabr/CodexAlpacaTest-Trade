@@ -92,6 +92,9 @@ def test_build_quote_acquisition_manifest_marks_missing_quote_windows(tmp_path: 
     }
 
     rows = pd.read_csv(tmp_path / "out" / "quote_acquisition_manifest.csv")
+    quote_manifest_rows = pd.read_csv(tmp_path / "out" / "quote_manifest.csv")
+    assert summary["quote_manifest_csv"].endswith("quote_manifest.csv")
+    pd.testing.assert_frame_equal(rows, quote_manifest_rows)
     assert set(rows["event_side"]) == {"entry", "exit"}
     assert set(rows["contract_symbol"]) == {
         "QQQ260515C00450000",

@@ -401,7 +401,9 @@ def build_quote_acquisition_manifest(
 
     event_frame = pd.DataFrame(events)
     manifest_csv = output_dir / "quote_acquisition_manifest.csv"
+    quote_manifest_csv = output_dir / "quote_manifest.csv"
     event_frame.to_csv(manifest_csv, index=False)
+    event_frame.to_csv(quote_manifest_csv, index=False)
     aggregate_paths = _write_aggregates(event_frame, output_dir)
 
     coverage_counts = Counter()
@@ -433,6 +435,7 @@ def build_quote_acquisition_manifest(
         "quote_sidecar_min_time_utc": _iso(sidecar.min_time) if sidecar else "",
         "quote_sidecar_max_time_utc": _iso(sidecar.max_time) if sidecar else "",
         "manifest_csv": str(manifest_csv),
+        "quote_manifest_csv": str(quote_manifest_csv),
         "coverage_status_counts": dict(sorted(coverage_counts.items())),
         "replay_quote_source_counts": dict(sorted(quote_source_counts.items())),
         "family_counts": dict(sorted(family_counts.items())),
