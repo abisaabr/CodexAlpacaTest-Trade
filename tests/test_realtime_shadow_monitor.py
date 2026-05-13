@@ -11,6 +11,7 @@ from alpaca_lab.multi_ticker_portfolio.realtime_shadow import (
     RealtimeShadowStats,
     data_feed_from_name,
     event_latency_seconds,
+    merge_option_subscription_symbols,
     option_feed_from_name,
 )
 
@@ -115,6 +116,26 @@ def test_shadow_plan_serializes_subscription_scope() -> None:
     assert payload["underlyings"] == ["QQQ", "SPY"]
     assert payload["option_symbols"] == ["QQQ260507C00400000"]
     assert payload["source"] == "rest_bootstrap_for_realtime_shadow"
+
+
+def test_merge_option_subscription_symbols_keeps_forced_symbols_first() -> None:
+    symbols, notes = merge_option_subscription_symbols(
+        discovered_symbols=[
+            "SPY260515C00600000",
+            "QQQ260515C00450000",
+            "IWM260515P00200000",
+        ],
+        extra_symbols=["QQQ260515P00440000", "QQQ260515C00450000"],
+        max_option_symbols=3,
+    )
+
+    assert symbols == [
+        "QQQ260515C00450000",
+        "QQQ260515P00440000",
+        "IWM260515P00200000",
+    ]
+    assert "forced extra option symbols into capture plan: 2" in notes
+    assert "truncated option subscriptions from 4 to 3" in notes
 
 
 def test_jsonl_event_writer_keeps_valid_lines_until_close(tmp_path) -> None:

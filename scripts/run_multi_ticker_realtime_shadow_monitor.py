@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 from pathlib import Path
 
@@ -42,6 +43,24 @@ def parse_args() -> argparse.Namespace:
         help="Maximum option contracts to subscribe to. Keep below Alpaca plan limits.",
     )
     parser.add_argument(
+        "--underlying",
+        action="append",
+        default=[],
+        help=(
+            "Optional underlying filter for targeted capture, e.g. --underlying QQQ. "
+            "May be supplied multiple times. Omit to use the full portfolio config."
+        ),
+    )
+    parser.add_argument(
+        "--extra-option-symbols-file",
+        action="append",
+        default=[],
+        help=(
+            "Optional text/CSV file of additional option symbols to force into the "
+            "subscription plan. CSV columns option_symbol or contract_symbol are supported."
+        ),
+    )
+    parser.add_argument(
         "--duration-seconds",
         type=int,
         default=300,
@@ -70,16 +89,44 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _load_extra_option_symbols(paths: list[str]) -> list[str]:
+    symbols: list[str] = []
+    for raw_path in paths:
+        path = Path(raw_path)
+        if not path.exists():
+            raise FileNotFoundError(f"extra option symbols file not found: {path}")
+        if path.suffix.lower() == ".csv":
+            with path.open("r", encoding="utf-8", newline="") as handle:
+                reader = csv.DictReader(handle)
+                if reader.fieldnames:
+                    fieldnames = {name.lower(): name for name in reader.fieldnames}
+                    symbol_field = fieldnames.get("option_symbol") or fieldnames.get("contract_symbol")
+                    if symbol_field:
+                        for row in reader:
+                            value = str(row.get(symbol_field) or "").strip().upper()
+                            if value:
+                                symbols.append(value)
+                        continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            value = line.strip().split(",", 1)[0].strip().upper()
+            if value and not value.startswith("#"):
+                symbols.append(value)
+    return sorted(set(symbols))
+
+
 def main() -> None:
     args = parse_args()
     settings = load_settings(config_file=args.config)
     configure_logging(settings.log_level)
     portfolio_config = load_portfolio_config(args.portfolio_config)
+    extra_option_symbols = _load_extra_option_symbols(args.extra_option_symbols_file)
     monitor = RealtimeShadowMonitor(
         settings,
         portfolio_config,
         output_dir=Path(args.output_dir),
         max_option_symbols=args.max_option_symbols,
+        underlyings=args.underlying,
+        extra_option_symbols=extra_option_symbols,
         include_stock_quotes=args.include_stock_quotes,
         include_option_trades=args.include_option_trades,
         include_trade_updates=not args.no_trade_updates,
@@ -101,6 +148,7 @@ def main() -> None:
                 "summary_path": str(summary_path),
                 "underlying_count": len(plan.underlyings),
                 "option_symbol_count": len(plan.option_symbols),
+                "extra_option_symbol_count": len(extra_option_symbols),
                 "stock_feed": plan.stock_feed,
                 "option_feed": plan.option_feed,
                 "stream_requested": bool(args.stream),

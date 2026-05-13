@@ -176,6 +176,46 @@ def _coerce_float(value: Any) -> float | None:
         return None
 
 
+def _normalise_option_symbols(symbols: list[str] | None) -> list[str]:
+    if not symbols:
+        return []
+    return sorted({str(symbol).strip().upper() for symbol in symbols if str(symbol).strip()})
+
+
+def merge_option_subscription_symbols(
+    *,
+    discovered_symbols: list[str],
+    extra_symbols: list[str] | None,
+    max_option_symbols: int,
+) -> tuple[list[str], list[str]]:
+    """Merge runtime-discovered contracts with forced capture symbols.
+
+    Extra symbols are retained first so a targeted evidence-capture run cannot
+    lose its explicit universe because of global subscription truncation.
+    """
+
+    notes: list[str] = []
+    extras = _normalise_option_symbols(extra_symbols)
+    discovered = [
+        symbol
+        for symbol in _normalise_option_symbols(discovered_symbols)
+        if symbol not in set(extras)
+    ]
+    merged = extras + discovered
+    if len(merged) > max_option_symbols:
+        notes.append(
+            f"truncated option subscriptions from {len(merged)} to {max_option_symbols}"
+        )
+        if len(extras) > max_option_symbols:
+            notes.append(
+                f"extra option symbols alone exceeded limit: {len(extras)} > {max_option_symbols}"
+            )
+        merged = merged[:max_option_symbols]
+    if extras:
+        notes.append(f"forced extra option symbols into capture plan: {len(extras)}")
+    return merged, notes
+
+
 def data_feed_from_name(feed: str | None) -> DataFeed:
     normalized = str(feed or "iex").strip().lower()
     for candidate in DataFeed:
@@ -283,6 +323,8 @@ class RealtimeShadowMonitor:
         *,
         output_dir: Path,
         max_option_symbols: int = 900,
+        underlyings: list[str] | None = None,
+        extra_option_symbols: list[str] | None = None,
         include_stock_quotes: bool = False,
         include_option_trades: bool = False,
         include_trade_updates: bool = True,
@@ -291,6 +333,8 @@ class RealtimeShadowMonitor:
         self.portfolio_config = portfolio_config
         self.output_dir = output_dir
         self.max_option_symbols = max_option_symbols
+        self.underlyings = [symbol.strip().upper() for symbol in underlyings or [] if symbol.strip()]
+        self.extra_option_symbols = extra_option_symbols or []
         self.include_stock_quotes = include_stock_quotes
         self.include_option_trades = include_option_trades
         self.include_trade_updates = include_trade_updates
@@ -311,7 +355,16 @@ class RealtimeShadowMonitor:
         stock_frames = trader._fetch_today_stock_frames(trade_date)
         option_symbols: list[str] = []
         notes: list[str] = []
-        for underlying_symbol in self.portfolio_config.execution.underlying_symbols:
+        configured_underlyings = list(self.portfolio_config.execution.underlying_symbols)
+        requested_underlyings = set(self.underlyings)
+        selected_underlyings = (
+            [symbol for symbol in configured_underlyings if symbol in requested_underlyings]
+            if requested_underlyings
+            else configured_underlyings
+        )
+        for missing in sorted(requested_underlyings.difference(configured_underlyings)):
+            notes.append(f"{missing}: requested underlying is not in the portfolio config")
+        for underlying_symbol in selected_underlyings:
             frame = stock_frames.get(underlying_symbol)
             if frame is None or frame.empty:
                 notes.append(f"{underlying_symbol}: no stock frame available during bootstrap")
@@ -324,15 +377,15 @@ class RealtimeShadowMonitor:
                 trade_date,
             )
             option_symbols.extend(symbols)
-        unique_options = sorted(set(option_symbols))
-        if len(unique_options) > self.max_option_symbols:
-            notes.append(
-                f"truncated option subscriptions from {len(unique_options)} to {self.max_option_symbols}"
-            )
-            unique_options = unique_options[: self.max_option_symbols]
+        unique_options, merge_notes = merge_option_subscription_symbols(
+            discovered_symbols=option_symbols,
+            extra_symbols=self.extra_option_symbols,
+            max_option_symbols=self.max_option_symbols,
+        )
+        notes.extend(merge_notes)
         return RealtimeShadowPlan(
             trade_date=trade_date.isoformat(),
-            underlyings=list(self.portfolio_config.execution.underlying_symbols),
+            underlyings=selected_underlyings,
             option_symbols=unique_options,
             stock_feed=(
                 self.portfolio_config.execution.stock_feed or self.settings.alpaca_data_feed
