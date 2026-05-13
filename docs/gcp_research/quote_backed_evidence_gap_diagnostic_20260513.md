@@ -52,3 +52,5 @@ A no-submit full-portfolio capture plan was generated at:
 - GCS: `gs://codexalpaca-control-us/gcp_research/evidence_repair_sweep_20260513/full_portfolio_realtime_capture_plan_20260513T0148Z/`
 
 The plan covers the May 13 paper portfolio config with 15 underlyings and 504 OPRA option symbols using SIP stock data and OPRA option data. It was plan-only and submitted no orders.
+
+Use `scripts/run_no_submit_quote_capture_session.ps1` during RTH to capture the same universe and build sidecars after the stream closes. The script runs the realtime shadow monitor with `--no-trade-updates`, `--include-stock-quotes`, and `--include-option-trades`; it is broker-free and does not submit orders.
