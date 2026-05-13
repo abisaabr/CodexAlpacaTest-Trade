@@ -409,6 +409,7 @@ class RealtimeShadowMonitor:
         include_trade_updates: bool = True,
         runtime_refresh_seconds: int = 0,
         runtime_refresh_max_total_symbols: int | None = None,
+        include_session_trade_symbols: bool = False,
     ) -> None:
         self.settings = settings
         self.portfolio_config = portfolio_config
@@ -421,8 +422,36 @@ class RealtimeShadowMonitor:
         self.include_trade_updates = include_trade_updates
         self.runtime_refresh_seconds = max(0, int(runtime_refresh_seconds or 0))
         self.runtime_refresh_max_total_symbols = runtime_refresh_max_total_symbols
+        self.include_session_trade_symbols = bool(include_session_trade_symbols)
         self.stats = RealtimeShadowStats()
         self.writer = JsonlEventWriter(output_dir / "realtime_shadow_events.jsonl")
+
+    def _session_trade_option_symbols(self, trade_date: date) -> list[str]:
+        if not self.include_session_trade_symbols:
+            return []
+        state_root = self.portfolio_config.execution.state_root
+        session_path = Path(state_root) / f"session_{trade_date.isoformat()}.json"
+        if not session_path.exists():
+            return []
+        try:
+            payload = json.loads(session_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return []
+        symbols: set[str] = set()
+        for bucket in ("open_trades", "completed_trades"):
+            rows = payload.get(bucket) or []
+            if not isinstance(rows, list):
+                continue
+            for trade in rows:
+                if not isinstance(trade, dict):
+                    continue
+                for leg in trade.get("legs") or []:
+                    if not isinstance(leg, dict):
+                        continue
+                    symbol = str(leg.get("symbol") or leg.get("option_symbol") or "").strip().upper()
+                    if symbol:
+                        symbols.add(symbol)
+        return sorted(symbols)
 
     def build_plan(self) -> RealtimeShadowPlan:
         trader = MultiTickerPortfolioPaperTrader(
@@ -460,12 +489,16 @@ class RealtimeShadowMonitor:
                 trade_date,
             )
             option_symbols.extend(symbols)
+        session_trade_symbols = self._session_trade_option_symbols(trade_date)
+        extra_symbols = sorted(set(self.extra_option_symbols).union(session_trade_symbols))
         unique_options, merge_notes = merge_option_subscription_symbols(
             discovered_symbols=option_symbols,
-            extra_symbols=self.extra_option_symbols,
+            extra_symbols=extra_symbols,
             max_option_symbols=self.max_option_symbols,
         )
         notes.extend(merge_notes)
+        if session_trade_symbols:
+            notes.append(f"forced session trade leg symbols into capture plan: {len(session_trade_symbols)}")
         return RealtimeShadowPlan(
             trade_date=trade_date.isoformat(),
             underlyings=selected_underlyings,
@@ -634,9 +667,13 @@ class RealtimeShadowMonitor:
                 if next_refresh_at is not None and time.monotonic() >= next_refresh_at:
                     try:
                         runtime_symbols, runtime_errors = self._current_runtime_option_symbols()
+                        session_symbols = self._session_trade_option_symbols(
+                            date.fromisoformat(active_plan.trade_date)
+                        )
+                        refresh_symbols = sorted(set(runtime_symbols).union(session_symbols))
                         missing_symbols = [
                             symbol
-                            for symbol in runtime_symbols
+                            for symbol in refresh_symbols
                             if symbol not in active_option_symbols
                         ]
                         available_slots = max(0, refresh_max_total - len(active_option_symbols))

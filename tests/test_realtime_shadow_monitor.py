@@ -5,8 +5,10 @@ import json
 
 import pytest
 
+from alpaca_lab.multi_ticker_portfolio.config import default_portfolio_config
 from alpaca_lab.multi_ticker_portfolio.realtime_shadow import (
     JsonlEventWriter,
+    RealtimeShadowMonitor,
     RealtimeShadowPlan,
     RealtimeShadowStats,
     data_feed_from_name,
@@ -165,6 +167,46 @@ def test_merge_option_subscription_symbols_buffers_nearby_runtime_strikes() -> N
     ]
     assert "truncated option subscriptions from 9 to 5" in notes
     assert "AMD260515P00425000" not in symbols
+
+
+def test_session_trade_symbols_are_loaded_for_forced_capture(tmp_path) -> None:
+    base = default_portfolio_config()
+    config = base.model_copy(
+        update={"execution": base.execution.model_copy(update={"state_root": tmp_path})}
+    )
+    session_path = tmp_path / "session_2026-05-13.json"
+    session_path.write_text(
+        json.dumps(
+            {
+                "open_trades": [
+                    {
+                        "legs": [
+                            {"symbol": "QQQ260514P00703000"},
+                            {"option_symbol": "AMD260515P00422500"},
+                        ]
+                    }
+                ],
+                "completed_trades": [
+                    {
+                        "legs": [
+                            {"symbol": "QQQ260514P00703000"},
+                            {"symbol": "SPY260514C00739000"},
+                        ]
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monitor = RealtimeShadowMonitor.__new__(RealtimeShadowMonitor)
+    monitor.portfolio_config = config
+    monitor.include_session_trade_symbols = True
+
+    assert monitor._session_trade_option_symbols(datetime(2026, 5, 13).date()) == [
+        "AMD260515P00422500",
+        "QQQ260514P00703000",
+        "SPY260514C00739000",
+    ]
 
 
 def test_jsonl_event_writer_keeps_valid_lines_until_close(tmp_path) -> None:

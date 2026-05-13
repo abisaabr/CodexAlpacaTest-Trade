@@ -137,6 +137,14 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Hard cap for dynamic OPRA option symbols after runtime refreshes.",
     )
+    parser.add_argument(
+        "--session-trade-leg-symbols",
+        action="store_true",
+        help=(
+            "Force option symbols already present in the current session open/completed "
+            "trade legs into the initial plan and runtime refreshes."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -253,6 +261,7 @@ def main() -> None:
         include_trade_updates=not args.no_trade_updates,
         runtime_refresh_seconds=args.runtime_refresh_seconds,
         runtime_refresh_max_total_symbols=args.runtime_refresh_max_total_symbols,
+        include_session_trade_symbols=args.session_trade_leg_symbols,
     )
     plan = monitor.build_plan()
     plan_path = monitor.write_plan(plan)
@@ -286,6 +295,7 @@ def main() -> None:
                 "stream_requested": bool(args.stream),
                 "runtime_refresh_seconds": int(args.runtime_refresh_seconds or 0),
                 "runtime_refresh_max_total_symbols": args.runtime_refresh_max_total_symbols,
+                "session_trade_leg_symbols": bool(args.session_trade_leg_symbols),
             },
             indent=2,
             sort_keys=True,
