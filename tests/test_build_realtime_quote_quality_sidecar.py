@@ -124,3 +124,44 @@ def test_build_realtime_quote_quality_sidecar_reports_no_quotes(tmp_path: Path) 
     assert summary["quality_status"] == "no_option_quote_events"
     assert summary["stats"]["accepted_option_quotes"] == 0
     assert (tmp_path / "out" / "quote_quality_sidecar_summary.json").exists()
+
+
+def test_build_realtime_quote_quality_sidecar_filters_exact_option_symbols(tmp_path: Path) -> None:
+    events = tmp_path / "events.jsonl"
+    _write_events(
+        events,
+        [
+            {
+                "event_type": "option_quote",
+                "observed_at_utc": "2026-05-13T14:30:00.250000+00:00",
+                "payload": {
+                    "symbol": "QQQ260515C00450000",
+                    "timestamp": "2026-05-13T14:30:00+00:00",
+                    "bid_price": 1.00,
+                    "ask_price": 1.04,
+                },
+            },
+            {
+                "event_type": "option_quote",
+                "observed_at_utc": "2026-05-13T14:30:00.250000+00:00",
+                "payload": {
+                    "symbol": "QQQ260515C00451000",
+                    "timestamp": "2026-05-13T14:30:00+00:00",
+                    "bid_price": 0.90,
+                    "ask_price": 0.94,
+                },
+            },
+        ],
+    )
+
+    summary = build_realtime_quote_quality_sidecar(
+        events_jsonl=events,
+        output_dir=tmp_path / "out_exact_symbols",
+        option_symbols={"QQQ260515C00450000"},
+    )
+
+    assert summary["stats"]["accepted_option_quotes"] == 1
+    assert summary["stats"]["filtered_events"] == 1
+    assert summary["stats"]["option_symbol_filter"] == ["QQQ260515C00450000"]
+    quotes = pd.read_csv(tmp_path / "out_exact_symbols" / "option_quote_sidecar.csv")
+    assert quotes["option_symbol"].tolist() == ["QQQ260515C00450000"]

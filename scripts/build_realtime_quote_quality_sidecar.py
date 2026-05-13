@@ -102,6 +102,11 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Optional comma-separated underlying filter, e.g. QQQ,SPY,IWM.",
     )
+    parser.add_argument(
+        "--option-symbols",
+        default="",
+        help="Optional comma-separated exact OPRA option symbol filter.",
+    )
     return parser.parse_args()
 
 
@@ -281,6 +286,7 @@ def build_realtime_quote_quality_sidecar(
     events_jsonl: Path,
     output_dir: Path,
     underlyings: set[str] | None = None,
+    option_symbols: set[str] | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     option_quotes: list[dict[str, Any]] = []
@@ -297,6 +303,7 @@ def build_realtime_quote_quality_sidecar(
         "filtered_events": 0,
         "rejected_events": 0,
         "underlying_filter": sorted(underlyings) if underlyings else [],
+        "option_symbol_filter": sorted(option_symbols) if option_symbols else [],
     }
     with events_jsonl.open("r", encoding="utf-8") as handle:
         for line in handle:
@@ -314,6 +321,9 @@ def build_realtime_quote_quality_sidecar(
             if event_type == "option_quote":
                 stats["option_quote_events"] += 1
                 underlying = _underlying_from_option_symbol(symbol)
+                if option_symbols and symbol not in option_symbols:
+                    stats["filtered_events"] += 1
+                    continue
                 if underlyings and underlying not in underlyings:
                     stats["filtered_events"] += 1
                     continue
@@ -337,6 +347,9 @@ def build_realtime_quote_quality_sidecar(
             elif event_type == "option_trade":
                 stats["option_trade_events"] += 1
                 underlying = _underlying_from_option_symbol(symbol)
+                if option_symbols and symbol not in option_symbols:
+                    stats["filtered_events"] += 1
+                    continue
                 if underlyings and underlying not in underlyings:
                     stats["filtered_events"] += 1
                     continue
@@ -396,6 +409,7 @@ def main() -> None:
         events_jsonl=Path(args.events_jsonl),
         output_dir=Path(args.output_dir),
         underlyings=_csv_set(args.underlyings) or None,
+        option_symbols=_csv_set(args.option_symbols) or None,
     )
     print(json.dumps(summary, indent=2, sort_keys=True))
 

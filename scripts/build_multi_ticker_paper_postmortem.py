@@ -41,6 +41,8 @@ def _write_markdown(path: Path, summary: dict[str, Any], strategy_table: pd.Data
         f"- Strategy-attributed PnL: `{summary.get('completed_trade_net_pnl')}`",
         f"- Unattributed session PnL: `{summary.get('unattributed_session_pnl')}`",
         f"- Accounting status: `{summary.get('postmortem_accounting_status')}`",
+        f"- Quote-backed evidence status: `{summary.get('quote_backed_evidence_status')}`",
+        f"- Quote-backed optimizer input allowed: `{summary.get('quote_backed_optimizer_input_allowed')}`",
         f"- Completed trades: `{summary.get('completed_trade_count')}`",
         f"- Open trades at report time: `{summary.get('open_trade_count')}`",
         f"- Broker-flat stale session exits: `{summary.get('broker_flat_without_session_exit_count')}`",
@@ -56,6 +58,14 @@ def _write_markdown(path: Path, summary: dict[str, Any], strategy_table: pd.Data
             [
                 "> Strategy ledgers include only completed trades with locally attributed exits. "
                 "Unattributed session PnL requires broker-fill reconciliation before it is assigned to a strategy.",
+                "",
+            ]
+        )
+    if not summary.get("quote_backed_optimizer_input_allowed"):
+        lines.extend(
+            [
+                "> Completed trade PnL is not optimizer-ready unless the quote-backed evidence bundle "
+                "passes session quote-field coverage and raw OPRA sidecar coverage.",
                 "",
             ]
         )
@@ -200,6 +210,7 @@ def build_postmortem(
     run_root: Path,
     trade_date: str,
     submit_paper_orders: bool | None = None,
+    quote_evidence_json: Path | None = None,
 ) -> dict[str, Any]:
     session_path = state_root / f"session_{trade_date}.json"
     session_payload = _read_json(session_path, {})
@@ -221,6 +232,9 @@ def build_postmortem(
         if abs(unattributed_session_pnl) <= 0.01 and broker_flat_stale_exit_count == 0
         else "needs_broker_fill_reconciliation"
     )
+    quote_evidence = _read_json(quote_evidence_json, {}) if quote_evidence_json else {}
+    if not isinstance(quote_evidence, dict):
+        quote_evidence = {}
     summary = {
         "trade_date": trade_date,
         "session_found": bool(session_payload),
@@ -234,6 +248,18 @@ def build_postmortem(
         "unattributed_session_pnl": round(unattributed_session_pnl, 4),
         "broker_flat_without_session_exit_count": int(broker_flat_stale_exit_count),
         "postmortem_accounting_status": accounting_status,
+        "quote_evidence_json": str(quote_evidence_json) if quote_evidence_json else None,
+        "quote_backed_evidence_status": quote_evidence.get("evidence_status", "not_provided"),
+        "quote_backed_projection_input_allowed": bool(
+            quote_evidence.get("quote_backed_projection_input_allowed", False)
+        ),
+        "quote_backed_optimizer_input_allowed": bool(
+            quote_evidence.get("quote_backed_optimizer_input_allowed", False)
+        ),
+        "quote_backed_promotion_input_allowed": bool(
+            quote_evidence.get("quote_backed_promotion_input_allowed", False)
+        ),
+        "quote_backed_evidence_blockers": quote_evidence.get("blockers") or [],
         "completed_trade_count": int(len(session_payload.get("completed_trades") or [])),
         "open_trade_count": int(len(session_payload.get("open_trades") or [])),
         "alert_count": int(len(session_payload.get("alerts") or [])),
@@ -256,6 +282,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--trade-date", default=date.today().isoformat())
     parser.add_argument("--state-root", type=Path, default=None)
     parser.add_argument("--run-root", type=Path, default=None)
+    parser.add_argument("--quote-evidence-json", type=Path, default=None)
     return parser.parse_args()
 
 
@@ -269,6 +296,7 @@ def main() -> None:
         run_root=Path(run_root),
         trade_date=str(args.trade_date),
         submit_paper_orders=bool(config.execution.submit_paper_orders),
+        quote_evidence_json=args.quote_evidence_json,
     )
     print(json.dumps(summary, indent=2))
 

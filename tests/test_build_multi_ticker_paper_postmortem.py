@@ -117,3 +117,56 @@ def test_build_postmortem_flags_unattributed_broker_flat_session_exits(tmp_path:
         encoding="utf-8"
     )
     assert "Unattributed session PnL requires broker-fill reconciliation" in postmortem_md
+
+
+def test_build_postmortem_surfaces_quote_backed_evidence_gate(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    run_root = tmp_path / "runs"
+    state_root.mkdir()
+    trade_date = "2026-05-13"
+    (state_root / f"session_{trade_date}.json").write_text(
+        json.dumps(
+            {
+                "trade_date": trade_date,
+                "starting_equity": 25000.0,
+                "virtual_cash": 25050.0,
+                "completed_trades": [
+                    {
+                        "strategy_name": "qqq_quote_backed",
+                        "underlying_symbol": "QQQ",
+                        "regime": "bear",
+                        "net_pnl": 50.0,
+                    }
+                ],
+                "open_trades": [],
+                "alerts": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    quote_evidence = tmp_path / "quote_evidence.json"
+    quote_evidence.write_text(
+        json.dumps(
+            {
+                "evidence_status": "quote_backed_session_evidence_complete",
+                "quote_backed_projection_input_allowed": True,
+                "quote_backed_optimizer_input_allowed": True,
+                "quote_backed_promotion_input_allowed": False,
+                "blockers": ["promotion_gate_not_requested"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = build_postmortem(
+        state_root=state_root,
+        run_root=run_root,
+        trade_date=trade_date,
+        submit_paper_orders=True,
+        quote_evidence_json=quote_evidence,
+    )
+
+    assert summary["quote_backed_evidence_status"] == "quote_backed_session_evidence_complete"
+    assert summary["quote_backed_optimizer_input_allowed"] is True
+    assert summary["quote_backed_promotion_input_allowed"] is False
+    assert summary["quote_backed_evidence_blockers"] == ["promotion_gate_not_requested"]
