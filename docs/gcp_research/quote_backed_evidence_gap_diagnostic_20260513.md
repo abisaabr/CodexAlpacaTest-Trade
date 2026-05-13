@@ -54,3 +54,18 @@ A no-submit full-portfolio capture plan was generated at:
 The plan covers the May 13 paper portfolio config with 15 underlyings and 504 OPRA option symbols using SIP stock data and OPRA option data. It was plan-only and submitted no orders.
 
 Use `scripts/run_no_submit_quote_capture_session.ps1` during RTH to capture the same universe and build sidecars after the stream closes. The script runs the realtime shadow monitor with `--no-trade-updates`, `--include-stock-quotes`, and `--include-option-trades`; it is broker-free and does not submit orders.
+
+## Choppy c001-c120 Result
+
+The QQQ/SPY/IWM c097-c120 GCP tranche for `choppy_non_single_train_test_refine_20260512T1925ET` completed, was synced, aggregated into c001-c120, mirrored, and cleaned up. It did not add new eligible candidates.
+
+- GCS aggregate: `gs://codexalpaca-control-us/research_results/choppy_non_single_train_test_refine_20260512T1925ET/aggregate_c001_120/`
+- Candidate count: `1440`
+- Eligible governed-review candidates: `4`
+- Eligible candidates remained the prior TSM choppy debit-call-vertical set from c001-c024.
+- QQQ/SPY/IWM quote-gap diagnostic: `94224` diagnosed trade rows, `1554` replay contracts, `0` replay contracts present in the 2026-05-07 sidecar, and every entry/exit miss was `trade_date_not_in_sidecar`.
+- Quote-lineage audit: `2` current capital-plan rows matched replay lineage, but both are still `quote_quality_gap`.
+- Hardened quote-cost/fill-haircut projection: ending equity stayed near `$4941.71` from `$25000`, with train/test optimizer selecting `0` candidates.
+- Strict `$200/day` and relaxed `$25/day` constrained optimizers both selected `0` candidates.
+
+Decision: do not add the c001-c120 choppy candidates to the paper runner without matching-date OPRA/SIP sidecars and a positive quote-backed train/test projection.
