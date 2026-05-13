@@ -1080,6 +1080,85 @@ class MultiTickerPortfolioPaperTrader:
             return price, price, price, minute_bar.get("t")
         return None, None, None, None
 
+    def _bbo_quote_quality_from_snapshot(
+        self,
+        *,
+        symbol: str,
+        snapshot: dict[str, Any],
+        now_et: datetime,
+    ) -> dict[str, Any] | None:
+        latest_quote = snapshot.get("latestQuote", {}) or {}
+        bid = latest_quote.get("bp")
+        ask = latest_quote.get("ap")
+        quote_time = latest_quote.get("t")
+        bid_value = float(bid) if bid not in (None, "") else None
+        ask_value = float(ask) if ask not in (None, "") else None
+        if bid_value is None or ask_value is None or not (ask_value >= bid_value > 0.0):
+            return None
+        mark = (bid_value + ask_value) / 2.0
+        spread_pct = max(0.0, (ask_value - bid_value) / max(mark, 0.01))
+        freshness_seconds = None
+        if quote_time:
+            freshness_seconds = max(
+                0.0,
+                (
+                    now_et
+                    - datetime.fromisoformat(str(quote_time).replace("Z", "+00:00")).astimezone(ET)
+                ).total_seconds(),
+            )
+        return {
+            "symbol": symbol,
+            "bid": bid_value,
+            "ask": ask_value,
+            "mark": mark,
+            "quote_time": quote_time,
+            "spread_pct": spread_pct,
+            "freshness_seconds": freshness_seconds,
+            "quote_source": "option_quote_bid_ask",
+        }
+
+    def _exit_leg_quality_map(
+        self,
+        trade: OpenTrade,
+        option_chain: pd.DataFrame | None,
+    ) -> dict[str, dict[str, Any]]:
+        quality_by_symbol: dict[str, dict[str, Any]] = {}
+        if option_chain is not None and not option_chain.empty and "symbol" in option_chain.columns:
+            for row in option_chain.to_dict("records"):
+                symbol = str(row.get("symbol") or "")
+                if symbol:
+                    quality_by_symbol[symbol] = row
+        missing_symbols = [
+            str(leg.get("symbol") or "").strip()
+            for leg in trade.legs
+            if str(leg.get("symbol") or "").strip()
+            and str(leg.get("symbol") or "").strip() not in quality_by_symbol
+        ]
+        get_snapshots = getattr(getattr(self, "broker", None), "get_option_snapshots", None)
+        if not missing_symbols or not callable(get_snapshots):
+            return quality_by_symbol
+        now_et = _now_et()
+        for batch in _chunked(sorted(set(missing_symbols)), 50):
+            try:
+                payload = get_snapshots(
+                    batch,
+                    feed=self.portfolio_config.execution.option_feed,
+                )
+            except Exception as exc:  # noqa: BLE001 - exit should not fail because quote audit enrichment failed.
+                self.logger.warning("failed to fetch exit quote quality for %s: %r", batch, exc)
+                continue
+            for symbol, snapshot in (payload.get("snapshots") or {}).items():
+                if not isinstance(snapshot, dict):
+                    continue
+                quality = self._bbo_quote_quality_from_snapshot(
+                    symbol=str(symbol),
+                    snapshot=snapshot,
+                    now_et=now_et,
+                )
+                if quality is not None:
+                    quality_by_symbol[str(symbol)] = quality
+        return quality_by_symbol
+
     def _fetch_option_chain(
         self,
         symbols: list[str],
@@ -2729,12 +2808,7 @@ class MultiTickerPortfolioPaperTrader:
             + exit_cashflow
         )
         entry_fee_breakdown = _entry_fee_breakdown(trade.legs, int(trade.quantity))
-        exit_leg_quality = {}
-        if not snapshot.option_chain.empty and "symbol" in snapshot.option_chain.columns:
-            for row in snapshot.option_chain.to_dict("records"):
-                symbol = str(row.get("symbol") or "")
-                if symbol:
-                    exit_leg_quality[symbol] = row
+        exit_leg_quality = self._exit_leg_quality_map(trade, snapshot.option_chain)
         completed_legs: list[dict[str, Any]] = []
         for leg in trade.legs:
             completed_leg = dict(leg)
@@ -2748,6 +2822,7 @@ class MultiTickerPortfolioPaperTrader:
                         "exit_quote_time": quality.get("quote_time"),
                         "exit_spread_pct": quality.get("spread_pct"),
                         "exit_freshness_seconds": quality.get("freshness_seconds"),
+                        "exit_quote_source": quality.get("quote_source") or "option_quote_bid_ask",
                     }
                 )
             completed_legs.append(completed_leg)
@@ -3106,12 +3181,7 @@ class MultiTickerPortfolioPaperTrader:
             _entry_cashflow_from_debit(float(trade.entry_debit), quantity, trade.legs)
             + exit_cashflow
         )
-        exit_leg_quality = {}
-        if option_chain is not None and not option_chain.empty and "symbol" in option_chain.columns:
-            for row in option_chain.to_dict("records"):
-                symbol = str(row.get("symbol") or "")
-                if symbol:
-                    exit_leg_quality[symbol] = row
+        exit_leg_quality = self._exit_leg_quality_map(trade, option_chain)
         completed_legs: list[dict[str, Any]] = []
         for leg in trade.legs:
             completed_leg = dict(leg)
@@ -3125,6 +3195,7 @@ class MultiTickerPortfolioPaperTrader:
                         "exit_quote_time": quality.get("quote_time"),
                         "exit_spread_pct": quality.get("spread_pct"),
                         "exit_freshness_seconds": quality.get("freshness_seconds"),
+                        "exit_quote_source": quality.get("quote_source") or "option_quote_bid_ask",
                     }
                 )
             completed_legs.append(completed_leg)

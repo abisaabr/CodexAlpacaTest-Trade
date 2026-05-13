@@ -750,6 +750,94 @@ def test_run_exit_multileg_not_filled_falls_back_to_cleanup() -> None:
     assert any("combo exit cleanup fallback" in message for message in alerts)
 
 
+def test_cleanup_exit_fetches_missing_held_leg_quotes() -> None:
+    class _LoggerStub:
+        def warning(self, *_args, **_kwargs) -> None:
+            return None
+
+    class _BrokerStub:
+        def get_positions(self) -> list[dict[str, object]]:
+            return []
+
+        def get_option_snapshots(self, symbols, *, feed=None) -> dict[str, object]:
+            return {
+                "snapshots": {
+                    str(symbol): {
+                        "latestQuote": {
+                            "bp": 3.10 if "50000" in str(symbol) else 1.50,
+                            "ap": 3.30 if "50000" in str(symbol) else 1.70,
+                            "t": (
+                                "2026-04-15T19:15:00Z"
+                                if "50000" in str(symbol)
+                                else "2026-04-15T19:15:01Z"
+                            ),
+                        }
+                    }
+                    for symbol in symbols
+                }
+            }
+
+    cleanup_fill_prices = iter([3.18, 1.62])
+    events: list[dict[str, object]] = []
+    alerts: list[str] = []
+
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = default_portfolio_config()
+    trader.logger = _LoggerStub()
+    trader.broker = _BrokerStub()
+    trader._expected_entry_greeks = lambda _trade: (0.0, 0.0)
+    trader._append_trade_event = lambda _trade_date, payload: events.append(payload)
+    trader._event_base_for_trade = lambda trade, phase="exit": {
+        "strategy_name": trade.strategy_name,
+        "phase": phase,
+    }
+    trader._alert = lambda _session, _level, message: alerts.append(message)
+    trader._build_cleanup_order_request = lambda **kwargs: OrderRequest(
+        symbol=kwargs["symbol"],
+        side=kwargs["side"],
+        strategy_name=kwargs["strategy_name"],
+        asset_class=kwargs["asset_class"],
+        qty=kwargs["qty"],
+        order_type="market",
+        time_in_force="day",
+        extra={"position_intent": kwargs["position_intent"]},
+        client_order_id=str(kwargs.get("client_order_key") or ""),
+    )
+    trader._submit_cleanup_order = lambda **_kwargs: {
+        "status": "filled",
+        "order_id": f"cleanup-{len(events)}",
+        "filled_avg_price": next(cleanup_fill_prices),
+    }
+
+    trade_payload = _sample_multileg_open_trade(
+        strategy_name="qqq__fast__debit_call_spread_same_day",
+        underlying_symbol="QQQ",
+    )
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+        open_trades=[trade_payload],
+    )
+
+    assert trader._force_cleanup_known_trade(
+        trade_payload=trade_payload,
+        session=session,
+        trade_date=date(2026, 4, 15),
+        stock_frames={
+            "QQQ": pd.DataFrame([{"minute_index": 345, "close": 501.0}]),
+        },
+        option_chain=pd.DataFrame(),
+        reason="forced_flatten",
+    )
+    completed = session.completed_trades[0]
+    assert completed["via_cleanup"] is True
+    assert completed["legs"][0]["exit_quote_time"] == "2026-04-15T19:15:00Z"
+    assert completed["legs"][0]["exit_quote_source"] == "option_quote_bid_ask"
+    assert completed["legs"][1]["exit_bid"] == 1.5
+    assert completed["legs"][1]["exit_quote_time"] == "2026-04-15T19:15:01Z"
+
+
 def test_default_multi_ticker_portfolio_contains_all_symbols() -> None:
     config = default_portfolio_config()
 
