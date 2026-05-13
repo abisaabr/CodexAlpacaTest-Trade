@@ -244,6 +244,11 @@ def main() -> None:
         extra_option_symbols = sorted(set(extra_option_symbols).union(runtime_symbols))
         if args.runtime_selected_leg_symbols_only:
             args.max_option_symbols = len(extra_option_symbols)
+    include_session_trade_symbols = bool(
+        args.session_trade_leg_symbols
+        or args.runtime_selected_leg_symbols
+        or args.runtime_selected_leg_symbols_only
+    )
     runtime_lineage_csv, runtime_lineage_summary = _write_runtime_leg_lineage(
         output_dir=Path(args.output_dir),
         rows=runtime_leg_rows,
@@ -261,7 +266,7 @@ def main() -> None:
         include_trade_updates=not args.no_trade_updates,
         runtime_refresh_seconds=args.runtime_refresh_seconds,
         runtime_refresh_max_total_symbols=args.runtime_refresh_max_total_symbols,
-        include_session_trade_symbols=args.session_trade_leg_symbols,
+        include_session_trade_symbols=include_session_trade_symbols,
     )
     plan = monitor.build_plan()
     plan_path = monitor.write_plan(plan)
@@ -292,10 +297,12 @@ def main() -> None:
                 ),
                 "stock_feed": plan.stock_feed,
                 "option_feed": plan.option_feed,
+                "forced_option_symbol_count": len(plan.forced_option_symbols),
+                "missing_forced_option_symbol_count": len(plan.missing_forced_option_symbols),
                 "stream_requested": bool(args.stream),
                 "runtime_refresh_seconds": int(args.runtime_refresh_seconds or 0),
                 "runtime_refresh_max_total_symbols": args.runtime_refresh_max_total_symbols,
-                "session_trade_leg_symbols": bool(args.session_trade_leg_symbols),
+                "session_trade_leg_symbols": include_session_trade_symbols,
             },
             indent=2,
             sort_keys=True,
