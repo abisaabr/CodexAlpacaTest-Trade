@@ -10,6 +10,10 @@ from typing import Any
 import pandas as pd
 
 
+DEFAULT_MAX_QUOTE_AGE_SECONDS = 60.0
+DEFAULT_MAX_RELATIVE_SPREAD = 0.25
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -112,6 +116,20 @@ def _zero_or_missing_rate(frame: pd.DataFrame, column: str | None) -> float | No
     return round(float((values.fillna(0.0) <= 0.0).mean()), 6)
 
 
+def _threshold_pass_rate(
+    frame: pd.DataFrame,
+    column: str | None,
+    threshold: float,
+) -> float | None:
+    if not column or frame.empty:
+        return None
+    values = pd.to_numeric(frame[column], errors="coerce")
+    valid = values.notna()
+    if not bool(valid.any()):
+        return None
+    return round(float((values[valid] <= threshold).mean()), 6)
+
+
 def _source_quality(path: str | None, candidate_variant_id: str) -> dict[str, Any]:
     if not path:
         return {
@@ -183,6 +201,8 @@ def _source_quality(path: str | None, candidate_variant_id: str) -> dict[str, An
     option_print_column = _first_existing_column(frame, ("option_trade_print_count",))
     quote_backed_status_column = _first_existing_column(frame, ("quote_backed_replay_status",))
     quote_backed_pnl_column = _first_existing_column(frame, ("quote_backed_option_pnl",))
+    quote_backed_age_column = _first_existing_column(frame, ("quote_backed_max_quote_age_seconds",))
+    quote_backed_spread_column = _first_existing_column(frame, ("quote_backed_max_relative_spread",))
 
     entry_spread_coverage = _coverage(frame, entry_spread_column)
     exit_spread_coverage = _coverage(frame, exit_spread_column)
@@ -196,6 +216,16 @@ def _source_quality(path: str | None, candidate_variant_id: str) -> dict[str, An
         "quote_backed_replay",
     )
     quote_backed_pnl_coverage = _coverage(frame, quote_backed_pnl_column)
+    quote_backed_age_pass_rate = _threshold_pass_rate(
+        frame,
+        quote_backed_age_column,
+        DEFAULT_MAX_QUOTE_AGE_SECONDS,
+    )
+    quote_backed_spread_pass_rate = _threshold_pass_rate(
+        frame,
+        quote_backed_spread_column,
+        DEFAULT_MAX_RELATIVE_SPREAD,
+    )
 
     quality_values = [
         entry_bid_ask_rate,
@@ -211,6 +241,10 @@ def _source_quality(path: str | None, candidate_variant_id: str) -> dict[str, An
         and quote_backed_replay_rate >= 0.90
         and quote_backed_pnl_coverage is not None
         and quote_backed_pnl_coverage >= 0.90
+        and quote_backed_age_pass_rate is not None
+        and quote_backed_age_pass_rate >= 0.90
+        and quote_backed_spread_pass_rate is not None
+        and quote_backed_spread_pass_rate >= 0.90
     )
     quote_backed = quote_quality_complete and side_aware_replay_complete
     status = "quote_backed_replay" if quote_backed else "quote_quality_gap"
@@ -218,6 +252,13 @@ def _source_quality(path: str | None, candidate_variant_id: str) -> dict[str, An
         action = "projection_ready_quote_backed_replay"
     elif quote_quality_complete and quote_backed_status_column is None:
         action = "rerun_replay_with_side_aware_quote_backed_pnl"
+    elif quote_quality_complete and (quote_backed_age_column is None or quote_backed_spread_column is None):
+        action = "rerun_replay_with_quote_backed_age_and_spread_fields"
+    elif quote_quality_complete and (
+        (quote_backed_age_pass_rate is not None and quote_backed_age_pass_rate < 0.90)
+        or (quote_backed_spread_pass_rate is not None and quote_backed_spread_pass_rate < 0.90)
+    ):
+        action = "reject_or_repair_stale_or_wide_quote_backed_replay"
     elif quote_quality_complete:
         action = "repair_incomplete_side_aware_quote_backed_replay"
     else:
@@ -232,6 +273,10 @@ def _source_quality(path: str | None, candidate_variant_id: str) -> dict[str, An
         "exit_quote_age_coverage": exit_age_coverage,
         "quote_backed_replay_rate": quote_backed_replay_rate,
         "quote_backed_pnl_coverage": quote_backed_pnl_coverage,
+        "quote_backed_age_pass_rate": quote_backed_age_pass_rate,
+        "quote_backed_spread_pass_rate": quote_backed_spread_pass_rate,
+        "quote_backed_max_quote_age_seconds_gate": DEFAULT_MAX_QUOTE_AGE_SECONDS,
+        "quote_backed_max_relative_spread_gate": DEFAULT_MAX_RELATIVE_SPREAD,
         "entry_zero_or_missing_trade_print_rate": entry_zero_print_rate,
         "option_zero_or_missing_trade_print_rate": option_zero_print_rate,
         "rows_with_no_bid_ask_source_mentions": rows_with_no_bid_ask_source,
@@ -239,6 +284,8 @@ def _source_quality(path: str | None, candidate_variant_id: str) -> dict[str, An
         "exit_spread_source_column": exit_spread_column or "",
         "quote_backed_replay_status_column": quote_backed_status_column or "",
         "quote_backed_pnl_column": quote_backed_pnl_column or "",
+        "quote_backed_age_column": quote_backed_age_column or "",
+        "quote_backed_spread_column": quote_backed_spread_column or "",
         "quote_quality_status": status,
         "recommended_data_action": action,
     }

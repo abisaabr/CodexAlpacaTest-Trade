@@ -124,6 +124,9 @@ def test_diagnose_quote_sidecar_gaps_classifies_qqq_failures(tmp_path: Path) -> 
 
     universe = pd.read_csv(tmp_path / "out" / "replay_contract_universe.csv")
     assert set(universe["underlying"]) == {"QQQ"}
+    symbols_txt = (tmp_path / "out" / "replay_contract_symbols.txt").read_text(encoding="utf-8")
+    assert "QQQ260515C00450000" in symbols_txt
+    assert "QQQ260515C00490000" in symbols_txt
     sidecar = pd.read_csv(tmp_path / "out" / "sidecar_symbol_coverage.csv")
     assert set(sidecar["underlying"]) == {"QQQ"}
 

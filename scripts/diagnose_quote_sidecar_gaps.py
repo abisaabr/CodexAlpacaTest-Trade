@@ -592,6 +592,10 @@ def diagnose_quote_sidecar_gaps(
     diagnostics.to_csv(output_dir / "quote_gap_rows.csv", index=False)
     universe = _contract_universe_rows(rows)
     pd.DataFrame(universe).to_csv(output_dir / "replay_contract_universe.csv", index=False)
+    (output_dir / "replay_contract_symbols.txt").write_text(
+        "\n".join(str(item["contract_symbol"]) for item in universe) + ("\n" if universe else ""),
+        encoding="utf-8",
+    )
     sidecar_coverage = _sidecar_coverage_rows(quote_frame)
     pd.DataFrame(sidecar_coverage).to_csv(output_dir / "sidecar_symbol_coverage.csv", index=False)
     root_cause_action_rows = _root_cause_action_rows(diagnostics)
@@ -668,6 +672,7 @@ def diagnose_quote_sidecar_gaps(
             "quote_gap_examples_csv": str(output_dir / "quote_gap_examples.csv"),
             "quote_gap_root_cause_action_plan_csv": str(output_dir / "quote_gap_root_cause_action_plan.csv"),
             "replay_contract_universe_csv": str(output_dir / "replay_contract_universe.csv"),
+            "replay_contract_symbols_txt": str(output_dir / "replay_contract_symbols.txt"),
             "sidecar_symbol_coverage_csv": str(output_dir / "sidecar_symbol_coverage.csv"),
             "summary_json": str(output_dir / "quote_gap_diagnostic_summary.json"),
         },
