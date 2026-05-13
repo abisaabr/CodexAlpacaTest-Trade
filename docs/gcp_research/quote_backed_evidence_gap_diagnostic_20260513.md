@@ -38,6 +38,7 @@ The installed Alpaca SDK exposes historical option bars/trades and latest option
 - `scripts/build_quote_acquisition_manifest.py` converts replay trade economics into exact OPRA acquisition requirements by contract, trade date, entry/exit decision time, requested quote window, strategy family, and sidecar coverage status.
 - `scripts/download_option_trade_prints_from_acquisition_manifest.py` downloads historical Alpaca option trade prints for the exact contract/date/window records in an acquisition manifest. This repairs liquidity/fill evidence only; it does not create historical bid/ask quote or quote-age evidence.
 - `scripts/diagnose_option_trade_print_coverage.py` measures requested-window, forward-window, and prior-window option trade-print coverage for every missing OPRA leg event in an acquisition manifest.
+- `scripts/build_external_opra_quote_sidecar.py` normalizes external historical OPRA BBO quote exports into the same `option_quote_sidecar.csv` schema used by quote-backed replay. It can filter external files against an acquisition manifest so only the exact requested contract/date/window quotes are retained.
 - `scripts/run_multi_ticker_realtime_shadow_monitor.py` now supports `--underlying` and `--extra-option-symbols-file` so no-submit OPRA/SIP shadow capture can target the exact runtime/review universe.
 - `alpaca_lab/multi_ticker_portfolio/realtime_shadow.py` now preserves forced option symbols ahead of the normal symbol cap, which prevents targeted repair contracts from being truncated out of the websocket subscription.
 
@@ -209,6 +210,7 @@ The immediate QQQ example is now split cleanly:
 Next operational repair path:
 
 - Acquire external historical OPRA BBO quote data for the contract/date/window rows in the acquisition manifests, or capture OPRA/SIP forward during RTH and only replay same-day strategy decisions against those sidecars.
+- Convert external historical OPRA quote exports with `scripts/build_external_opra_quote_sidecar.py --input-path <vendor-csv-or-dir> --acquisition-manifest-csv <quote_acquisition_manifest.csv> --output-dir <sidecar-output>`, then run `scripts/diagnose_quote_sidecar_gaps.py` before applying the sidecar to trade economics.
 - Enrich trade economics with bid, ask, midpoint, spread, quote age, quote source, and trade-print liquidity fields before projection.
 - Reject candidates with incomplete quote lineage.
 - Optimize only quote-backed survivors under train/test-positive, drawdown, diversification, and real paper-trader risk constraints.
