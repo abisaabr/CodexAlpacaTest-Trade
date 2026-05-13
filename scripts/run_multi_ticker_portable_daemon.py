@@ -81,15 +81,18 @@ def _sleep_for(seconds: int, logger_name: str, reason: str) -> None:
     time.sleep(max(1, seconds))
 
 
+def resolve_submit_paper_orders(args: argparse.Namespace, portfolio_config: object) -> bool:
+    del portfolio_config
+    return bool(args.submit_paper_orders)
+
+
 def main() -> None:
     args = parse_args()
     settings = load_settings(config_file=args.config)
     configure_logging(settings.log_level)
     logger = get_logger("multi_ticker_portable_daemon")
     portfolio_config = load_portfolio_config(args.portfolio_config)
-    submit_paper_orders = (
-        args.submit_paper_orders or portfolio_config.execution.submit_paper_orders
-    )
+    submit_paper_orders = resolve_submit_paper_orders(args, portfolio_config)
     clock_broker = AlpacaBrokerAdapter(settings, dry_run=True)
     last_finished_trade_date: str | None = None
 

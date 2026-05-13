@@ -1,0 +1,84 @@
+name: multi_symbol_governed_realtime_paper_trader_20260508_armed
+description: PAPER-only armed May 8 governed-validation portfolio using the May 7 broad governed set plus May 8 TSM, AVGO, QQQ, and regime-optional governed-validation packets. This config may submit PAPER orders only because execution.paper_order_arming_mode is config_explicit.
+strategy_manifest_paths:
+  - promotion_manifests/multi_symbol_governed_validation_20260508_runtime_unique.yaml
+  - promotion_manifests/tsm_overnight_governed_validation_20260508.yaml
+  - promotion_manifests/avgo_overnight_governed_validation_20260508.yaml
+  - promotion_manifests/avgo_c109_overnight_governed_validation_20260508.yaml
+  - promotion_manifests/qqq_overnight_governed_validation_20260508.yaml
+  - promotion_manifests/regime_optional_governed_validation_20260508.yaml
+
+ownership:
+  enabled: true
+  lease_backend: file
+  lease_path: D:/codexalpaca_runtime/state/multi_symbol_governed_realtime_20260508_ownership_lease.json
+  lease_ttl_seconds: 180
+  machine_label: local-primary-paper-20260508
+
+execution:
+  underlying_symbols: [QQQ, SPY, IWM, AMD, AMZN, MSFT, TSLA, AVGO, GOOGL, TSM, INTC, META, NVDA, PLTR, XOM]
+  option_feed: opra
+  stock_feed: sip
+  submit_paper_orders: true
+  paper_order_arming_mode: config_explicit
+  poll_interval_seconds: 15
+  order_status_poll_seconds: 5
+  order_fill_timeout_seconds: 35
+  contract_refresh_minutes: 10
+  quote_stale_seconds: 75
+  stock_freshness_seconds: 120
+  max_relative_spread: 0.30
+  max_dte_days: 7
+  state_root: D:/codexalpaca_runtime/state/multi_symbol_governed_realtime_20260508
+  run_root: D:/codexalpaca_runtime/runs/multi_symbol_governed_realtime_20260508
+  task_name: Multi Symbol Governed Realtime Paper Trader 20260508 Armed
+  allow_market_exit_fallback: true
+  market_exit_fallback_minute: 385
+  startup_lead_minutes: 10
+  midday_report_minute: 180
+  eod_flatten_minutes_before_close: [10, 2]
+  auto_flatten_unexpected_positions: true
+  unexpected_position_cleanup_timeout_seconds: 45
+
+risk:
+  sleeve_starting_equity: 25000
+  max_open_risk_fraction: 0.14
+  daily_loss_gate_pct: 0.02
+  delever_drawdown_pct: 8.0
+  delever_risk_scale: 0.5
+  max_open_positions: 999
+  max_positions_per_regime: 3
+  max_positions_per_symbol: 3
+  entry_cluster_window_minutes: 15
+  max_positions_per_regime_window: 2
+  max_positions_per_bucket_regime_window: 4
+  max_open_risk_fraction_per_symbol: 0.08
+  regime_risk_scales:
+    bull: 1.0
+    bear: 1.0
+    choppy: 1.0
+  bucket_caps:
+    - name: index_beta
+      symbols: [QQQ, SPY, IWM]
+      max_open_risk_fraction: 0.08
+    - name: growth_tech
+      symbols: [AMD, AMZN, MSFT, TSLA, AVGO, GOOGL, TSM, INTC, META, NVDA, PLTR]
+      max_open_risk_fraction: 0.09
+    - name: energy
+      symbols: [XOM]
+      max_open_risk_fraction: 0.03
+  min_required_buying_power: 10000
+  broker_min_equity_to_trade: 26000
+  broker_equity_emergency_stop: 25500
+  severe_loss_halt_new_entries_pct: 0.035
+  severe_loss_flatten_all_pct: 0.05
+  soft_alert_delta_shares: 1800
+  soft_alert_vega_dollars_1pct: 360
+  hard_cap_delta_shares: 2200
+  hard_cap_vega_dollars_1pct: 460
+  entry_failure_streak_limit: 3
+  entry_adverse_slippage_fraction_limit: 0.20
+  entry_adverse_slippage_lookback: 4
+  entry_cutoff_minute: 345
+  same_day_entry_cutoff_minute: 300
+  event_blackouts: []

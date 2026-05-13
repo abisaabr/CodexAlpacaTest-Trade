@@ -4,9 +4,11 @@ import argparse
 import json
 import sys
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+UTC = timezone.utc
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -42,19 +44,67 @@ def _float(value: object, default: float = 0.0) -> float:
 def _candidate_summary(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "candidate_variant_id": row.get("candidate_variant_id"),
+        "base_candidate_variant_id": row.get("base_candidate_variant_id"),
+        "candidate_identity_mode": row.get("candidate_identity_mode"),
+        "aggregate_profile": row.get("aggregate_profile"),
         "symbol": row.get("symbol"),
+        "strategy_id": row.get("strategy_id") or row.get("source_strategy_id"),
         "source_strategy_id": row.get("source_strategy_id"),
+        "family": row.get("family"),
+        "intended_regime": row.get("intended_regime"),
+        "parameter_set": row.get("parameter_set"),
         "directional_option_type": row.get("directional_option_type"),
         "research_score": row.get("research_score"),
         "min_net_pnl": row.get("min_net_pnl"),
         "min_test_net_pnl": row.get("min_test_net_pnl"),
         "min_fill_coverage": row.get("min_fill_coverage"),
         "max_fill_coverage": row.get("max_fill_coverage"),
+        "min_strategy_fill_coverage": row.get(
+            "min_strategy_fill_coverage", row.get("min_fill_coverage")
+        ),
+        "max_strategy_fill_coverage": row.get(
+            "max_strategy_fill_coverage", row.get("max_fill_coverage")
+        ),
+        "min_data_foundation_coverage": row.get("min_data_foundation_coverage"),
+        "min_entry_bar_coverage": row.get("min_entry_bar_coverage"),
+        "min_exit_bar_coverage": row.get("min_exit_bar_coverage"),
+        "fill_coverage_unit": row.get("fill_coverage_unit"),
         "min_option_trade_count": row.get("min_option_trade_count"),
         "worst_drawdown": row.get("worst_drawdown"),
         "promotion_status": row.get("promotion_status"),
         "promotion_blockers": row.get("promotion_blockers", []),
     }
+
+
+def _base_candidate_id(row: dict[str, Any]) -> str:
+    return str(row.get("base_candidate_variant_id") or row.get("candidate_variant_id") or "")
+
+
+def _dedupe_review_candidates(rows: list[dict[str, Any]], max_items: int) -> list[dict[str, Any]]:
+    review_candidates: list[dict[str, Any]] = []
+    seen_base_ids: set[str] = set()
+    for row in rows:
+        if row.get("promotion_status") != "eligible_for_promotion_review":
+            continue
+        base_id = _base_candidate_id(row)
+        if base_id in seen_base_ids:
+            continue
+        seen_base_ids.add(base_id)
+        review_candidates.append(_candidate_summary(row))
+        if len(review_candidates) >= max_items:
+            break
+    return review_candidates
+
+
+def _merge_represented_candidates(
+    representatives: list[dict[str, Any]],
+    top_candidates: list[dict[str, Any]],
+    max_items: int,
+) -> list[dict[str, Any]]:
+    # Regime representatives are intentionally first so a lower-scoring but
+    # gate-clearing bull/bear/choppy sleeve cannot disappear from a packet
+    # simply because top-candidate pruning favored another regime.
+    return _dedupe_review_candidates(representatives + top_candidates, max_items)
 
 
 def _blocker_counts(candidates: list[dict[str, Any]]) -> dict[str, int]:
@@ -119,15 +169,25 @@ def _repair_targets(
 
 
 def _next_actions(packet: dict[str, Any]) -> list[str]:
+    missing_regimes = packet.get("gate_summary", {}).get("missing_eligible_regimes") or []
     if packet["decision"] == "ready_for_governed_validation_review":
-        return [
+        actions = [
             "Review promotion-review candidates against the strategy-governance policy before any activation discussion.",
             "Require a clean broker-audited paper session before control-plane promotion beyond research review.",
             "Do not modify live manifests, strategy selection, or risk policy from this packet alone.",
         ]
+        if missing_regimes:
+            actions.insert(
+                1,
+                "Regime completeness is informational only for this policy version; promote only the eligible bull/bear/choppy sleeves present in the packet and continue targeted research for missing regimes: "
+                + ", ".join(str(item) for item in missing_regimes)
+                + ".",
+            )
+        return actions
     return [
-        "Repair the highest-scoring blocked candidates by filling option coverage gaps first.",
-        "Rerun option-aware stress replay after data repair.",
+        "Separate raw data repair from strategy/replay redesign before rerunning blocked candidates.",
+        "For strong data-foundation but low strategy-fill candidates, redesign entry timing, exit timing, and option structure rather than downloading more raw bars first.",
+        "Rerun option-aware stress replay after the targeted repair or redesign.",
         "Keep all candidates research-only until promotion-review gates pass.",
     ]
 
@@ -138,10 +198,20 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         "",
         f"- Generated at: `{packet['generated_at']}`",
         f"- Decision: `{packet['decision']}`",
+        f"- Candidate-level decision: `{packet.get('candidate_level_decision')}`",
         f"- Promotion scope: `{packet['promotion_scope']}`",
         f"- Broker facing: `{packet['broker_facing']}`",
         f"- Candidate count: `{packet['gate_summary']['candidate_count']}`",
         f"- Eligible count: `{packet['gate_summary']['eligible_for_promotion_review_count']}`",
+        f"- Top-candidate count: `{packet['gate_summary']['top_candidate_count']}`",
+        f"- Blocker count scope: `{packet['gate_summary']['blocker_count_scope']}`",
+        f"- Required regimes: `{', '.join(packet['gate_summary'].get('required_regimes') or [])}`",
+        f"- Missing eligible regimes: `{', '.join(packet['gate_summary'].get('missing_eligible_regimes') or []) or 'none'}`",
+        f"- Regime complete for promotion review: `{packet['gate_summary'].get('regime_complete_for_promotion_review')}`",
+        f"- Regime completeness policy: `{packet['gate_summary'].get('regime_completeness_policy')}`",
+        f"- Governance review scope: `{packet['gate_summary'].get('governance_review_scope')}`",
+        f"- Fill coverage unit: `{packet['gate_summary'].get('fill_coverage_unit')}`",
+        f"- Fill coverage semantics: {packet['gate_summary'].get('fill_coverage_semantics')}",
         f"- Capital allocated weight: `{packet['gate_summary']['capital_plan_allocated_weight']}`",
         f"- Capital unallocated dollars: `${packet['gate_summary']['capital_plan_unallocated_dollars']}`",
         "",
@@ -155,8 +225,24 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         lines.append(
             "- "
             f"`{row['symbol']}` `{row['candidate_variant_id']}` "
+            f"family `{row.get('family') or 'unknown'}` "
+            f"regime `{row.get('intended_regime') or 'unknown'}` "
             f"min_net `{row['min_net_pnl']}` min_test `{row['min_test_net_pnl']}` "
-            f"fill `{row['min_fill_coverage']}` blockers `{blockers}`"
+            f"strategy_fill `{row['min_fill_coverage']}` "
+            f"data_foundation `{row.get('min_data_foundation_coverage')}` "
+            f"blockers `{blockers}`"
+        )
+    lines.extend(["", "## Eligible Regime Representatives", ""])
+    if not packet.get("eligible_regime_representatives"):
+        lines.append("- No explicit eligible regime representatives were provided.")
+    for row in packet.get("eligible_regime_representatives", []):
+        blockers = ", ".join(row.get("promotion_blockers", [])) or "none"
+        lines.append(
+            "- "
+            f"`{row['symbol']}` `{row['candidate_variant_id']}` "
+            f"regime `{row.get('intended_regime') or 'unknown'}` "
+            f"min_net `{row['min_net_pnl']}` min_test `{row['min_test_net_pnl']}` "
+            f"strategy_fill `{row['min_fill_coverage']}` blockers `{blockers}`"
         )
     lines.extend(["", "## Symbol Exposure", ""])
     if not packet["symbol_exposure"]:
@@ -170,9 +256,27 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         )
     lines.extend(["", "## Blocker Counts", ""])
     if not packet["blocker_counts"]:
-        lines.append("- No blockers found in the top-candidate set.")
+        lines.append("- No blockers found in the configured blocker-count scope.")
     for blocker, count in packet["blocker_counts"].items():
         lines.append(f"- `{blocker}`: `{count}`")
+    if packet.get("top_candidate_blocker_counts") != packet.get("blocker_counts"):
+        lines.extend(["", "Top-candidate blocker counts:", ""])
+        if not packet.get("top_candidate_blocker_counts"):
+            lines.append("- No blockers found in the top-candidate set.")
+        for blocker, count in packet["top_candidate_blocker_counts"].items():
+            lines.append(f"- `{blocker}`: `{count}`")
+    lines.extend(["", "## Regime Summary", ""])
+    if not packet.get("regime_summary"):
+        lines.append("- No regime summary was provided by the source report.")
+    for row in packet.get("regime_summary", []):
+        lines.append(
+            "- "
+            f"`{row.get('intended_regime')}` candidates `{row.get('candidate_count')}` "
+            f"eligible `{row.get('eligible_for_promotion_review_count')}` "
+            f"best `{row.get('best_candidate_variant_id')}` "
+            f"best_fill `{row.get('best_min_fill_coverage')}` "
+            f"best_status `{row.get('best_promotion_status')}`"
+        )
     lines.extend(["", "## Data Repair Targets", ""])
     if not packet["data_repair_targets"]:
         lines.append("- No data repair targets selected.")
@@ -181,7 +285,23 @@ def _write_markdown(path: Path, packet: dict[str, Any]) -> None:
         lines.append(
             "- "
             f"`{row['symbol']}` `{row['candidate_variant_id']}` "
+            f"family `{row.get('family') or 'unknown'}` "
+            f"regime `{row.get('intended_regime') or 'unknown'}` "
             f"score `{row['research_score']}` blockers `{blockers}`"
+        )
+    lines.extend(["", "## Strategy Redesign Targets", ""])
+    if not packet.get("strategy_redesign_targets"):
+        lines.append("- No strategy redesign targets selected.")
+    for row in packet.get("strategy_redesign_targets", []):
+        blockers = ", ".join(row.get("promotion_blockers", [])) or "none"
+        lines.append(
+            "- "
+            f"`{row['symbol']}` `{row['candidate_variant_id']}` "
+            f"family `{row.get('family') or 'unknown'}` "
+            f"regime `{row.get('intended_regime') or 'unknown'}` "
+            f"strategy_fill `{row.get('min_strategy_fill_coverage')}` "
+            f"data_foundation `{row.get('min_data_foundation_coverage')}` "
+            f"blockers `{blockers}`"
         )
     lines.extend(["", "## Next Actions", ""])
     for item in packet["next_actions"]:
@@ -200,22 +320,58 @@ def build_research_promotion_review_packet(
     top_candidates = [
         item for item in source.get("top_candidates", []) if isinstance(item, dict)
     ]
+    eligible_regime_representatives = [
+        item
+        for item in source.get("eligible_regime_representatives", [])
+        if isinstance(item, dict)
+    ]
     capital_plan = [item for item in source.get("capital_plan", []) if isinstance(item, dict)]
-    review_candidates = [
-        _candidate_summary(row)
-        for row in top_candidates
-        if row.get("promotion_status") == "eligible_for_promotion_review"
-    ][:max_review_candidates]
+    full_blocker_counts = source.get("blocker_counts")
+    if not isinstance(full_blocker_counts, dict):
+        full_blocker_counts = _blocker_counts(top_candidates)
+    top_candidate_blocker_counts = _blocker_counts(top_candidates)
+    source_data_repair_targets = [
+        _candidate_summary(item)
+        for item in source.get("data_repair_priority_candidates", [])
+        if isinstance(item, dict)
+    ]
+    source_has_data_repair_targets = "data_repair_priority_candidates" in source
+    source_strategy_redesign_targets = [
+        _candidate_summary(item)
+        for item in source.get("strategy_redesign_candidates", [])
+        if isinstance(item, dict)
+    ]
+    review_candidates = _merge_represented_candidates(
+        eligible_regime_representatives,
+        top_candidates,
+        max_review_candidates,
+    )
     eligible_count = int(source.get("eligible_for_promotion_review_count") or 0)
-    decision = (
+    unique_eligible_base_count = len(
+        {
+            _base_candidate_id(row)
+            for row in [*eligible_regime_representatives, *top_candidates]
+            if row.get("promotion_status") == "eligible_for_promotion_review"
+        }
+    )
+    candidate_level_decision = (
         "ready_for_governed_validation_review"
-        if eligible_count > 0 and review_candidates
+        if unique_eligible_base_count > 0 and review_candidates
         else "research_only_blocked"
+    )
+    decision = candidate_level_decision
+    missing_eligible_regimes = source.get("missing_eligible_regimes") or []
+    governance_review_scope = (
+        "per_regime_governed_validation_review"
+        if missing_eligible_regimes
+        and candidate_level_decision == "ready_for_governed_validation_review"
+        else "multi_regime_governed_validation_review"
     )
     packet = {
         "generated_at": datetime.now(UTC).isoformat(),
         "status": "research_promotion_review_packet_complete",
         "decision": decision,
+        "candidate_level_decision": candidate_level_decision,
         "promotion_scope": "research_governed_validation_review_only",
         "broker_facing": False,
         "live_manifest_effect": "none",
@@ -226,7 +382,14 @@ def build_research_promotion_review_packet(
             "promotion_allowed_from_source_report": bool(source.get("promotion_allowed")),
             "candidate_count": int(source.get("candidate_count") or len(top_candidates)),
             "eligible_for_promotion_review_count": eligible_count,
+            "unique_eligible_base_candidate_count": unique_eligible_base_count,
             "fill_coverage_gate": source.get("fill_coverage_gate"),
+            "strategy_fill_coverage_gate": source.get(
+                "strategy_fill_coverage_gate", source.get("fill_coverage_gate")
+            ),
+            "fill_coverage_unit": source.get("fill_coverage_unit"),
+            "fill_coverage_semantics": source.get("fill_coverage_semantics"),
+            "candidate_identity_mode": source.get("candidate_identity_mode"),
             "min_option_trades": source.get("min_option_trades"),
             "min_test_net_pnl": source.get("min_test_net_pnl"),
             "capital_plan_allocated_weight": source.get("capital_plan_allocated_weight"),
@@ -234,6 +397,23 @@ def build_research_promotion_review_packet(
             "capital_plan_unallocated_dollars": source.get(
                 "capital_plan_unallocated_dollars"
             ),
+            "top_candidate_count": len(top_candidates),
+            "blocker_count_scope": (
+                "full_candidate_population"
+                if isinstance(source.get("blocker_counts"), dict)
+                else "top_candidates_only"
+            ),
+            "required_regimes": source.get("required_regimes", []),
+            "eligible_regimes": source.get("eligible_regimes", []),
+            "missing_eligible_regimes": source.get("missing_eligible_regimes", []),
+            "regime_complete_for_promotion_review": source.get(
+                "regime_complete_for_promotion_review"
+            ),
+            "promotion_allowed_regime_complete": source.get(
+                "promotion_allowed_regime_complete"
+            ),
+            "regime_completeness_policy": "informational_only_not_a_hard_promotion_gate",
+            "governance_review_scope": governance_review_scope,
         },
         "portfolio_constraints": {
             "initial_cash": source.get("initial_cash"),
@@ -242,13 +422,20 @@ def build_research_promotion_review_packet(
             "max_symbol_weight": source.get("max_symbol_weight"),
         },
         "review_candidates": review_candidates,
+        "eligible_regime_representatives": [
+            _candidate_summary(item) for item in eligible_regime_representatives
+        ],
         "capital_plan": capital_plan,
         "symbol_exposure": _symbol_exposure(capital_plan),
-        "blocker_counts": _blocker_counts(top_candidates),
-        "data_repair_targets": _repair_targets(
-            top_candidates,
-            max_targets=max_review_candidates,
+        "blocker_counts": full_blocker_counts,
+        "top_candidate_blocker_counts": top_candidate_blocker_counts,
+        "regime_summary": source.get("regime_summary", []),
+        "data_repair_targets": (
+            source_data_repair_targets
+            if source_has_data_repair_targets
+            else _repair_targets(top_candidates, max_targets=max_review_candidates)
         ),
+        "strategy_redesign_targets": source_strategy_redesign_targets,
         "hard_rules": [
             "This packet is not broker-facing.",
             "This packet does not authorize live manifest changes.",

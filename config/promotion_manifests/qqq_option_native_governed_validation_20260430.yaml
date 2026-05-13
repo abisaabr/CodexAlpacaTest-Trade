@@ -1,0 +1,64 @@
+version: 1
+generated_at_utc: "2026-04-30T22:23:37Z"
+scope: research_governed_validation_review_only
+broker_facing: false
+live_manifest_effect: none
+risk_policy_effect: none
+symbol: QQQ
+dataset_lineage:
+  stock_bars: gs://codexalpaca-data-us/research_stock_data/qqq_365d_next_trading_day_5x5_20260428/
+  selected_contracts: gs://codexalpaca-control-us/research_results/qqq_365d_next_trading_day_5x5_20260428/research_wave/qqq_365d_next_trading_day_5x5_20260428/dense_universe/selected_option_contracts/
+  option_bars: gs://codexalpaca-data-us/research_option_data/qqq_365d_next_trading_day_5x5_20260428/option_bars_silver/option_bars/underlying=QQQ/
+  regime_labels: qqq_regime_labels_bearm0p01
+replay_profile:
+  entry_timing_mode: first_common_within_cutoff
+  contract_selection_method: nearest_contract
+  entry_offset_minutes: 330
+  exit_offset_minutes: 390
+  max_entry_lag_minutes: 15
+  max_exit_lag_minutes: 15
+  test_date_count: 20
+  fill_coverage_gate: 0.90
+  min_option_trades: 20
+  min_test_net_pnl: 0
+promotion_packet:
+  decision: ready_for_governed_validation_review
+  eligible_for_promotion_review_count: 3
+  local_path: C:\Users\rabisaab\Downloads\gcp_backtester_review_20260430\qqq_option_native_all_regime_promotion_packet_3regime\research_promotion_review_packet.json
+  gcs_path: gs://codexalpaca-control-us/research_results/qqq_option_native_governed_validation_20260430/
+strategies:
+  - candidate_variant_id: qqq_bull_long_call_atm__first_common_within_cutoff_e330_x390_el15_xl15_nearest_contract
+    source_strategy_id: qqq_bull_long_call_atm
+    intended_regime: bull
+    family: long_call
+    min_fill_coverage: 0.9506
+    min_data_foundation_coverage: 1.0
+    min_option_trade_count: 77
+    min_net_pnl: 3886.861
+    min_test_net_pnl: 142.792
+    promotion_status: eligible_for_promotion_review
+  - candidate_variant_id: qqq_bear_call_credit_spread__first_common_within_cutoff_e330_x390_el15_xl15_nearest_contract
+    source_strategy_id: qqq_bear_call_credit_spread
+    intended_regime: bear
+    family: call_credit_spread
+    min_fill_coverage: 0.913
+    min_data_foundation_coverage: 0.8372
+    min_option_trade_count: 21
+    min_net_pnl: 1416.421
+    min_test_net_pnl: 494.192
+    promotion_status: eligible_for_promotion_review
+  - candidate_variant_id: qqq_choppy_iron_condor__first_common_within_cutoff_e330_x390_el15_xl15_nearest_contract
+    source_strategy_id: qqq_choppy_iron_condor
+    intended_regime: choppy
+    family: iron_condor
+    min_fill_coverage: 0.9268
+    min_data_foundation_coverage: 0.9344
+    min_option_trade_count: 38
+    min_net_pnl: 162.677
+    min_test_net_pnl: 294.945
+    promotion_status: eligible_for_promotion_review
+hard_rules:
+  - This manifest does not start trading.
+  - This manifest does not modify the live paper-runner manifest.
+  - This manifest does not change risk policy.
+  - Broker-facing paper validation requires a separate controlled runner PR and operator approval.

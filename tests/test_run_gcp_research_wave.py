@@ -8,10 +8,12 @@ import pandas as pd
 
 from scripts.run_gcp_research_wave import (
     REAL_STOCK_BAR_EVIDENCE_MODE,
+    _variant_stock_strategy,
     filter_variants,
     load_variants,
     run,
     score_variant,
+    variant_timing_parameters,
 )
 
 
@@ -76,6 +78,233 @@ def test_score_variant_keeps_metadata_proxy_non_promotable() -> None:
     assert row["recommendation"] == "hold_for_real_backtest"
     assert row["broker_facing"] is False
     assert row["live_manifest_effect"] == "none"
+
+
+def test_timing_profile_defaults_drive_stock_proxy_timing() -> None:
+    fast = variant_timing_parameters({"timing_profile": "fast"})
+    slow = variant_timing_parameters({"timing_profile": "slow"})
+
+    assert fast["hard_exit_minute"] < slow["hard_exit_minute"]
+    assert fast["liquidity_gate"] == "tight"
+    assert slow["liquidity_gate"] == "baseline"
+
+    fast_strategy = _variant_stock_strategy(
+        {"variant_id": "fast", "symbol": "QQQ", "parameters": {"timing_profile": "fast"}}
+    )
+    slow_strategy = _variant_stock_strategy(
+        {"variant_id": "slow", "symbol": "QQQ", "parameters": {"timing_profile": "slow"}}
+    )
+
+    assert fast_strategy.timeout_bars < slow_strategy.timeout_bars
+    assert fast_strategy.fast_window < slow_strategy.fast_window
+
+
+def test_choppy_premium_strategy_uses_range_bound_timeout_proxy() -> None:
+    strategy = _variant_stock_strategy(
+        {
+            "variant_id": "qqq_choppy_condor",
+            "symbol": "QQQ",
+            "source_strategy_id": "qqq__choppy__call__iron_condor",
+            "parameters": {
+                "family_template": "iron_condor",
+                "hard_exit_minute": 75,
+                "stock_proxy_mode": "range_bound",
+            },
+        }
+    )
+
+    assert strategy.signal_mode == "range_bound"
+    assert strategy.stop_pct == 0.0
+    assert strategy.target_pct == 0.0
+    assert strategy.timeout_bars == 75
+
+
+def test_choppy_range_reversion_can_emit_lower_and_upper_band_signals() -> None:
+    timestamps = pd.date_range("2026-01-05 14:30", periods=100, freq="min", tz="UTC")
+    prices = [100.0 + ((index % 20) - 10) * 0.025 for index in range(len(timestamps))]
+    bars = pd.DataFrame(
+        {
+            "symbol": ["QQQ"] * len(timestamps),
+            "timestamp": timestamps,
+            "open": prices,
+            "high": [price + 0.08 for price in prices],
+            "low": [price - 0.08 for price in prices],
+            "close": prices,
+            "volume": [1000] * len(timestamps),
+        }
+    )
+    lower_strategy = _variant_stock_strategy(
+        {
+            "variant_id": "qqq_choppy_lower",
+            "symbol": "QQQ",
+            "source_strategy_id": "qqq__choppy__call__single_leg_repair",
+            "parameters": {
+                "range_edge_pct": 0.0005,
+                "range_entry_side": "lower_band",
+                "stock_proxy_mode": "range_bound",
+            },
+        }
+    )
+    upper_strategy = _variant_stock_strategy(
+        {
+            "variant_id": "qqq_choppy_upper",
+            "symbol": "QQQ",
+            "source_strategy_id": "qqq__choppy__put__single_leg_repair",
+            "parameters": {
+                "range_edge_pct": 0.0005,
+                "range_entry_side": "upper_band",
+                "stock_proxy_mode": "range_bound",
+            },
+        }
+    )
+
+    lower_signals = lower_strategy.generate_signals(bars)["signal"]
+    upper_signals = upper_strategy.generate_signals(bars)["signal"]
+
+    assert int((lower_signals > 0).sum()) > 0
+    assert int((upper_signals < 0).sum()) > 0
+    assert int((lower_signals < 0).sum()) == 0
+    assert int((upper_signals > 0).sum()) == 0
+
+
+def test_variant_stock_proxy_can_delay_signals_within_session() -> None:
+    timestamps = pd.date_range("2026-01-05 14:30", periods=100, freq="min", tz="UTC")
+    prices = [100.0 + ((index % 20) - 10) * 0.025 for index in range(len(timestamps))]
+    bars = pd.DataFrame(
+        {
+            "symbol": ["QQQ"] * len(timestamps),
+            "timestamp": timestamps,
+            "open": prices,
+            "high": [price + 0.08 for price in prices],
+            "low": [price - 0.08 for price in prices],
+            "close": prices,
+            "volume": [1000] * len(timestamps),
+        }
+    )
+    immediate_strategy = _variant_stock_strategy(
+        {
+            "variant_id": "qqq_choppy_immediate",
+            "symbol": "QQQ",
+            "source_strategy_id": "qqq__choppy__call__single_leg_repair",
+            "parameters": {
+                "range_edge_pct": 0.0005,
+                "range_entry_side": "lower_band",
+                "stock_proxy_mode": "range_bound",
+            },
+        }
+    )
+    delayed_strategy = _variant_stock_strategy(
+        {
+            "variant_id": "qqq_choppy_delayed",
+            "symbol": "QQQ",
+            "source_strategy_id": "qqq__choppy__call__single_leg_repair",
+            "parameters": {
+                "range_edge_pct": 0.0005,
+                "range_entry_side": "lower_band",
+                "signal_delay_bars": 2,
+                "stock_proxy_mode": "range_bound",
+            },
+        }
+    )
+
+    immediate = immediate_strategy.generate_signals(bars)
+    delayed = delayed_strategy.generate_signals(bars)
+    immediate_first = immediate.loc[immediate["signal"] != 0, "timestamp"].iloc[0]
+    delayed_first = delayed.loc[delayed["signal"] != 0, "timestamp"].iloc[0]
+
+    assert delayed_strategy.signal_delay_bars == 2
+    assert delayed_first == immediate_first + pd.Timedelta(minutes=2)
+
+
+def test_bull_put_credit_spread_keeps_bullish_stock_proxy_direction() -> None:
+    strategy = _variant_stock_strategy(
+        {
+            "variant_id": "qqq_bull_put_credit",
+            "symbol": "QQQ",
+            "source_strategy_id": "qqq__bull__call__bull_put_credit_spread",
+            "parameters": {
+                "family_template": "bull_put_credit_spread",
+                "timing_profile": "fast",
+            },
+        }
+    )
+
+    assert strategy.direction == 1
+    assert strategy.signal_mode == "breakout"
+
+
+def test_variant_stock_proxy_throttles_to_daily_first_signal() -> None:
+    strategy = _variant_stock_strategy(
+        {
+            "variant_id": "qqq_bull_daily_first",
+            "symbol": "QQQ",
+            "source_strategy_id": "qqq__bull__call__single_leg_repair",
+            "parameters": {
+                "entry_signal_mode": "daily_first",
+                "hard_exit_minute": 30,
+                "max_signals_per_day": 1,
+                "min_minutes_since_open": 15,
+                "min_trend_gap_pct": 0.0,
+                "stock_proxy_mode": "breakout",
+            },
+        }
+    )
+    timestamps = pd.date_range("2026-01-05 14:30", periods=80, freq="min", tz="UTC")
+    bars = pd.DataFrame(
+        {
+            "symbol": ["QQQ"] * len(timestamps),
+            "timestamp": timestamps,
+            "open": [100.0 + index * 0.1 for index in range(len(timestamps))],
+            "high": [100.1 + index * 0.1 for index in range(len(timestamps))],
+            "low": [99.9 + index * 0.1 for index in range(len(timestamps))],
+            "close": [100.0 + index * 0.1 for index in range(len(timestamps))],
+            "volume": [1000] * len(timestamps),
+        }
+    )
+
+    signals = strategy.generate_signals(bars)
+
+    assert int((signals["signal"] != 0).sum()) == 1
+
+
+def test_variant_stock_proxy_respects_entry_window() -> None:
+    strategy = _variant_stock_strategy(
+        {
+            "variant_id": "qqq_bear_window",
+            "symbol": "QQQ",
+            "source_strategy_id": "qqq__bear__put__single_leg_repair",
+            "parameters": {
+                "entry_signal_mode": "daily_first",
+                "hard_exit_minute": 30,
+                "max_signals_per_day": 1,
+                "max_minutes_since_open": 40,
+                "min_minutes_since_open": 30,
+                "min_trend_gap_pct": 0.0,
+                "stock_proxy_mode": "breakout",
+            },
+        }
+    )
+    timestamps = pd.date_range("2026-01-05 14:30", periods=80, freq="min", tz="UTC")
+    prices = [100.0 - index * 0.1 for index in range(len(timestamps))]
+    bars = pd.DataFrame(
+        {
+            "symbol": ["QQQ"] * len(timestamps),
+            "timestamp": timestamps,
+            "open": prices,
+            "high": [price + 0.05 for price in prices],
+            "low": [price - 0.05 for price in prices],
+            "close": prices,
+            "volume": [1000] * len(timestamps),
+        }
+    )
+
+    signals = strategy.generate_signals(bars)
+    fired = signals.loc[signals["signal"] != 0, "timestamp"]
+
+    assert len(fired) == 1
+    fired_local = fired.dt.tz_convert("America/New_York").iloc[0]
+    minute_since_open = fired_local.hour * 60 + fired_local.minute - (9 * 60 + 30)
+    assert 30 <= minute_since_open <= 40
 
 
 def test_run_writes_required_research_artifacts(tmp_path: Path) -> None:

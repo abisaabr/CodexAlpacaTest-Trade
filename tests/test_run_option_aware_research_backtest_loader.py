@@ -3,6 +3,7 @@ from pathlib import Path
 import pandas as pd
 
 from scripts.run_option_aware_research_backtest import (
+    STOCK_SESSION_FILTER_NONE,
     _load_parquet_tree,
     _load_stock_bars,
     _stock_trades_for_variant,
@@ -80,6 +81,7 @@ def test_stock_trades_for_variant_treats_symbolless_frame_as_single_symbol() -> 
         stock_bars=bars,
         initial_cash=25000,
         allocation_fraction=0.10,
+        stock_session_filter=STOCK_SESSION_FILTER_NONE,
     )
 
     assert isinstance(trades, pd.DataFrame)

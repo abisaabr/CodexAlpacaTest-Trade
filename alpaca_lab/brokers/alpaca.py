@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -33,6 +34,15 @@ def build_client_order_id(*, strategy_name: str, symbol: str, side: str, request
     digest = sha1(f"{strategy_name}|{symbol}|{side}|{request_key}".encode()).hexdigest()[:16]
     prefix = strategy_name.lower().replace(" ", "-")[:12]
     return f"{prefix}-{digest}"
+
+
+OPTION_SYMBOL_RE = re.compile(r"^(?P<root>[A-Z]{1,6})(?P<expiry>\d{6})(?P<type>[CP])(?P<strike>\d{8})$")
+POSITION_INTENT_SIDE = {
+    "buy_to_open": "buy",
+    "buy_to_close": "buy",
+    "sell_to_open": "sell",
+    "sell_to_close": "sell",
+}
 
 
 @dataclass(slots=True)
@@ -307,6 +317,47 @@ class AlpacaBrokerAdapter:
                 "Naked option sell_to_open orders are blocked for this runner. "
                 "Use an approved multi-leg order flow if short option exposure is intentional."
             )
+        if order.asset_class == "option" and order.legs:
+            AlpacaBrokerAdapter._validate_multileg_option_request(order)
+
+    @staticmethod
+    def _validate_multileg_option_request(order: OrderRequest) -> None:
+        if order.extra.get("order_class") != "mleg":
+            raise ValueError("Option multi-leg orders must be submitted with order_class='mleg'.")
+        if order.qty is None or float(order.qty) <= 0.0:
+            raise ValueError("Option multi-leg orders require a positive combo quantity.")
+
+        intents = [str(leg.position_intent or "").strip() for leg in order.legs]
+        invalid_intents = sorted({intent for intent in intents if intent not in POSITION_INTENT_SIDE})
+        if invalid_intents:
+            raise ValueError(f"Option multi-leg order has invalid position intents: {invalid_intents}")
+        for leg, intent in zip(order.legs, intents, strict=True):
+            if int(leg.ratio_qty) <= 0:
+                raise ValueError("Option multi-leg legs require positive ratio_qty values.")
+            expected_side = POSITION_INTENT_SIDE[intent]
+            if leg.side != expected_side:
+                raise ValueError(
+                    f"Option multi-leg leg side '{leg.side}' does not match position intent '{intent}'."
+                )
+
+        opening_intents = {intent for intent in intents if intent.endswith("_open")}
+        closing_intents = {intent for intent in intents if intent.endswith("_close")}
+        if opening_intents and closing_intents:
+            raise ValueError("Option multi-leg orders cannot mix opening and closing position intents.")
+        if "sell_to_open" in opening_intents:
+            long_open_ratio = sum(leg.ratio_qty for leg, intent in zip(order.legs, intents, strict=True) if intent == "buy_to_open")
+            short_open_ratio = sum(leg.ratio_qty for leg, intent in zip(order.legs, intents, strict=True) if intent == "sell_to_open")
+            if long_open_ratio < short_open_ratio:
+                raise ValueError(
+                    "Short-opening multi-leg option orders must include at least as much long opening hedge ratio."
+                )
+            parsed_roots = {
+                match.group("root")
+                for leg in order.legs
+                if (match := OPTION_SYMBOL_RE.match(leg.symbol.strip().upper()))
+            }
+            if len(parsed_roots) > 1:
+                raise ValueError("Option multi-leg orders must use one underlying root per combo.")
 
     def build_order_request(
         self,
@@ -736,21 +787,21 @@ class AlpacaBrokerAdapter:
             page_index += 1
         return self._attach_request_audit(aggregated, request_audit)
 
-    def get_option_latest_quotes(self, symbols: list[str]) -> dict[str, Any]:
+    def get_option_latest_quotes(self, symbols: list[str], *, feed: str = "opra") -> dict[str, Any]:
         payload = self._request_json(
             "GET",
             "/v1beta1/options/quotes/latest",
             api="data",
-            params={"symbols": ",".join(symbols)},
+            params={"symbols": ",".join(symbols), "feed": feed},
         )
         return payload if isinstance(payload, dict) else {}
 
-    def get_option_snapshots(self, symbols: list[str]) -> dict[str, Any]:
+    def get_option_snapshots(self, symbols: list[str], *, feed: str = "opra") -> dict[str, Any]:
         payload = self._request_json(
             "GET",
             "/v1beta1/options/snapshots",
             api="data",
-            params={"symbols": ",".join(symbols)},
+            params={"symbols": ",".join(symbols), "feed": feed},
         )
         return payload if isinstance(payload, dict) else {}
 

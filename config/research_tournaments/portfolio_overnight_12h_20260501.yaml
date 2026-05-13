@@ -1,0 +1,151 @@
+wave_id: portfolio_overnight_12h_20260501
+generated_for_date: 2026-05-01
+scope: research_only_portfolio_tournament
+broker_facing: false
+paper_orders: false
+live_manifest_effect: none
+risk_policy_effect: none
+duration_hours: 12
+initial_cash: 25000
+default_boot_disk_size_gb: 40
+gcs_prefix: gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/
+source_branch: codex/phase2-fill-semantics-20260430
+service_account: ramzi-service-account@codexalpaca.iam.gserviceaccount.com
+source_archive_uri: gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/inputs/source/codexalpaca_repo_source.tar.gz
+input_variants_uri: gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/inputs/portfolio_overnight_variants.jsonl
+input_queue_uri: gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/inputs/portfolio_overnight_option_queue.json
+promotion_gates:
+  fill_coverage_gate: 0.90
+  min_option_trades: 20
+  min_test_net_pnl: 0
+  min_net_pnl: 0
+  max_positions: 8
+  max_strategies_per_symbol: 2
+  max_symbol_weight: 0.20
+  initial_cash: 25000
+portfolio_objective:
+  primary: maximize_after_cost_test_net_pnl_with_drawdown_and_fill_penalties
+  account_size: 25000
+  regimes:
+    - bull
+    - bear
+    - choppy
+  promotion_scope: governed_validation_review_only
+datasets:
+  qqq_dense_365d:
+    symbols: [QQQ]
+    stock_root: gs://codexalpaca-data-us/research_stock_data/qqq_365d_next_trading_day_5x5_20260428/
+    selected_contracts_root: gs://codexalpaca-control-us/research_results/qqq_365d_next_trading_day_5x5_20260428/research_wave/qqq_365d_next_trading_day_5x5_20260428/dense_universe/selected_option_contracts/
+    option_root: gs://codexalpaca-data-us/research_option_data/qqq_365d_next_trading_day_5x5_20260428/
+    priority: 1
+    stages: [365d_5x5]
+  top10_ladder:
+    symbols: [AAPL, AMD, AMZN, INTC, IWM, META, MSFT, NVDA, SPY, TSLA]
+    stock_root: gs://codexalpaca-data-us/research_stock_data/option_fill_ladder_20260429/
+    option_root: gs://codexalpaca-data-us/research_option_data/option_fill_ladder_20260429/
+    selected_contracts_root_template: gs://codexalpaca-control-us/research_results/option_fill_ladder_20260429/{symbol}/{stage}/research_wave/dense_universe/selected_option_contracts/
+    priority: 2
+    stages: [365d_5x5, 30d_5x5, 30d_atm, 7d_atm]
+  next10_ladder:
+    symbols: [AVGO, GOOGL, MU, NFLX, ORCL, PLTR, QQQ, TSM, XLE, XOM]
+    stock_root: gs://codexalpaca-data-us/research_stock_data/option_fill_ladder_next10_20260429/
+    option_root: gs://codexalpaca-data-us/research_option_data/option_fill_ladder_next10_20260429/
+    selected_contracts_root_template: gs://codexalpaca-control-us/research_results/option_fill_ladder_next10_20260429/{symbol}/{stage}/research_wave/dense_universe/selected_option_contracts/
+    priority: 2
+    stages: [365d_5x5, 30d_5x5, 30d_atm, 7d_atm]
+  curated_preferred_20260421_20260423:
+    symbols: [GLD, MSFT, QQQ, SLV, TSLA]
+    stock_root: gs://codexalpaca-data-us/curated/historical/research_preferred_1min_20260421_20260423_stock_contracts/
+    option_root: gs://codexalpaca-data-us/curated/historical/research_preferred_1min_20260421_20260423_stock_contracts/
+    priority: 3
+    stages: [preferred_1min_smoke]
+    overnight_enabled: false
+workers:
+  - worker_id: data_coverage_top10
+    role: data_coverage
+    machine_type: e2-standard-2
+    boot_disk_size_gb: 20
+    zone: us-central1-a
+    spot: true
+    symbols: [AAPL, AMD, AMZN, INTC, IWM, META, MSFT, NVDA, SPY, TSLA]
+    stages: [365d_5x5, 30d_5x5, 30d_atm, 7d_atm]
+  - worker_id: data_coverage_next10
+    role: data_coverage
+    machine_type: e2-standard-2
+    boot_disk_size_gb: 20
+    zone: us-central1-a
+    spot: true
+    symbols: [AVGO, GOOGL, MU, NFLX, ORCL, PLTR, QQQ, TSM, XLE, XOM]
+    stages: [365d_5x5, 30d_5x5, 30d_atm, 7d_atm]
+  - worker_id: qqq_deep_regime_grid
+    role: qqq_option_native_deep_grid
+    machine_type: e2-standard-4
+    boot_disk_size_gb: 40
+    zone: us-central1-a
+    spot: true
+    symbols: [QQQ]
+    profiles:
+      - first_common_e330_x390_lag15_15_nearest
+      - first_common_e300_x390_lag30_60_nearest
+      - fixed_e330_x390_lag15_15_nearest
+  - worker_id: option_aware_core_a
+    role: option_aware_tournament
+    machine_type: e2-standard-4
+    boot_disk_size_gb: 40
+    zone: us-central1-a
+    spot: true
+    symbols: [AAPL, AMD, AMZN, INTC, IWM]
+    stages: [365d_5x5]
+    selectors: [nearest_contract, entry_liquidity_first_research_only]
+  - worker_id: option_aware_core_b
+    role: option_aware_tournament
+    machine_type: e2-standard-4
+    boot_disk_size_gb: 40
+    zone: us-central1-a
+    spot: true
+    symbols: [META, MSFT, NVDA, SPY, TSLA]
+    stages: [365d_5x5]
+    selectors: [nearest_contract, entry_liquidity_first_research_only]
+  - worker_id: option_aware_core_c
+    role: option_aware_tournament
+    machine_type: e2-standard-4
+    boot_disk_size_gb: 40
+    zone: us-central1-a
+    spot: true
+    symbols: [AVGO, GOOGL, MU, NFLX, ORCL]
+    stages: [365d_5x5]
+    selectors: [nearest_contract, entry_liquidity_first_research_only]
+  - worker_id: option_aware_core_d
+    role: option_aware_tournament
+    machine_type: e2-standard-4
+    boot_disk_size_gb: 40
+    zone: us-central1-a
+    spot: true
+    symbols: [PLTR, QQQ, TSM, XLE, XOM]
+    stages: [365d_5x5]
+    selectors: [nearest_contract, entry_liquidity_first_research_only]
+  - worker_id: aggregator_promotion_review
+    role: aggregate_and_promote
+    machine_type: e2-standard-2
+    boot_disk_size_gb: 20
+    zone: us-central1-a
+    spot: true
+    start_after_hours: 11
+logging_contract:
+  worker_prefix_template: gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/workers/{worker_id}/
+  aggregate_prefix: gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate/
+  required_worker_files:
+    - startup.log
+    - command.txt
+    - source_commit.txt
+    - artifacts_manifest.json
+  required_aggregate_files:
+    - research_portfolio_report.json
+    - research_promotion_review_packet.json
+    - portfolio_overnight_12h_final_handoff.md
+hard_rules:
+  - Do not start trading.
+  - Do not submit paper orders.
+  - Do not modify live manifests.
+  - Do not change risk policy.
+  - Promotion means governed validation review only.

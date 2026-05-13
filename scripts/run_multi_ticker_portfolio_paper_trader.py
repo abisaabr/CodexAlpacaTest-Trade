@@ -3,7 +3,10 @@ from __future__ import annotations
 import argparse
 import json
 
-from _bootstrap import bootstrap_repo_root
+try:
+    from _bootstrap import bootstrap_repo_root
+except ModuleNotFoundError:  # pragma: no cover - importable module fallback
+    from scripts._bootstrap import bootstrap_repo_root
 
 bootstrap_repo_root()
 
@@ -48,14 +51,23 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def resolve_submit_paper_orders(args: argparse.Namespace, portfolio_config: object) -> bool:
+    if args.no_submit_paper_orders or args.startup_preflight:
+        return False
+    if args.submit_paper_orders:
+        return True
+    execution_config = getattr(portfolio_config, "execution", None)
+    if getattr(execution_config, "paper_order_arming_mode", "cli_flag_only") == "config_explicit":
+        return bool(getattr(execution_config, "submit_paper_orders", False))
+    return False
+
+
 def main() -> None:
     args = parse_args()
     settings = load_settings(config_file=args.config)
     configure_logging("CRITICAL" if args.startup_preflight else settings.log_level)
     portfolio_config = load_portfolio_config(args.portfolio_config)
-    submit_paper_orders = args.submit_paper_orders or portfolio_config.execution.submit_paper_orders
-    if args.no_submit_paper_orders or args.startup_preflight:
-        submit_paper_orders = False
+    submit_paper_orders = resolve_submit_paper_orders(args, portfolio_config)
     trader = MultiTickerPortfolioPaperTrader(
         settings,
         portfolio_config,

@@ -38,14 +38,51 @@ class StrategyConfig(BaseModel):
         "credit_bear",
         "long_straddle",
         "iron_condor",
+        "governed_breakout_call",
+        "governed_breakout_put",
+        "governed_lower_band_reversion_call",
     ]
-    timing_profile: Literal["reactive", "fast", "base", "slow", "patient"] = "base"
+    timing_profile: Literal["reactive", "fast", "base", "slow", "patient", "governed_late"] = "base"
     hard_exit_minute: int
     risk_fraction: float
     max_contracts: int
     profit_target_multiple: float
     stop_loss_multiple: float
     legs: tuple[StrategyLegConfig, ...]
+    candidate_variant_id: str | None = None
+    source_strategy_id: str | None = None
+    promotion_manifest_path: str | None = None
+    governed_validation_packet_uri: str | None = None
+    promotion_status: str | None = None
+    min_fill_coverage: float | None = None
+    min_data_foundation_coverage: float | None = None
+    min_option_trade_count: int | None = None
+    min_net_pnl: float | None = None
+    min_test_net_pnl: float | None = None
+    profit_factor: float | None = None
+    research_profile: str | None = None
+    research_entry_timing_mode: str | None = None
+    research_entry_offset_minutes: int | None = None
+    research_exit_offset_minutes: int | None = None
+    runner_semantics_status: str | None = None
+    stock_proxy_mode: Literal["breakout", "range_bound"] | None = None
+    entry_signal_mode: Literal["continuous", "daily_first", "rising_edge"] | None = None
+    min_minutes_since_open: int | None = None
+    max_minutes_since_open: int | None = None
+    min_trend_gap_pct: float | None = None
+    max_trend_gap_pct: float | None = None
+    min_range_pct: float | None = None
+    max_range_pct: float | None = None
+    max_midpoint_distance_pct: float | None = None
+    range_entry_side: Literal["center", "lower_band", "upper_band"] | None = None
+    range_edge_pct: float | None = None
+    liquidity_gate: Literal["tight", "loose"] | None = None
+    option_exit_mode: Literal["premium_target_stop"] | None = None
+    option_exit_profile: str | None = None
+    option_profit_target_pct: float | None = None
+    option_stop_loss_pct: float | None = None
+    min_option_hold_minutes: int | None = None
+    runner_hard_exit_mode: Literal["absolute_minute", "minutes_after_entry"] | None = None
 
     @field_validator("underlying_symbol", mode="before")
     @classmethod
@@ -126,6 +163,7 @@ class RiskConfig(BaseModel):
     max_positions_per_regime_window: int | None = 3
     max_positions_per_bucket_regime_window: int | None = 2
     max_open_risk_fraction_per_symbol: float | None = 0.05
+    regime_risk_scales: dict[str, float] = Field(default_factory=dict)
     bucket_caps: tuple[RiskBucketConfig, ...] = Field(
         default_factory=lambda: (
             RiskBucketConfig(
@@ -162,9 +200,34 @@ class RiskConfig(BaseModel):
     entry_failure_streak_limit: int | None = 3
     entry_adverse_slippage_fraction_limit: float | None = 0.20
     entry_adverse_slippage_lookback: int = 4
+    stop_loss_cooldown_count: int | None = 2
+    stop_loss_cooldown_minutes: int | None = 60
+    stop_loss_cooldown_scope: Literal["strategy", "symbol_regime", "symbol_regime_family"] = (
+        "symbol_regime_family"
+    )
     entry_cutoff_minute: int | None = 345
     same_day_entry_cutoff_minute: int | None = 300
     event_blackouts: tuple[EventBlackoutConfig, ...] = Field(default_factory=tuple)
+
+    @field_validator("regime_risk_scales", mode="before")
+    @classmethod
+    def normalize_regime_risk_scales(cls, value: object) -> dict[str, float]:
+        if value in (None, "", []):
+            return {}
+        if not isinstance(value, dict):
+            raise TypeError("regime_risk_scales must be a mapping of regime to positive scale")
+        normalized: dict[str, float] = {}
+        for raw_key, raw_value in value.items():
+            key = str(raw_key).strip().lower()
+            if not key:
+                continue
+            if key not in {"bull", "bear", "choppy"}:
+                raise ValueError("regime_risk_scales keys must be bull, bear, or choppy")
+            scale = float(raw_value)
+            if scale <= 0.0:
+                raise ValueError("regime_risk_scales values must be positive")
+            normalized[key] = scale
+        return normalized
 
 
 class ExecutionConfig(BaseModel):
@@ -196,6 +259,7 @@ class ExecutionConfig(BaseModel):
     option_feed: str = "indicative"
     stock_feed: str | None = None
     submit_paper_orders: bool = True
+    paper_order_arming_mode: Literal["cli_flag_only", "config_explicit"] = "cli_flag_only"
     poll_interval_seconds: int = 20
     order_status_poll_seconds: int = 10
     order_fill_timeout_seconds: int = 45
@@ -211,6 +275,7 @@ class ExecutionConfig(BaseModel):
     market_exit_fallback_minute: int = 385
     startup_lead_minutes: int = 10
     midday_report_minute: int = 180
+    eod_flatten_minutes_before_close: tuple[int, ...] = (10, 2)
     auto_flatten_unexpected_positions: bool = True
     unexpected_position_cleanup_timeout_seconds: int = 45
 
@@ -228,6 +293,27 @@ class ExecutionConfig(BaseModel):
     @classmethod
     def normalize_path(cls, value: object) -> Path:
         return Path(str(value))
+
+    @field_validator("eod_flatten_minutes_before_close", mode="before")
+    @classmethod
+    def normalize_eod_flatten_minutes_before_close(cls, value: object) -> tuple[int, ...]:
+        if value in (None, "", []):
+            return ()
+        if isinstance(value, str):
+            items = [item.strip() for item in value.split(",") if item.strip()]
+            return tuple(int(item) for item in items)
+        if isinstance(value, (list, tuple, set)):
+            return tuple(int(item) for item in value)
+        raise TypeError("eod_flatten_minutes_before_close must be a comma-separated string or sequence")
+
+    @field_validator("eod_flatten_minutes_before_close")
+    @classmethod
+    def validate_eod_flatten_minutes_before_close(cls, value: tuple[int, ...]) -> tuple[int, ...]:
+        normalized = tuple(sorted({int(item) for item in value}, reverse=True))
+        for minutes_before_close in normalized:
+            if minutes_before_close <= 0 or minutes_before_close >= 390:
+                raise ValueError("eod_flatten_minutes_before_close values must be between 1 and 389")
+        return normalized
 
 
 class OwnershipConfig(BaseModel):
@@ -268,6 +354,7 @@ class MultiTickerPortfolioConfig(BaseModel):
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     ownership: OwnershipConfig = Field(default_factory=OwnershipConfig)
     strategy_manifest_path: Path | None = None
+    strategy_manifest_paths: tuple[Path, ...] = ()
     strategies: tuple[StrategyConfig, ...]
 
     @field_validator("strategy_manifest_path", mode="before")
@@ -276,6 +363,17 @@ class MultiTickerPortfolioConfig(BaseModel):
         if value in (None, ""):
             return None
         return Path(str(value))
+
+    @field_validator("strategy_manifest_paths", mode="before")
+    @classmethod
+    def normalize_strategy_manifest_paths(cls, value: object) -> tuple[Path, ...]:
+        if value in (None, "", []):
+            return ()
+        if isinstance(value, str):
+            return tuple(Path(item.strip()) for item in value.split(",") if item.strip())
+        if isinstance(value, (list, tuple, set)):
+            return tuple(Path(str(item)) for item in value if str(item).strip())
+        raise TypeError("strategy_manifest_paths must be a string or sequence")
 
     @property
     def strategies_by_name(self) -> dict[str, StrategyConfig]:
@@ -558,6 +656,36 @@ def _resolve_strategy_payloads(
         if not isinstance(strategies_value, list):
             raise ValueError("Strategies config must contain a list.")
         return strategies_value
+
+    manifest_paths_value = payload.get("strategy_manifest_paths")
+    if manifest_paths_value not in (None, "", []):
+        if payload.get("strategy_manifest_path") not in (None, ""):
+            raise ValueError(
+                "Use either strategy_manifest_path or strategy_manifest_paths, not both."
+            )
+        if isinstance(manifest_paths_value, str):
+            manifest_path_values = [
+                item.strip() for item in manifest_paths_value.split(",") if item.strip()
+            ]
+        elif isinstance(manifest_paths_value, (list, tuple, set)):
+            manifest_path_values = [
+                str(item).strip() for item in manifest_paths_value if str(item).strip()
+            ]
+        else:
+            raise TypeError("strategy_manifest_paths must be a string or sequence")
+        if not manifest_path_values:
+            raise ValueError("strategy_manifest_paths must not be empty.")
+        base_dir = config_path.parent if config_path is not None else Path(__file__).resolve().parents[2]
+        resolved_manifest_paths: list[Path] = []
+        strategy_payloads: list[dict[str, object]] = []
+        for manifest_path_value in manifest_path_values:
+            manifest_path = Path(manifest_path_value)
+            if not manifest_path.is_absolute():
+                manifest_path = (base_dir / manifest_path).resolve()
+            resolved_manifest_paths.append(manifest_path)
+            strategy_payloads.extend(_load_strategy_manifest_payload(manifest_path))
+        payload["strategy_manifest_paths"] = resolved_manifest_paths
+        return strategy_payloads
 
     manifest_path_value = payload.get("strategy_manifest_path")
     manifest_path: Path | None = None

@@ -19,6 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_DIR = REPO_ROOT / "reports" / "research_wave"
 DEFAULT_EVIDENCE_MODE = "metadata_proxy_smoke"
 REAL_STOCK_BAR_EVIDENCE_MODE = "real_stock_bar_smoke"
+MARKET_TIMEZONE = "America/New_York"
 REQUIRED_OUTPUTS = [
     "research_run_manifest",
     "normalized_backtest_results",
@@ -147,16 +148,16 @@ def stable_unit_interval(*parts: Any) -> float:
 
 
 def _parameter_score(parameters: dict[str, Any]) -> float:
+    timing = variant_timing_parameters(parameters)
     score = 0.0
-    if parameters.get("liquidity_gate") == "tight":
+    if timing["liquidity_gate"] == "tight":
         score += 3.0
     if parameters.get("avoid_after_loser_similarity") is True:
         score += 4.0
-    stop = parameters.get("stop_loss_multiple")
-    if isinstance(stop, int | float):
-        score += max(0.0, 0.30 - float(stop)) * 30.0
-    exit_minute = parameters.get("hard_exit_minute")
-    if isinstance(exit_minute, int | float) and float(exit_minute) <= 300:
+    stop = timing["stop_loss_multiple"]
+    score += max(0.0, 0.30 - float(stop)) * 30.0
+    exit_minute = timing["hard_exit_minute"]
+    if float(exit_minute) <= 300:
         score += 2.0
     template = str(parameters.get("family_template") or "")
     if "butterfly" in template:
@@ -172,6 +173,7 @@ class VariantStockProxyStrategy(BaseStrategy):
         *,
         name: str,
         direction: int,
+        signal_mode: str,
         fast_window: int,
         slow_window: int,
         breakout_window: int,
@@ -179,9 +181,23 @@ class VariantStockProxyStrategy(BaseStrategy):
         stop_pct: float,
         target_pct: float,
         timeout_bars: int,
+        max_trend_gap_pct: float = 0.004,
+        min_trend_gap_pct: float = 0.0,
+        min_range_pct: float = 0.0015,
+        max_range_pct: float = 0.018,
+        max_midpoint_distance_pct: float = 0.006,
+        range_entry_side: str = "center",
+        range_edge_pct: float = 0.001,
+        min_minutes_since_open: int = 5,
+        max_minutes_since_open: int = 385,
+        entry_signal_mode: str = "continuous",
+        signal_delay_bars: int = 0,
+        cooldown_bars: int = 0,
+        max_signals_per_day: int = 0,
     ) -> None:
         super().__init__(name=name, instrument_type="stock", contract_multiplier=1.0)
         self.direction = 1 if direction >= 0 else -1
+        self.signal_mode = signal_mode
         self.fast_window = fast_window
         self.slow_window = slow_window
         self.breakout_window = breakout_window
@@ -189,6 +205,19 @@ class VariantStockProxyStrategy(BaseStrategy):
         self.stop_pct = stop_pct
         self.target_pct = target_pct
         self.timeout_bars = timeout_bars
+        self.max_trend_gap_pct = max_trend_gap_pct
+        self.min_trend_gap_pct = min_trend_gap_pct
+        self.min_range_pct = min_range_pct
+        self.max_range_pct = max_range_pct
+        self.max_midpoint_distance_pct = max_midpoint_distance_pct
+        self.range_entry_side = range_entry_side
+        self.range_edge_pct = range_edge_pct
+        self.min_minutes_since_open = min_minutes_since_open
+        self.max_minutes_since_open = max_minutes_since_open
+        self.entry_signal_mode = entry_signal_mode
+        self.signal_delay_bars = max(int(signal_delay_bars), 0)
+        self.cooldown_bars = cooldown_bars
+        self.max_signals_per_day = max_signals_per_day
 
     def generate_signals(self, bars: pd.DataFrame) -> pd.DataFrame:
         self.validate_bars(bars, ("symbol", "timestamp", "open", "high", "low", "close", "volume"))
@@ -211,51 +240,231 @@ class VariantStockProxyStrategy(BaseStrategy):
         )
         frame["volume_ratio"] = frame["volume"] / frame["volume_sma"].replace(0, pd.NA)
         volume_ok = frame["volume_ratio"].fillna(0).ge(self.min_volume_ratio)
-        if self.direction > 0:
+        timestamps = pd.to_datetime(frame["timestamp"], utc=True)
+        market_timestamps = timestamps.dt.tz_convert(MARKET_TIMEZONE)
+        minutes_since_open = (market_timestamps.dt.hour * 60 + market_timestamps.dt.minute) - (
+            9 * 60 + 30
+        )
+        time_ok = minutes_since_open.ge(self.min_minutes_since_open) & minutes_since_open.le(
+            self.max_minutes_since_open
+        )
+        if self.signal_mode == "range_bound":
+            range_width = (frame["rolling_high"] - frame["rolling_low"]).abs()
+            range_pct = range_width / frame["close"].replace(0, pd.NA)
+            trend_gap_pct = (frame["fast_sma"] - frame["slow_sma"]).abs() / frame[
+                "close"
+            ].replace(0, pd.NA)
+            midpoint = (frame["rolling_high"] + frame["rolling_low"]) / 2.0
+            midpoint_distance_pct = (frame["close"] - midpoint).abs() / frame[
+                "close"
+            ].replace(0, pd.NA)
+            active = (
+                volume_ok
+                & time_ok
+                & range_pct.ge(self.min_range_pct).fillna(False)
+                & range_pct.le(self.max_range_pct).fillna(False)
+                & trend_gap_pct.le(self.max_trend_gap_pct).fillna(False)
+                & midpoint_distance_pct.le(self.max_midpoint_distance_pct).fillna(False)
+            )
+            if self.range_entry_side == "lower_band":
+                edge = frame["close"].le(midpoint * (1.0 - self.range_edge_pct)).fillna(False)
+                frame["signal"] = (active & edge).fillna(False).astype(int)
+            elif self.range_entry_side == "upper_band":
+                edge = frame["close"].ge(midpoint * (1.0 + self.range_edge_pct)).fillna(False)
+                frame["signal"] = -(active & edge).fillna(False).astype(int)
+            else:
+                frame["signal"] = active.fillna(False).astype(int)
+        elif self.direction > 0:
+            trend_gap_pct = (frame["fast_sma"] - frame["slow_sma"]) / frame[
+                "close"
+            ].replace(0, pd.NA)
             active = (
                 frame["close"].gt(frame["rolling_high"])
                 & frame["fast_sma"].gt(frame["slow_sma"])
+                & trend_gap_pct.ge(self.min_trend_gap_pct).fillna(False)
+                & time_ok
                 & volume_ok
             )
             frame["signal"] = active.fillna(False).astype(int)
         else:
+            trend_gap_pct = (frame["slow_sma"] - frame["fast_sma"]) / frame[
+                "close"
+            ].replace(0, pd.NA)
             active = (
                 frame["close"].lt(frame["rolling_low"])
                 & frame["fast_sma"].lt(frame["slow_sma"])
+                & trend_gap_pct.ge(self.min_trend_gap_pct).fillna(False)
+                & time_ok
                 & volume_ok
             )
             frame["signal"] = -active.fillna(False).astype(int)
+        frame["signal"] = self._throttle_signals(frame, market_timestamps)
+        frame["signal"] = self._delay_signals(frame, market_timestamps)
         frame["stop_pct"] = self.stop_pct
         frame["target_pct"] = self.target_pct
         frame["timeout_bars"] = self.timeout_bars
         frame["size_fraction"] = 1.0
         return self.finalize_signal_frame(frame)
 
+    def _throttle_signals(
+        self, frame: pd.DataFrame, market_timestamps: pd.Series
+    ) -> pd.Series:
+        raw = frame["signal"].fillna(0).astype(int)
+        if (
+            self.entry_signal_mode == "continuous"
+            and self.cooldown_bars <= 0
+            and self.max_signals_per_day <= 0
+        ):
+            return raw
+
+        trade_dates = market_timestamps.dt.date
+        throttled = pd.Series(0, index=frame.index, dtype=int)
+        for _, group_index in frame.groupby(["symbol", trade_dates], sort=False).groups.items():
+            indices = list(group_index)
+            signals_today = 0
+            cooldown_remaining = 0
+            was_active = False
+            for idx in indices:
+                signal = int(raw.loc[idx])
+                is_active = signal != 0
+                should_emit = is_active
+                if self.entry_signal_mode in {"rising_edge", "daily_first"}:
+                    should_emit = should_emit and not was_active
+                if cooldown_remaining > 0:
+                    should_emit = False
+                    cooldown_remaining -= 1
+                if self.max_signals_per_day > 0 and signals_today >= self.max_signals_per_day:
+                    should_emit = False
+                if should_emit:
+                    throttled.loc[idx] = signal
+                    signals_today += 1
+                    cooldown_remaining = max(self.cooldown_bars, 0)
+                was_active = is_active
+        return throttled
+
+    def _delay_signals(
+        self, frame: pd.DataFrame, market_timestamps: pd.Series
+    ) -> pd.Series:
+        raw = frame["signal"].fillna(0).astype(int)
+        if self.signal_delay_bars <= 0:
+            return raw
+        trade_dates = market_timestamps.dt.date
+        delayed = raw.groupby([frame["symbol"], trade_dates], sort=False).shift(
+            self.signal_delay_bars
+        )
+        return delayed.fillna(0).astype(int)
+
 
 def _variant_direction(variant: dict[str, Any]) -> int:
     source = str(variant.get("source_strategy_id") or variant.get("variant_id") or "").lower()
+    if "__bull__" in source or "bull__" in source:
+        return 1
+    if "__bear__" in source or "bear__" in source:
+        return -1
     if "put" in source or "short" in source or "bear" in source:
         return -1
     return 1
 
 
+TIMING_PROFILE_DEFAULTS: dict[str, dict[str, float | str]] = {
+    "scalp": {
+        "hard_exit_minute": 120,
+        "stop_loss_multiple": 0.16,
+        "profit_target_multiple": 0.28,
+        "liquidity_gate": "tight",
+    },
+    "fast": {
+        "hard_exit_minute": 180,
+        "stop_loss_multiple": 0.18,
+        "profit_target_multiple": 0.32,
+        "liquidity_gate": "tight",
+    },
+    "base": {
+        "hard_exit_minute": 240,
+        "stop_loss_multiple": 0.22,
+        "profit_target_multiple": 0.40,
+        "liquidity_gate": "baseline",
+    },
+    "patient": {
+        "hard_exit_minute": 300,
+        "stop_loss_multiple": 0.24,
+        "profit_target_multiple": 0.45,
+        "liquidity_gate": "baseline",
+    },
+    "slow": {
+        "hard_exit_minute": 360,
+        "stop_loss_multiple": 0.28,
+        "profit_target_multiple": 0.55,
+        "liquidity_gate": "baseline",
+    },
+}
+
+
+def variant_timing_parameters(parameters: dict[str, Any]) -> dict[str, Any]:
+    profile = str(parameters.get("timing_profile") or "patient").lower()
+    defaults = TIMING_PROFILE_DEFAULTS.get(profile, TIMING_PROFILE_DEFAULTS["patient"])
+    return {
+        "timing_profile": profile,
+        "hard_exit_minute": int(parameters.get("hard_exit_minute") or defaults["hard_exit_minute"]),
+        "stop_loss_multiple": float(
+            parameters.get("stop_loss_multiple") or defaults["stop_loss_multiple"]
+        ),
+        "profit_target_multiple": float(
+            parameters.get("profit_target_multiple") or defaults["profit_target_multiple"]
+        ),
+        "liquidity_gate": str(parameters.get("liquidity_gate") or defaults["liquidity_gate"]),
+    }
+
+
 def _variant_stock_strategy(variant: dict[str, Any]) -> VariantStockProxyStrategy:
     parameters = variant.get("parameters") if isinstance(variant.get("parameters"), dict) else {}
-    hard_exit = int(parameters.get("hard_exit_minute") or 300)
+    timing = variant_timing_parameters(parameters)
+    hard_exit = int(timing["hard_exit_minute"])
     timing_scale = 0 if hard_exit <= 210 else 1 if hard_exit <= 300 else 2
-    stop_multiple = float(parameters.get("stop_loss_multiple") or 0.24)
-    target_multiple = float(parameters.get("profit_target_multiple") or 0.45)
-    liquidity_gate = str(parameters.get("liquidity_gate") or "baseline")
+    stop_multiple = float(timing["stop_loss_multiple"])
+    target_multiple = float(timing["profit_target_multiple"])
+    liquidity_gate = str(timing["liquidity_gate"])
+    source = str(variant.get("source_strategy_id") or variant.get("variant_id") or "").lower()
+    family_template = str(parameters.get("family_template") or source).lower()
+    inferred_choppy = "choppy" in source or any(
+        token in family_template
+        for token in ("iron_butterfly", "iron_condor", "premium_defense")
+    )
+    signal_mode = str(
+        parameters.get("stock_proxy_mode") or ("range_bound" if inferred_choppy else "breakout")
+    ).lower()
+    timeout_only = bool(parameters.get("timeout_only_stock_proxy")) or signal_mode == "range_bound"
+    fast_window = int(parameters.get("fast_window") or (4 + timing_scale))
+    slow_window = int(parameters.get("slow_window") or (18 + timing_scale * 3))
+    breakout_window = int(parameters.get("breakout_window") or (18 + timing_scale * 3))
+    min_volume_ratio = float(
+        parameters.get("min_volume_ratio")
+        or (1.05 if liquidity_gate == "tight" else 0.80)
+    )
     return VariantStockProxyStrategy(
         name=f"variant_stock_proxy__{variant.get('variant_id')}",
         direction=_variant_direction(variant),
-        fast_window=4 + timing_scale,
-        slow_window=18 + timing_scale * 3,
-        breakout_window=18 + timing_scale * 3,
-        min_volume_ratio=1.05 if liquidity_gate == "tight" else 0.80,
-        stop_pct=max(0.003, min(0.04, stop_multiple * 0.05)),
-        target_pct=max(0.005, min(0.08, target_multiple * 0.05)),
+        signal_mode=signal_mode,
+        fast_window=max(2, fast_window),
+        slow_window=max(3, slow_window),
+        breakout_window=max(3, breakout_window),
+        min_volume_ratio=max(0.0, min_volume_ratio),
+        stop_pct=0.0 if timeout_only else max(0.003, min(0.04, stop_multiple * 0.05)),
+        target_pct=0.0 if timeout_only else max(0.005, min(0.08, target_multiple * 0.05)),
         timeout_bars=max(5, min(390, hard_exit)),
+        max_trend_gap_pct=float(parameters.get("max_trend_gap_pct") or 0.004),
+        min_trend_gap_pct=float(parameters.get("min_trend_gap_pct") or 0.0),
+        min_range_pct=float(parameters.get("min_range_pct") or 0.0015),
+        max_range_pct=float(parameters.get("max_range_pct") or 0.018),
+        max_midpoint_distance_pct=float(parameters.get("max_midpoint_distance_pct") or 0.006),
+        range_entry_side=str(parameters.get("range_entry_side") or "center").lower(),
+        range_edge_pct=float(parameters.get("range_edge_pct") or 0.001),
+        min_minutes_since_open=int(parameters.get("min_minutes_since_open") or 5),
+        max_minutes_since_open=int(parameters.get("max_minutes_since_open") or 385),
+        entry_signal_mode=str(parameters.get("entry_signal_mode") or "continuous"),
+        signal_delay_bars=int(parameters.get("signal_delay_bars") or 0),
+        cooldown_bars=int(parameters.get("cooldown_bars") or 0),
+        max_signals_per_day=int(parameters.get("max_signals_per_day") or 0),
     )
 
 

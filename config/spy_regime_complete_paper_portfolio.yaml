@@ -1,0 +1,61 @@
+name: spy_regime_complete_paper_trader
+description: SPY-only governed bull, bear, and choppy option-native paper-validation portfolio.
+strategy_manifest_path: promotion_manifests/spy_regime_complete_governed_validation_20260505.yaml
+
+ownership:
+  enabled: true
+  lease_backend: file
+  lease_path: reports/multi_ticker_portfolio/state/spy_regime_complete_ownership_lease.json
+  lease_ttl_seconds: 180
+
+execution:
+  underlying_symbols: [SPY]
+  option_feed: indicative
+  stock_feed: iex
+  submit_paper_orders: false
+  poll_interval_seconds: 20
+  order_status_poll_seconds: 10
+  order_fill_timeout_seconds: 45
+  contract_refresh_minutes: 15
+  quote_stale_seconds: 120
+  stock_freshness_seconds: 180
+  max_relative_spread: 0.35
+  max_dte_days: 7
+  state_root: reports/multi_ticker_portfolio/state/spy_regime_complete
+  run_root: reports/multi_ticker_portfolio/runs/spy_regime_complete
+  task_name: SPY Regime Complete Paper Trader
+  allow_market_exit_fallback: true
+  market_exit_fallback_minute: 385
+  startup_lead_minutes: 10
+  midday_report_minute: 180
+  auto_flatten_unexpected_positions: true
+  unexpected_position_cleanup_timeout_seconds: 45
+
+risk:
+  sleeve_starting_equity: 25000
+  max_open_risk_fraction: 0.08
+  daily_loss_gate_pct: 0.02
+  delever_drawdown_pct: 8.0
+  delever_risk_scale: 0.5
+  max_open_positions: 3
+  max_positions_per_regime: 1
+  max_positions_per_symbol: 3
+  entry_cluster_window_minutes: 15
+  max_positions_per_regime_window: 1
+  max_positions_per_bucket_regime_window: 3
+  max_open_risk_fraction_per_symbol: 0.08
+  min_required_buying_power: 7500
+  broker_min_equity_to_trade: 26000
+  broker_equity_emergency_stop: 25500
+  severe_loss_halt_new_entries_pct: 0.035
+  severe_loss_flatten_all_pct: 0.05
+  soft_alert_delta_shares: 750
+  soft_alert_vega_dollars_1pct: 160
+  hard_cap_delta_shares: 900
+  hard_cap_vega_dollars_1pct: 210
+  entry_failure_streak_limit: 3
+  entry_adverse_slippage_fraction_limit: 0.20
+  entry_adverse_slippage_lookback: 4
+  entry_cutoff_minute: 345
+  same_day_entry_cutoff_minute: 300
+  event_blackouts: []

@@ -1,0 +1,164 @@
+version: 1
+generated_at_utc: "2026-05-05T12:20:00Z"
+scope: research_governed_validation_review_only
+broker_facing: false
+live_manifest_effect: none
+risk_policy_effect: none
+symbol: SPY
+dataset_lineage:
+  stock_bars: gs://codexalpaca-data-us/research_stock_data/option_fill_ladder_20260429/SPY/365d_5x5/stock_ref_silver/stock_bars
+  selected_contracts: gs://codexalpaca-control-us/research_results/option_fill_ladder_20260429/SPY/365d_5x5/research_wave/dense_universe/selected_option_contracts
+  option_bars: gs://codexalpaca-data-us/research_option_data/option_fill_ladder_20260429/SPY/365d_5x5/option_bars_silver/option_bars
+promotion_packet:
+  decision: ready_for_governed_validation_review
+  eligible_for_promotion_review_count: 3
+  local_path: reports/gcp_research/spy_regime_complete_20260505/promotion_packet/research_promotion_review_packet.json
+  gcs_path: gs://codexalpaca-control-us/research_results/spy_regime_complete_20260505/promotion_packet/research_promotion_review_packet.json
+runner_alignment:
+  status: runner_aligned
+  signal_semantics: governed rolling breakout/range predicates
+  exit_semantics: option-native target/stop with minutes-after-entry hard exit
+  broker_facing: false
+strategies:
+  - name: spy__governed__choppy_call_single_leg_repair_20260505
+    underlying_symbol: SPY
+    regime: choppy
+    family: Single-leg long call
+    description: SPY governed choppy candidate from 365d option-native replay; late-morning lower-band reversion with option-native target/stop.
+    dte_mode: next_expiry
+    signal_name: governed_lower_band_reversion_call
+    timing_profile: governed_late
+    hard_exit_minute: 45
+    runner_hard_exit_mode: minutes_after_entry
+    risk_fraction: 0.03
+    max_contracts: 3
+    profit_target_multiple: 0.30
+    stop_loss_multiple: 0.12
+    candidate_variant_id: portfolio12h__spy__choppy__call__single_leg_repair__f9a907650802b7
+    source_strategy_id: spy__choppy__call__single_leg_repair
+    promotion_manifest_path: config/promotion_manifests/spy_regime_complete_governed_validation_20260505.yaml
+    governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/spy_regime_complete_20260505/promotion_packet/research_promotion_review_packet.json
+    promotion_status: eligible_for_promotion_review
+    min_fill_coverage: 0.994
+    min_data_foundation_coverage: 1.0
+    min_option_trade_count: 166
+    min_net_pnl: 5508.298
+    min_test_net_pnl: 194.349
+    research_profile: choppy_c005
+    research_entry_timing_mode: rising_edge
+    runner_semantics_status: runner_aligned
+    stock_proxy_mode: range_bound
+    entry_signal_mode: rising_edge
+    min_minutes_since_open: 90
+    max_minutes_since_open: 150
+    max_trend_gap_pct: 0.0015
+    min_range_pct: 0.0015
+    max_range_pct: 0.006
+    max_midpoint_distance_pct: 0.004
+    range_entry_side: lower_band
+    range_edge_pct: 0.0005
+    liquidity_gate: tight
+    option_exit_mode: premium_target_stop
+    option_exit_profile: target30_stop14
+    option_profit_target_pct: 0.30
+    option_stop_loss_pct: 0.14
+    min_option_hold_minutes: 2
+    legs:
+      - option_type: call
+        side: long
+        target_delta: 0.55
+        min_abs_delta: 0.05
+        max_abs_delta: 0.95
+  - name: spy__governed__bear_put_single_leg_repair_20260505
+    underlying_symbol: SPY
+    regime: bear
+    family: Single-leg long put
+    description: SPY governed bear candidate from 365d option-native replay; late follow-through long put with option-native target/stop.
+    dte_mode: next_expiry
+    signal_name: governed_breakout_put
+    timing_profile: governed_late
+    hard_exit_minute: 90
+    runner_hard_exit_mode: minutes_after_entry
+    risk_fraction: 0.025
+    max_contracts: 3
+    profit_target_multiple: 0.30
+    stop_loss_multiple: 0.18
+    candidate_variant_id: portfolio12h__spy__bear__put__single_leg_repair__1f8d8ba1e9de3b
+    source_strategy_id: spy__bear__put__single_leg_repair
+    promotion_manifest_path: config/promotion_manifests/spy_regime_complete_governed_validation_20260505.yaml
+    governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/spy_regime_complete_20260505/promotion_packet/research_promotion_review_packet.json
+    promotion_status: eligible_for_promotion_review
+    min_fill_coverage: 1.0
+    min_data_foundation_coverage: 1.0
+    min_option_trade_count: 69
+    min_net_pnl: 2071.481
+    min_test_net_pnl: 512.94
+    research_profile: bear_c009
+    research_entry_timing_mode: daily_first
+    runner_semantics_status: runner_aligned
+    stock_proxy_mode: breakout
+    entry_signal_mode: daily_first
+    min_minutes_since_open: 240
+    max_minutes_since_open: 350
+    min_trend_gap_pct: 0.0007
+    liquidity_gate: tight
+    option_exit_mode: premium_target_stop
+    option_exit_profile: debit_fast_takeprofit
+    option_profit_target_pct: 0.35
+    option_stop_loss_pct: 0.18
+    min_option_hold_minutes: 3
+    legs:
+      - option_type: put
+        side: long
+        target_delta: -0.55
+        min_abs_delta: 0.05
+        max_abs_delta: 0.95
+  - name: spy__governed__bull_call_single_leg_repair_20260505
+    underlying_symbol: SPY
+    regime: bull
+    family: Single-leg long call
+    description: SPY governed bull candidate from 365d option-native replay; morning trend long call with option-native target/stop.
+    dte_mode: next_expiry
+    signal_name: governed_breakout_call
+    timing_profile: governed_late
+    hard_exit_minute: 75
+    runner_hard_exit_mode: minutes_after_entry
+    risk_fraction: 0.015
+    max_contracts: 2
+    profit_target_multiple: 0.26
+    stop_loss_multiple: 0.10
+    candidate_variant_id: portfolio12h__spy__bull__call__single_leg_repair__9460508770cf7e
+    source_strategy_id: spy__bull__call__single_leg_repair
+    promotion_manifest_path: config/promotion_manifests/spy_regime_complete_governed_validation_20260505.yaml
+    governed_validation_packet_uri: gs://codexalpaca-control-us/research_results/spy_regime_complete_20260505/promotion_packet/research_promotion_review_packet.json
+    promotion_status: eligible_for_promotion_review
+    min_fill_coverage: 0.9941
+    min_data_foundation_coverage: 1.0
+    min_option_trade_count: 168
+    min_net_pnl: 179.621
+    min_test_net_pnl: 2270.178
+    research_profile: bull_c002
+    research_entry_timing_mode: daily_first
+    runner_semantics_status: runner_aligned
+    stock_proxy_mode: breakout
+    entry_signal_mode: daily_first
+    min_minutes_since_open: 15
+    max_minutes_since_open: 105
+    min_trend_gap_pct: 0.0006
+    liquidity_gate: tight
+    option_exit_mode: premium_target_stop
+    option_exit_profile: debit_balanced_runner
+    option_profit_target_pct: 0.55
+    option_stop_loss_pct: 0.26
+    min_option_hold_minutes: 5
+    legs:
+      - option_type: call
+        side: long
+        target_delta: 0.55
+        min_abs_delta: 0.05
+        max_abs_delta: 0.95
+hard_rules:
+  - This manifest does not start trading.
+  - This manifest does not modify the live multi-ticker manifest.
+  - This manifest does not change global risk policy.
+  - Broker-facing paper validation requires an explicit operator command with --submit-paper-orders.

@@ -99,16 +99,18 @@ def _get_task_info(task_name: str) -> dict[str, Any] | None:
     task_name_ps = task_name.replace("'", "''")
     script = f"""
     $task = Get-ScheduledTask -TaskName '{task_name_ps}' -ErrorAction SilentlyContinue
-    if ($null -eq $task) {{ return }}
-    $info = $task | Get-ScheduledTaskInfo
-    [pscustomobject]@{{
-      task_name = $task.TaskName
-      state = [string]$task.State
-      last_run_time = $info.LastRunTime
-      last_task_result = $info.LastTaskResult
-      next_run_time = $info.NextRunTime
-      number_of_missed_runs = $info.NumberOfMissedRuns
-    }} | ConvertTo-Json -Compress
+    if ($null -ne $task) {{
+      $info = $task | Get-ScheduledTaskInfo
+      [pscustomobject]@{{
+        task_name = $task.TaskName
+        state = [string]$task.State
+        last_run_time = $info.LastRunTime
+        last_task_result = $info.LastTaskResult
+        next_run_time = $info.NextRunTime
+        number_of_missed_runs = $info.NumberOfMissedRuns
+      }} | ConvertTo-Json -Compress
+    }}
+    exit 0
     """
     payload = _run_powershell_json(script)
     if payload is None:
@@ -119,17 +121,19 @@ def _get_task_info(task_name: str) -> dict[str, Any] | None:
 
 
 def _get_trader_processes(python_path: Path) -> list[dict[str, Any]]:
-    exe_ps = str(python_path).replace("'", "''")
+    # Manual PAPER launches can use the system Python rather than the repo venv.
+    # The broker-facing runner command is the authoritative identifier here.
     script = f"""
     $rows = Get-CimInstance Win32_Process |
       Where-Object {{
         $_.Name -eq 'python.exe' -and
-        $_.ExecutablePath -eq '{exe_ps}' -and
         $_.CommandLine -like '*run_multi_ticker_portfolio_paper_trader.py*'
       }} |
       Select-Object ProcessId, CreationDate, ExecutablePath, CommandLine
-    if ($null -eq $rows) {{ return }}
-    $rows | ConvertTo-Json -Compress
+    if ($null -ne $rows) {{
+      $rows | ConvertTo-Json -Compress
+    }}
+    exit 0
     """
     payload = _run_powershell_json(script)
     if payload is None:

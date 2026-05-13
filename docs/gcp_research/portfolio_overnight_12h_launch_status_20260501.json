@@ -1,0 +1,175 @@
+{
+  "wave_id": "portfolio_overnight_12h_20260501",
+  "status_updated_utc": "2026-05-01T13:38:02Z",
+  "status": "running",
+  "branch_head_at_monitor_smoke": "a169a77bb441e2d811eaea71a65bfbd218c21cb5",
+  "branch": "codex/phase2-fill-semantics-20260430",
+  "github_pr": "https://github.com/abisaabr/CodexAlpacaTest-Trade/pull/2",
+  "gcs_prefix": "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/",
+  "gcs_inputs_prefix": "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/inputs/",
+  "gcs_monitor_prefix": "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/monitor/",
+  "safety": {
+    "broker_facing": false,
+    "paper_orders": false,
+    "live_manifest_changed": false,
+    "risk_policy_changed": false,
+    "promotion_meaning": "governed validation review only"
+  },
+  "validation": {
+    "focused_pytest": "5 passed",
+    "focused_ruff": "clean",
+    "paper_readiness_smoke_after_fastlane_path_fix": "decision=operator_review_ready_no_orders; aggregate_artifact_count=9; eligible_for_promotion_review_count=8; fastlane_top40_unique_eligible_base_count=4; running_wave_vm_count=8",
+    "qqq_shadow_no_order_preflight": "startup_preflight_passed; submit_paper_orders=false; broker_position_count=0; open_order_count=0",
+    "latest_test_command": "python -m pytest -q tests\\test_build_portfolio_overnight_tournament_packet.py tests\\test_build_portfolio_overnight_research_inputs.py tests\\test_run_option_aware_research_backtest.py",
+    "latest_ruff_command": "python -m ruff check scripts\\build_portfolio_overnight_tournament_packet.py tests\\test_build_portfolio_overnight_tournament_packet.py"
+  },
+  "monitor": {
+    "script": "scripts/monitor_portfolio_overnight_wave.py",
+    "latest_snapshot": "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/monitor/portfolio_overnight_monitor_latest.json",
+    "mode": "read-only GCP/GCS polling"
+  },
+  "latest_update": {
+    "readiness_decision": "blocked_waiting_for_evidence",
+    "readiness_monitor_pid": 41044,
+    "portfolio_monitor_pid": 4448,
+    "running_wave_vm_count": 8,
+    "worker_artifact_count": 527,
+    "aggregate_artifact_count": 9,
+    "final_aggregator": "portfolio-overnight-12h-20260501-finalagg2-1255z",
+    "final_aggregator_expected_wake_utc": "2026-05-01T12:55:00Z",
+    "final_aggregator_identity_mode": "variant_profile",
+    "profile_isolated_partial_aggregate_uri": "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate_partial_profile_20260501T031218Z/",
+    "partial_aggregate_profile_level_eligible_count": 8,
+    "partial_aggregate_unique_base_eligible_count": 4,
+    "partial_aggregate_launch_gate_effect": "evidence_only_does_not_unblock_final_aggregate_requirement",
+    "ssh_status_from_this_machine": "direct_and_iap_ssh_failed_with_network_connection_abort_or_closed",
+    "fastlane_packet_uri": "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/inputs/fastlane_top40_packet_v2/portfolio_overnight_12h_tournament_packet.json",
+    "fastlane_source_archive_uri": "gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/inputs/source/codexalpaca_repo_source_fastlane_top40_20260501.tar.gz",
+    "fastlane_workers": [
+      "portfolio-overnight-12h-20260501-fastlane-top40-a",
+      "portfolio-overnight-12h-20260501-fastlane-top40-b",
+      "portfolio-overnight-12h-20260501-fastlane-top40-c",
+      "portfolio-overnight-12h-20260501-fastlane-top40-d",
+      "portfolio-overnight-12h-20260501-fastlane-top40-agg-1040z"
+    ],
+    "fastlane_aggregate_output_subdir": "aggregate_fastlane_top40_20260501",
+    "fastlane_aggregate_expected_wake_utc": "2026-05-01T10:40:00Z",
+    "fastlane_aggregate_artifact_count": 9,
+    "fastlane_top40_unique_eligible_base_count": 4,
+    "fastlane_top40_profile_level_eligible_count": 8,
+    "fastlane_launch_gate_effect": "evidence_only_separate_from_final_aggregate",
+    "final_aggregate_candidate_count": 364,
+    "final_aggregate_profile_level_eligible_count": 8,
+    "final_aggregate_unique_base_eligible_count": 4,
+    "final_aggregate_decision": "ready_for_governed_validation_review",
+    "final_aggregate_safety_scope": "research_only_non_broker_facing_no_manifest_or_risk_effect",
+    "fastlane_first_run_markers": {
+      "fastlane_top40_a": "fastlane_top40_a_aapl_nearest_contract started 2026-05-01T03:39:17Z",
+      "fastlane_top40_b": "fastlane_top40_b_meta_nearest_contract started 2026-05-01T03:39:30Z",
+      "fastlane_top40_c": "fastlane_top40_c_avgo_nearest_contract started 2026-05-01T03:39:31Z",
+      "fastlane_top40_d": "fastlane_top40_d_pltr_nearest_contract started 2026-05-01T03:41:01Z"
+    },
+    "fastlane_monitor_commit": "b894ff34cf4670f61f9f8002104f017d5bd89a33"
+  },
+  "fleet": [
+    {
+      "name": "portfolio-overnight-12h-20260501-data-coverage-top10",
+      "role": "data_coverage",
+      "machine_type": "e2-standard-2",
+      "status": "DELETED_AFTER_COMPLETION",
+      "last_start": "2026-04-30T18:54:21.988-07:00",
+      "artifact_status": "completed_utc=2026-05-01T02:01:39Z; startup, command, source_commit, artifacts_manifest uploaded"
+    },
+    {
+      "name": "portfolio-overnight-12h-20260501-data-coverage-next10",
+      "role": "data_coverage",
+      "machine_type": "e2-standard-2",
+      "status": "DELETED_AFTER_COMPLETION",
+      "last_start": "2026-04-30T18:54:32.763-07:00",
+      "artifact_status": "completed_utc=2026-05-01T02:02:25Z; startup, command, source_commit, artifacts_manifest uploaded"
+    },
+    {
+      "name": "portfolio-overnight-12h-20260501-qqq-deep-regime-grid",
+      "role": "qqq_option_native_deep_grid",
+      "machine_type": "e2-standard-4",
+      "status": "DELETED_AFTER_COMPLETION",
+      "last_start": "2026-04-30T18:54:45.017-07:00",
+      "artifact_status": "completed_utc=2026-05-01T01:57:32Z; three option_aware_candidate_summary.csv files uploaded"
+    },
+    {
+      "name": "portfolio-overnight-12h-20260501-option-aware-core-a",
+      "role": "option_aware_tournament",
+      "machine_type": "e2-standard-4",
+      "status": "TERMINATED",
+      "last_start": "2026-04-30T19:03:57.469-07:00",
+      "symbols": ["AAPL", "AMD", "AMZN", "INTC", "IWM"],
+      "artifact_status": "Spot worker terminated before a worker output prefix was found"
+    },
+    {
+      "name": "portfolio-overnight-12h-20260501-option-aware-core-b",
+      "role": "option_aware_tournament",
+      "machine_type": "e2-standard-4",
+      "status": "TERMINATED",
+      "last_start": "2026-04-30T19:04:11.235-07:00",
+      "symbols": ["META", "MSFT", "NVDA", "SPY", "TSLA"],
+      "artifact_status": "Spot worker terminated before a worker output prefix was found"
+    },
+    {
+      "name": "portfolio-overnight-12h-20260501-option-aware-core-c",
+      "role": "option_aware_tournament",
+      "machine_type": "e2-standard-4",
+      "status": "RUNNING",
+      "last_start": "2026-04-30T19:12:52.201-07:00",
+      "symbols": ["AVGO", "GOOGL", "MU", "NFLX", "ORCL"],
+      "artifact_status": "recreated on clean disk after pip resolver corruption on reused spot disk; package install passed earlier failure point"
+    },
+    {
+      "name": "portfolio-overnight-12h-20260501-option-aware-core-d",
+      "role": "option_aware_tournament",
+      "machine_type": "e2-standard-4",
+      "status": "RUNNING",
+      "last_start": "2026-04-30T19:04:49.876-07:00",
+      "symbols": ["PLTR", "QQQ", "TSM", "XLE", "XOM"],
+      "artifact_status": "long replay stage; no terminal error observed in serial log as of status time"
+    },
+    {
+      "name": "portfolio-overnight-12h-20260501-aggregator-promotion-rev",
+      "role": "aggregate_and_promote",
+      "machine_type": "e2-standard-2",
+      "status": "RUNNING",
+      "last_start": "2026-04-30T19:05:29.790-07:00",
+      "artifact_status": "sleeping until worker window completes, then builds portfolio report and promotion packet"
+    }
+  ],
+  "repairs_applied": [
+    {
+      "commit": "4230a2f1a90ee5a9ae52dc004a3131d06a2ab3ea",
+      "summary": "Use selected contract universes for ladder workers instead of raw contract inventory roots."
+    },
+    {
+      "commit": "c09d48a478feec8414349d58c9adba4badda6012",
+      "summary": "Make worker startup idempotent by clearing the repo and virtualenv workspace before unpack/install."
+    }
+  ],
+  "known_events": [
+    "Initial large-disk fleet exceeded SSD quota and was resized to 20GB/40GB workers.",
+    "Initial high-CPU fleet exceeded 32-vCPU quota and was resized to 26 research vCPUs plus the existing 4-vCPU paper VM.",
+    "The first option-aware worker launch used raw contract inventory for ladder datasets and failed on missing relative_strike_step; fixed by routing workers to selected_option_contracts.",
+    "option-aware-core-c restarted on a reused disk and hit a corrupted pip resolver import; fixed by idempotent startup plus clean recreate.",
+    "Completed data coverage workers and the completed QQQ deep grid worker were deleted after artifact upload to reduce idle compute cost.",
+    "option-aware-core-c was later recreated as a standard on-demand e2-standard-4 worker after another Spot termination, preserving the AVGO/GOOGL/MU/NFLX/ORCL lane.",
+    "The fastlane aggregate landed at aggregate_fastlane_top40_20260501 and reports 8 eligible profile-level candidates, 4 unique eligible base candidates, research-only scope, no broker-facing effect, no live-manifest effect, and no risk-policy effect.",
+    "The paper readiness monitor was corrected to read nested aggregate output folders; this is observability only and does not alter promotion gates or execution behavior.",
+    "Duplicate stale monitor processes were stopped and exactly one portfolio monitor plus one paper-readiness monitor were restarted on a 15-minute cadence.",
+    "QQQ governed shadow-validation no-order preflight reached ownership and broker checks, then passed with submit_paper_orders=false.",
+    "The canonical final aggregate landed under aggregate/ and reports 8 profile-level eligible candidates, 4 unique eligible base candidates, all QQQ bull/choppy. No QQQ bear strategy passed the final overnight packet.",
+    "The 20-ticker tournament is still in progress. The final aggregate is a cutoff snapshot from available outputs, not a complete all-ticker result.",
+    "QQQ governed shadow-validation run-once passed in no-order mode with open_trades=0 and completed_trades=0."
+  ],
+  "next_monitor_commands": [
+    "python scripts\\monitor_portfolio_overnight_wave.py --once --gcloud-bin <path-to-gcloud>",
+    "gcloud compute instances list --filter='name~portfolio-overnight-12h-20260501' --format='table(name,status,machineType,lastStartTimestamp,lastStopTimestamp)'",
+    "gcloud storage ls gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/workers/ --recursive",
+    "gcloud storage ls gs://codexalpaca-control-us/research_results/portfolio_overnight_12h_20260501/aggregate/ --recursive"
+  ]
+}
