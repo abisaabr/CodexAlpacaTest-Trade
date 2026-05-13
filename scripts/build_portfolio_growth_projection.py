@@ -177,6 +177,22 @@ def parse_args() -> argparse.Namespace:
             "unreduced so low-quality quote inputs cannot make losing trades look safer."
         ),
     )
+    parser.add_argument(
+        "--prefer-quote-backed-pnl",
+        action="store_true",
+        help=(
+            "When quote_backed_option_pnl is present with quote_backed_replay status, "
+            "use it as option_pnl before projection, stress, fill, and optimizer logic."
+        ),
+    )
+    parser.add_argument(
+        "--require-quote-backed-replay",
+        action="store_true",
+        help=(
+            "Reject rows unless quote_backed_replay_status is quote_backed_replay and "
+            "quote_backed_option_pnl is present. This also enables quote-backed PnL."
+        ),
+    )
     parser.add_argument("--diversification-min-symbols", type=int, default=None)
     parser.add_argument("--diversification-min-regimes", type=int, default=None)
     parser.add_argument("--diversification-min-families", type=int, default=None)
@@ -269,6 +285,13 @@ def _load_trade_economics(
         "risk_per_unit",
         "quantity",
         "fees",
+        "quote_backed_option_pnl",
+        "quote_backed_entry_debit_per_unit",
+        "quote_backed_exit_value_per_unit",
+        "quote_backed_option_return_pct",
+        "quote_backed_max_quote_age_seconds",
+        "quote_backed_max_relative_spread",
+        "quote_backed_pnl_delta",
     ]:
         if column in trades.columns:
             trades[column] = pd.to_numeric(trades[column], errors="coerce")
@@ -327,6 +350,77 @@ def _load_trade_economics_roots(
     if dedupe_columns:
         trades = trades.drop_duplicates(subset=dedupe_columns)
     return trades
+
+
+def _apply_quote_backed_pnl_policy(
+    trades: pd.DataFrame,
+    *,
+    prefer_quote_backed_pnl: bool,
+    require_quote_backed_replay: bool,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    if trades.empty:
+        return trades, {
+            "status": "empty_input",
+            "input_trade_count": 0,
+            "require_quote_backed_replay": bool(require_quote_backed_replay),
+            "prefer_quote_backed_pnl": bool(prefer_quote_backed_pnl),
+            "accepted_trade_count": 0,
+            "rejected_trade_count": 0,
+            "quote_backed_pnl_applied_count": 0,
+        }
+    if not prefer_quote_backed_pnl and not require_quote_backed_replay:
+        return trades, {
+            "status": "not_configured",
+            "input_trade_count": int(len(trades)),
+            "require_quote_backed_replay": False,
+            "prefer_quote_backed_pnl": False,
+            "accepted_trade_count": int(len(trades)),
+            "rejected_trade_count": 0,
+            "quote_backed_pnl_applied_count": 0,
+        }
+
+    frame = trades.copy()
+    status_column = "quote_backed_replay_status"
+    pnl_column = "quote_backed_option_pnl"
+    if status_column not in frame.columns or pnl_column not in frame.columns:
+        accepted = frame.iloc[0:0].copy() if require_quote_backed_replay else frame
+        return accepted, {
+            "status": "quote_backed_columns_missing",
+            "input_trade_count": int(len(trades)),
+            "require_quote_backed_replay": bool(require_quote_backed_replay),
+            "prefer_quote_backed_pnl": bool(prefer_quote_backed_pnl),
+            "accepted_trade_count": int(len(accepted)),
+            "rejected_trade_count": int(len(trades) - len(accepted)),
+            "quote_backed_pnl_applied_count": 0,
+            "missing_columns": [
+                column for column in [status_column, pnl_column] if column not in frame.columns
+            ],
+        }
+
+    quote_backed_pnl = pd.to_numeric(frame[pnl_column], errors="coerce")
+    quote_backed_mask = frame[status_column].astype(str).eq("quote_backed_replay") & quote_backed_pnl.notna()
+    frame["quote_backed_pnl_policy_applied"] = False
+    if prefer_quote_backed_pnl or require_quote_backed_replay:
+        frame.loc[quote_backed_mask, "source_option_pnl_before_quote_backed"] = frame.loc[
+            quote_backed_mask, "option_pnl"
+        ]
+        frame.loc[quote_backed_mask, "option_pnl"] = quote_backed_pnl.loc[quote_backed_mask]
+        frame.loc[quote_backed_mask, "quote_backed_pnl_policy_applied"] = True
+    if require_quote_backed_replay:
+        frame = frame.loc[quote_backed_mask].copy()
+
+    return frame, {
+        "status": "enabled",
+        "input_trade_count": int(len(trades)),
+        "require_quote_backed_replay": bool(require_quote_backed_replay),
+        "prefer_quote_backed_pnl": bool(prefer_quote_backed_pnl or require_quote_backed_replay),
+        "accepted_trade_count": int(len(frame)),
+        "rejected_trade_count": int(len(trades) - len(frame)),
+        "quote_backed_replay_count": int(quote_backed_mask.sum()),
+        "quote_backed_pnl_applied_count": int(frame["quote_backed_pnl_policy_applied"].sum())
+        if "quote_backed_pnl_policy_applied" in frame.columns
+        else 0,
+    }
 
 
 def _load_projection_calendar(
@@ -884,6 +978,22 @@ def _market_quality_output_fields(row: pd.Series) -> dict[str, Any]:
     return output
 
 
+def _quote_backed_output_fields(row: pd.Series) -> dict[str, Any]:
+    fields = [
+        "quote_backed_replay_status",
+        "quote_backed_option_pnl",
+        "source_option_pnl_before_quote_backed",
+        "quote_backed_pnl_policy_applied",
+        "quote_backed_entry_debit_per_unit",
+        "quote_backed_exit_value_per_unit",
+        "quote_backed_option_return_pct",
+        "quote_backed_max_quote_age_seconds",
+        "quote_backed_max_relative_spread",
+        "quote_backed_pnl_delta",
+    ]
+    return {field: row.get(field) for field in fields if field in row.index}
+
+
 def _market_quality_diagnostics(selected_trades: pd.DataFrame) -> dict[str, Any]:
     if selected_trades.empty:
         return {
@@ -1231,6 +1341,22 @@ def _apply_market_quality_pnl_cost_model(
     cost_rows: list[dict[str, Any]] = []
     adjusted_pnl: list[float] = []
     for _, row in adjusted.iterrows():
+        raw_pnl = _float(row.get("option_pnl"))
+        if bool(row.get("quote_backed_pnl_policy_applied")):
+            adjusted_pnl.append(raw_pnl)
+            cost_rows.append(
+                {
+                    "source_option_pnl_before_market_quality_cost": raw_pnl,
+                    "market_quality_pnl_cost": 0.0,
+                    "market_quality_entry_spread_pct_applied": 0.0,
+                    "market_quality_exit_spread_pct_applied": 0.0,
+                    "market_quality_entry_spread_reason": "quote_backed_bid_ask_replay_no_double_charge",
+                    "market_quality_exit_spread_reason": "quote_backed_bid_ask_replay_no_double_charge",
+                    "market_quality_entry_notional": 0.0,
+                    "market_quality_exit_notional": 0.0,
+                }
+            )
+            continue
         entry_spread, entry_reason = _applied_quality_spread(
             row=row,
             side="entry",
@@ -1258,7 +1384,6 @@ def _apply_market_quality_pnl_cost_model(
         entry_notional = _side_notional(row, side="entry")
         exit_notional = _side_notional(row, side="exit")
         cost = (entry_notional * entry_spread * 0.5) + (exit_notional * exit_spread * 0.5)
-        raw_pnl = _float(row.get("option_pnl"))
         adjusted_pnl.append(raw_pnl - cost)
         cost_rows.append(
             {
@@ -1561,8 +1686,10 @@ def _build_daily_equity(
                     "source_option_pnl": round(_float(row.get("option_pnl")), 6),
                     "dynamic_scale_factor": round(scale, 8),
                     "scaled_option_pnl": round(scaled_pnl, 6),
+                    "scaled_projection_pnl": round(scaled_pnl, 6),
                     **_market_quality_output_fields(row),
                     **_market_quality_cost_output_fields(row),
+                    **_quote_backed_output_fields(row),
                     "projected_fill_probability": row.get("projected_fill_probability"),
                     "fill_probability_components": row.get("fill_probability_components"),
                     **_fill_probability_haircut_output_fields(row),
@@ -1849,10 +1976,12 @@ def _build_daily_equity_production_runtime(
                     "source_pnl_per_combo": round(pnl_per_combo, 6),
                     "dynamic_scale_factor": round(_int(position.get("quantity"), 0) / source_quantity, 8),
                     "scaled_option_pnl": round(scaled_pnl, 6),
+                    "scaled_projection_pnl": round(scaled_pnl, 6),
                     "option_entry_time": str(row.get("entry_ts")),
                     "option_exit_time": str(row.get("exit_ts")),
                     **_market_quality_output_fields(row),
                     **_market_quality_cost_output_fields(row),
+                    **_quote_backed_output_fields(row),
                     "projected_fill_probability": row.get("projected_fill_probability"),
                     "fill_probability_components": row.get("fill_probability_components"),
                     **_fill_probability_haircut_output_fields(row),
@@ -2992,6 +3121,8 @@ def build_growth_projection(
     min_fill_probability: float | None = None,
     unknown_fill_probability: float = 1.0,
     fill_model_haircut_positive_pnl: bool = False,
+    prefer_quote_backed_pnl: bool = False,
+    require_quote_backed_replay: bool = False,
     diversification_min_symbols: int | None = None,
     diversification_min_regimes: int | None = None,
     diversification_min_families: int | None = None,
@@ -3016,6 +3147,11 @@ def build_growth_projection(
     trades = _load_trade_economics_roots(
         replay_roots,
         candidate_filters=_capital_plan_trade_filters(capital_plan),
+    )
+    trades, quote_backed_pnl_policy = _apply_quote_backed_pnl_policy(
+        trades,
+        prefer_quote_backed_pnl=prefer_quote_backed_pnl,
+        require_quote_backed_replay=require_quote_backed_replay,
     )
     calendar = _load_projection_calendar(
         calendar_csv=calendar_csv,
@@ -3147,6 +3283,7 @@ def build_growth_projection(
         "market_quality_pnl_cost_model": market_quality_pnl_cost_model,
         "fill_probability_model": fill_probability_model,
         "fill_probability_pnl_haircut": fill_probability_pnl_haircut,
+        "quote_backed_pnl_policy": quote_backed_pnl_policy,
         "train_test_optimization": {
             key: value
             for key, value in train_test_optimization.items()
@@ -3278,6 +3415,8 @@ def main() -> None:
         min_fill_probability=args.min_fill_probability,
         unknown_fill_probability=args.unknown_fill_probability,
         fill_model_haircut_positive_pnl=args.fill_model_haircut_positive_pnl,
+        prefer_quote_backed_pnl=args.prefer_quote_backed_pnl,
+        require_quote_backed_replay=args.require_quote_backed_replay,
         diversification_min_symbols=args.diversification_min_symbols,
         diversification_min_regimes=args.diversification_min_regimes,
         diversification_min_families=args.diversification_min_families,

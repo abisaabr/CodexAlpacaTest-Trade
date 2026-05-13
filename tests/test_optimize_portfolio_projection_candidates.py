@@ -341,3 +341,38 @@ def test_fast_exact_simulation_matches_reference_simulation() -> None:
 
     reference.pop("daily_rows")
     assert fast == reference
+
+
+def test_optimizer_prefers_scaled_projection_pnl_when_available() -> None:
+    trades = pd.DataFrame(
+        [
+            {
+                "trade_date": "2025-01-02",
+                "base_candidate_variant_id": "qqq_bull",
+                "aggregate_profile": "profile_a",
+                "scaled_option_pnl": 100.0,
+                "scaled_projection_pnl": 10.0,
+            }
+        ]
+    )
+    trades["_optimizer_key"] = trades.apply(
+        lambda row: (row["base_candidate_variant_id"], row["aggregate_profile"]),
+        axis=1,
+    )
+    selected = {("qqq_bull", "profile_a")}
+
+    simulation = _simulate_selected(
+        trades,
+        selected,
+        initial_cash=25_000.0,
+        backtest_allocation_fraction=0.05,
+    )
+    fast = _simulate_selected_fast(
+        _prepare_daily_vectors(trades),
+        selected,
+        initial_cash=25_000.0,
+        backtest_allocation_fraction=0.05,
+    )
+
+    assert simulation["net_pnl"] == 200.0
+    assert fast["net_pnl"] == 200.0

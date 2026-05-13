@@ -74,6 +74,8 @@ def _trade_key(row: pd.Series) -> tuple[str, str]:
 
 
 def _pnl_column(frame: pd.DataFrame) -> str:
+    if "scaled_projection_pnl" in frame.columns:
+        return "scaled_projection_pnl"
     if "scaled_option_pnl" in frame.columns:
         return "scaled_option_pnl"
     if "source_pnl_per_combo" in frame.columns:
