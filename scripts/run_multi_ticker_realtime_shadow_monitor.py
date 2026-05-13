@@ -35,6 +35,7 @@ RUNTIME_LEG_FIELDNAMES = [
     "spread_pct",
     "freshness_seconds",
     "quote_time",
+    "quote_source",
 ]
 
 

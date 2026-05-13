@@ -146,6 +146,7 @@ def build_runtime_leg_quote_capture_rows(
                         "spread_pct": _safe_float(leg.spread_pct),
                         "freshness_seconds": _safe_float(leg.freshness_seconds),
                         "quote_time": leg.quote_time,
+                        "quote_source": leg.quote_source,
                     }
                 )
     return trade_date, rows, errors
@@ -186,6 +187,7 @@ def main() -> None:
         "spread_pct",
         "freshness_seconds",
         "quote_time",
+        "quote_source",
     ]
     with csv_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)

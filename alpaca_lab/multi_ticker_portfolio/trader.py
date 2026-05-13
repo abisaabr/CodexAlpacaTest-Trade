@@ -169,6 +169,7 @@ class SelectedLeg:
     quote_time: str | None
     spread_pct: float = 0.0
     freshness_seconds: float | None = None
+    quote_source: str | None = None
 
 
 @dataclass(slots=True)
@@ -1060,6 +1061,13 @@ class MultiTickerPortfolioPaperTrader:
         self,
         snapshot: dict[str, Any],
     ) -> tuple[float | None, float | None, float | None, str | None]:
+        bid, ask, mark, quote_time, _source = self._mark_from_snapshot_with_source(snapshot)
+        return bid, ask, mark, quote_time
+
+    def _mark_from_snapshot_with_source(
+        self,
+        snapshot: dict[str, Any],
+    ) -> tuple[float | None, float | None, float | None, str | None, str | None]:
         latest_quote = snapshot.get("latestQuote", {}) or {}
         latest_trade = snapshot.get("latestTrade", {}) or {}
         minute_bar = snapshot.get("minuteBar", {}) or {}
@@ -1069,16 +1077,16 @@ class MultiTickerPortfolioPaperTrader:
         bid_value = float(bid) if bid not in (None, "") else None
         ask_value = float(ask) if ask not in (None, "") else None
         if bid_value is not None and ask_value is not None and ask_value >= bid_value > 0.0:
-            return bid_value, ask_value, (bid_value + ask_value) / 2.0, quote_time
+            return bid_value, ask_value, (bid_value + ask_value) / 2.0, quote_time, "option_quote_bid_ask"
         trade_price = latest_trade.get("p")
         if trade_price not in (None, ""):
             price = float(trade_price)
-            return price, price, price, latest_trade.get("t")
+            return price, price, price, latest_trade.get("t"), "option_trade_print_no_bid_ask"
         bar_close = minute_bar.get("c")
         if bar_close not in (None, ""):
             price = float(bar_close)
-            return price, price, price, minute_bar.get("t")
-        return None, None, None, None
+            return price, price, price, minute_bar.get("t"), "option_bar_close_no_bid_ask"
+        return None, None, None, None, None
 
     def _bbo_quote_quality_from_snapshot(
         self,
@@ -1181,7 +1189,7 @@ class MultiTickerPortfolioPaperTrader:
                 info = metadata.get(symbol)
                 if info is None:
                     continue
-                bid, ask, mark, quote_time = self._mark_from_snapshot(snapshot)
+                bid, ask, mark, quote_time, quote_source = self._mark_from_snapshot_with_source(snapshot)
                 if mark is None or mark <= 0.0:
                     continue
                 expiration_date = info["expiration_date"]
@@ -1236,6 +1244,7 @@ class MultiTickerPortfolioPaperTrader:
                         "spread_pct": float(spread_pct),
                         "freshness_seconds": freshness_seconds,
                         "quote_time": quote_time,
+                        "quote_source": quote_source,
                     }
                 )
         return pd.DataFrame(rows)
@@ -1303,6 +1312,7 @@ class MultiTickerPortfolioPaperTrader:
                 freshness_seconds=float(chosen["freshness_seconds"])
                 if pd.notna(chosen["freshness_seconds"])
                 else None,
+                quote_source=chosen["quote_source"] if pd.notna(chosen.get("quote_source")) else None,
             )
             legs.append(selected_leg)
             used_symbols.add(selected_leg.symbol)
@@ -1860,6 +1870,7 @@ class MultiTickerPortfolioPaperTrader:
                 "theta": leg.theta,
                 "vega": leg.vega,
                 "quote_time": leg.quote_time,
+                "quote_source": leg.quote_source,
                 "spread_pct": leg.spread_pct,
                 "freshness_seconds": leg.freshness_seconds,
             }
