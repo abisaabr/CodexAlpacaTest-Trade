@@ -19,6 +19,7 @@ from scripts.apply_quote_sidecar_to_trade_economics import (
     _build_trade_index,
     _contract_symbols,
     _count_prints,
+    _quote_backed_replay_for_row,
     _quote_quality_for_side,
     _timestamp,
 )
@@ -192,6 +193,7 @@ def _apply_quote_sidecar_tree(
     summaries = []
     total_rows = 0
     aggregate_status_counts: dict[str, int] = {}
+    aggregate_replay_status_counts: dict[str, int] = {}
     for csv_path in input_csvs:
         try:
             trades = pd.read_csv(csv_path, low_memory=False)
@@ -199,6 +201,7 @@ def _apply_quote_sidecar_tree(
             continue
         enriched_rows: list[dict[str, Any]] = []
         status_counts: dict[str, int] = {}
+        replay_status_counts: dict[str, int] = {}
         for _, row in trades.iterrows():
             entry_time = _timestamp(row.get("stock_entry_time") or row.get("option_entry_time"))
             exit_time = _timestamp(row.get("stock_exit_time") or row.get("option_exit_time"))
@@ -213,6 +216,15 @@ def _apply_quote_sidecar_tree(
                 output.update(quality)
                 status = str(quality.get(f"{prefix}_quote_source") or "unknown")
                 status_counts[f"{prefix}:{status}"] = status_counts.get(f"{prefix}:{status}", 0) + 1
+            replay = _quote_backed_replay_for_row(
+                row=row,
+                quote_index=quote_index,
+                entry_time=entry_time,
+                exit_time=exit_time,
+            )
+            output.update(replay)
+            replay_status = str(replay.get("quote_backed_replay_status") or "unknown")
+            replay_status_counts[replay_status] = replay_status_counts.get(replay_status, 0) + 1
             if trade_index:
                 symbols = _contract_symbols(row)
                 entry_window_end = (
@@ -234,12 +246,15 @@ def _apply_quote_sidecar_tree(
         total_rows += len(enriched_rows)
         for key, value in status_counts.items():
             aggregate_status_counts[key] = aggregate_status_counts.get(key, 0) + int(value)
+        for key, value in replay_status_counts.items():
+            aggregate_replay_status_counts[key] = aggregate_replay_status_counts.get(key, 0) + int(value)
         summaries.append(
             {
                 "input_csv": str(csv_path),
                 "output_csv": str(output_csv),
                 "trade_rows": int(len(enriched_rows)),
                 "quote_source_status_counts": status_counts,
+                "quote_backed_replay_status_counts": replay_status_counts,
             }
         )
     summary = {
@@ -253,6 +268,7 @@ def _apply_quote_sidecar_tree(
         "trade_rows": total_rows,
         "quote_symbol_count": int(len(quote_index)),
         "quote_source_status_counts": aggregate_status_counts,
+        "quote_backed_replay_status_counts": aggregate_replay_status_counts,
         "files": summaries,
     }
     (output_root / "quote_sidecar_apply_summary.json").write_text(

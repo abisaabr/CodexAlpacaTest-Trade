@@ -104,6 +104,8 @@ def test_diagnose_quote_sidecar_gaps_classifies_qqq_failures(tmp_path: Path) -> 
     )
 
     assert summary["diagnosed_trade_rows"] == 6
+    assert summary["strict_quote_backed_trade_rows"] == 1
+    assert summary["strict_quote_backed_trade_row_rate"] == round(1 / 6, 6)
     assert summary["entry_gap_reason_counts"]["matched_quote"] == 1
     assert summary["entry_gap_reason_counts"]["trade_date_not_in_sidecar"] == 1
     assert summary["entry_gap_reason_counts"]["contract_not_in_sidecar"] == 1
@@ -124,3 +126,17 @@ def test_diagnose_quote_sidecar_gaps_classifies_qqq_failures(tmp_path: Path) -> 
     assert set(universe["underlying"]) == {"QQQ"}
     sidecar = pd.read_csv(tmp_path / "out" / "sidecar_symbol_coverage.csv")
     assert set(sidecar["underlying"]) == {"QQQ"}
+
+    action_plan = pd.read_csv(tmp_path / "out" / "quote_gap_root_cause_action_plan.csv")
+    contract_gap = action_plan[
+        (action_plan["side"] == "entry")
+        & (action_plan["gap_reason"] == "contract_not_in_sidecar")
+    ].iloc[0]
+    assert contract_gap["root_cause_class"] == "quote_capture_universe"
+    assert contract_gap["recommended_action"] == "expand_runtime_leg_or_replay_contract_quote_capture_universe"
+    assert bool(contract_gap["blocks_quote_backed_replay"])
+    matched = action_plan[
+        (action_plan["side"] == "entry")
+        & (action_plan["gap_reason"] == "matched_quote")
+    ].iloc[0]
+    assert matched["recommended_action"] == "none"

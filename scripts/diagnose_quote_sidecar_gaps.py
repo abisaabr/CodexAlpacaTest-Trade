@@ -16,6 +16,65 @@ import pandas as pd
 OCC_SYMBOL_RE = re.compile(r"^([A-Z]{1,6})(\d{6})([CP])(\d{8})$")
 
 
+ROOT_CAUSE_GUIDANCE: dict[str, dict[str, Any]] = {
+    "matched_quote": {
+        "root_cause_class": "matched",
+        "recommended_action": "none",
+        "blocks_quote_backed_replay": False,
+    },
+    "missing_contract_symbol": {
+        "root_cause_class": "replay_generation",
+        "recommended_action": "repair_replay_contract_symbol_or_leg_details",
+        "blocks_quote_backed_replay": True,
+    },
+    "missing_decision_time": {
+        "root_cause_class": "replay_generation",
+        "recommended_action": "repair_replay_entry_exit_timestamps",
+        "blocks_quote_backed_replay": True,
+    },
+    "trade_date_not_in_sidecar": {
+        "root_cause_class": "quote_capture_window",
+        "recommended_action": "capture_or_fetch_opra_quotes_for_trade_date",
+        "blocks_quote_backed_replay": True,
+    },
+    "symbol_normalization_mismatch": {
+        "root_cause_class": "symbol_normalization",
+        "recommended_action": "normalize_occ_symbol_format_before_join",
+        "blocks_quote_backed_replay": True,
+    },
+    "contract_not_in_sidecar": {
+        "root_cause_class": "quote_capture_universe",
+        "recommended_action": "expand_runtime_leg_or_replay_contract_quote_capture_universe",
+        "blocks_quote_backed_replay": True,
+    },
+    "contract_trade_date_not_in_sidecar": {
+        "root_cause_class": "quote_capture_contract_date",
+        "recommended_action": "backfill_contract_quotes_for_trade_date",
+        "blocks_quote_backed_replay": True,
+    },
+    "no_quote_before_decision": {
+        "root_cause_class": "quote_capture_start_or_decision_time",
+        "recommended_action": "capture_earlier_quotes_or_backfill_pre_decision_opra_quotes",
+        "blocks_quote_backed_replay": True,
+    },
+    "invalid_bid_ask": {
+        "root_cause_class": "quote_data_quality",
+        "recommended_action": "reject_bad_quotes_or_rebuild_sidecar_with_valid_bid_ask",
+        "blocks_quote_backed_replay": True,
+    },
+    "stale_quote": {
+        "root_cause_class": "quote_freshness",
+        "recommended_action": "tighten_capture_refresh_or_backfill_dense_opra_quotes",
+        "blocks_quote_backed_replay": True,
+    },
+    "partial_multileg_quote": {
+        "root_cause_class": "partial_multileg_coverage",
+        "recommended_action": "backfill_missing_multileg_legs_before_replay",
+        "blocks_quote_backed_replay": True,
+    },
+}
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -383,6 +442,84 @@ def _sidecar_coverage_rows(quote_frame: pd.DataFrame) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda item: (str(item.get("underlying") or ""), str(item["option_symbol"])))
 
 
+def _guidance_for_reason(reason: str) -> dict[str, Any]:
+    return ROOT_CAUSE_GUIDANCE.get(
+        reason,
+        {
+            "root_cause_class": "unknown",
+            "recommended_action": "inspect_quote_gap_examples",
+            "blocks_quote_backed_replay": True,
+        },
+    )
+
+
+def _unique_contract_examples(group: pd.DataFrame, limit: int = 8) -> str:
+    values: list[str] = []
+    seen = set()
+    for raw in group.get("contract_symbol", pd.Series(dtype=str)).dropna():
+        for symbol in str(raw).replace(",", ";").split(";"):
+            cleaned = _clean_symbol(symbol)
+            if cleaned and cleaned not in seen:
+                seen.add(cleaned)
+                values.append(cleaned)
+            if len(values) >= limit:
+                return ";".join(values)
+    return ";".join(values)
+
+
+def _unique_examples(group: pd.DataFrame, column: str, limit: int = 8) -> str:
+    if column not in group.columns:
+        return ""
+    values = []
+    seen = set()
+    for raw in group[column].dropna():
+        value = str(raw).strip()
+        if value and value not in seen:
+            seen.add(value)
+            values.append(value)
+        if len(values) >= limit:
+            break
+    return ";".join(values)
+
+
+def _root_cause_action_rows(diagnostics: pd.DataFrame) -> list[dict[str, Any]]:
+    if diagnostics.empty:
+        return []
+    rows: list[dict[str, Any]] = []
+    total_rows = max(len(diagnostics), 1)
+    for side in ("entry", "exit"):
+        reason_column = f"{side}_gap_reason"
+        if reason_column not in diagnostics.columns:
+            continue
+        for reason, group in diagnostics.groupby(reason_column, dropna=False):
+            reason_value = str(reason or "unknown")
+            guidance = _guidance_for_reason(reason_value)
+            rows.append(
+                {
+                    "side": side,
+                    "gap_reason": reason_value,
+                    "row_count": int(len(group)),
+                    "pct_of_diagnosed_rows": round(float(len(group) / total_rows), 6),
+                    "root_cause_class": guidance["root_cause_class"],
+                    "recommended_action": guidance["recommended_action"],
+                    "blocks_quote_backed_replay": bool(guidance["blocks_quote_backed_replay"]),
+                    "example_candidate_variant_ids": _unique_examples(group, "candidate_variant_id"),
+                    "example_symbols": _unique_examples(group, "symbol"),
+                    "example_contract_symbols": _unique_contract_examples(group),
+                    "example_trade_dates": _unique_examples(group, "trade_date"),
+                }
+            )
+    return sorted(
+        rows,
+        key=lambda item: (
+            bool(item["blocks_quote_backed_replay"]) is False,
+            -int(item["row_count"]),
+            str(item["side"]),
+            str(item["gap_reason"]),
+        ),
+    )
+
+
 def diagnose_quote_sidecar_gaps(
     *,
     trade_economics_roots: list[Path],
@@ -457,6 +594,8 @@ def diagnose_quote_sidecar_gaps(
     pd.DataFrame(universe).to_csv(output_dir / "replay_contract_universe.csv", index=False)
     sidecar_coverage = _sidecar_coverage_rows(quote_frame)
     pd.DataFrame(sidecar_coverage).to_csv(output_dir / "sidecar_symbol_coverage.csv", index=False)
+    root_cause_action_rows = _root_cause_action_rows(diagnostics)
+    pd.DataFrame(root_cause_action_rows).to_csv(output_dir / "quote_gap_root_cause_action_plan.csv", index=False)
 
     examples = []
     if not diagnostics.empty:
@@ -484,6 +623,16 @@ def diagnose_quote_sidecar_gaps(
     }
     sidecar_by_underlying = Counter(str(item.get("underlying") or "UNKNOWN") for item in sidecar_coverage)
     replay_by_underlying = Counter(str(item.get("underlying") or "UNKNOWN") for item in universe)
+    if diagnostics.empty:
+        strict_quote_backed_rows = 0
+    else:
+        strict_mask = (
+            diagnostics["entry_gap_reason"].astype(str).eq("matched_quote")
+            & diagnostics["exit_gap_reason"].astype(str).eq("matched_quote")
+            & pd.to_numeric(diagnostics["entry_missing_legs"], errors="coerce").fillna(1).eq(0)
+            & pd.to_numeric(diagnostics["exit_missing_legs"], errors="coerce").fillna(1).eq(0)
+        )
+        strict_quote_backed_rows = int(strict_mask.sum())
     summary = {
         "status": "quote_sidecar_gap_diagnostic_complete",
         "broker_facing": False,
@@ -495,8 +644,18 @@ def diagnose_quote_sidecar_gaps(
         "max_quote_age_seconds": max_quote_age_seconds,
         "input_csv_count": len(csvs),
         "diagnosed_trade_rows": int(len(diagnostics)),
+        "strict_quote_backed_trade_rows": strict_quote_backed_rows,
+        "strict_quote_backed_trade_row_rate": round(strict_quote_backed_rows / len(diagnostics), 6)
+        if len(diagnostics)
+        else 0.0,
         "entry_gap_reason_counts": {str(key): int(value) for key, value in entry_counts.items()},
         "exit_gap_reason_counts": {str(key): int(value) for key, value in exit_counts.items()},
+        "root_cause_action_counts": {
+            str(key): int(value)
+            for key, value in Counter(
+                str(row.get("recommended_action") or "unknown") for row in root_cause_action_rows
+            ).items()
+        },
         "replay_contract_count": len(replay_contracts),
         "sidecar_contract_count": len(sidecar_contracts),
         "replay_contracts_present_in_sidecar": len(replay_contracts.intersection(sidecar_contracts)),
@@ -507,6 +666,7 @@ def diagnose_quote_sidecar_gaps(
         "outputs": {
             "quote_gap_rows_csv": str(output_dir / "quote_gap_rows.csv"),
             "quote_gap_examples_csv": str(output_dir / "quote_gap_examples.csv"),
+            "quote_gap_root_cause_action_plan_csv": str(output_dir / "quote_gap_root_cause_action_plan.csv"),
             "replay_contract_universe_csv": str(output_dir / "replay_contract_universe.csv"),
             "sidecar_symbol_coverage_csv": str(output_dir / "sidecar_symbol_coverage.csv"),
             "summary_json": str(output_dir / "quote_gap_diagnostic_summary.json"),
