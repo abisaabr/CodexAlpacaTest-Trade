@@ -44,3 +44,11 @@ Do not add candidates to the paper runner based on rematched historical replay u
 
 GCP can still run research-only candidate discovery in parallel, but it does not solve missing historical OPRA quotes unless those workers are given same-date historical quote sidecars or an external historical OPRA quote source.
 
+## May 13 Capture Scope
+
+A no-submit full-portfolio capture plan was generated at:
+
+- Local: `reports/gcp_research/evidence_repair_sweep_20260513/full_portfolio_realtime_capture_plan_20260513T0148Z/`
+- GCS: `gs://codexalpaca-control-us/gcp_research/evidence_repair_sweep_20260513/full_portfolio_realtime_capture_plan_20260513T0148Z/`
+
+The plan covers the May 13 paper portfolio config with 15 underlyings and 504 OPRA option symbols using SIP stock data and OPRA option data. It was plan-only and submitted no orders.
