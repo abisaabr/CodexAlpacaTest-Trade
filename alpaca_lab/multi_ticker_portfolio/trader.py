@@ -4,6 +4,7 @@ import getpass
 import json
 import math
 import platform
+import re
 import subprocess
 import time
 from collections import Counter
@@ -66,6 +67,7 @@ SEVERE_LOSS_FLATTEN_REASON = "severe_loss_flatten_all"
 PROJECTED_DELTA_HARD_CAP_REASON = "projected_delta_hard_cap"
 PROJECTED_VEGA_HARD_CAP_REASON = "projected_vega_hard_cap"
 ENTRY_EXECUTION_CIRCUIT_BREAKER_REASON = "entry_execution_circuit_breaker"
+STOP_LOSS_COOLDOWN_REASON = "stop_loss_cooldown"
 LATE_DAY_ENTRY_CUTOFF_REASON = "late_day_entry_cutoff"
 EVENT_BLACKOUT_REASON = "event_blackout"
 REGIME_ENTRY_CLUSTER_REASON = "regime_entry_cluster"
@@ -1487,6 +1489,93 @@ class MultiTickerPortfolioPaperTrader:
             state["last_failure_status"] = str(failure_status or "not_filled")
         self._apply_entry_execution_circuit_breaker(session)
 
+    def _family_key_from_source_strategy_id(self, value: object) -> str:
+        raw = str(value or "")
+        parts = [part for part in raw.lower().split("__") if part]
+        if len(parts) >= 4:
+            return re.sub(r"[^a-z0-9]+", "_", parts[3]).strip("_")
+        return re.sub(r"[^a-z0-9]+", "_", raw.lower()).strip("_")
+
+    def _family_key_for_strategy(self, strategy: StrategyConfig) -> str:
+        if strategy.source_strategy_id:
+            return self._family_key_from_source_strategy_id(strategy.source_strategy_id)
+        return re.sub(r"[^a-z0-9]+", "_", str(strategy.family or "").lower()).strip("_")
+
+    def _family_key_for_completed_trade(self, trade: dict[str, Any]) -> str:
+        source_strategy_id = trade.get("source_strategy_id")
+        if source_strategy_id:
+            return self._family_key_from_source_strategy_id(source_strategy_id)
+        return re.sub(r"[^a-z0-9]+", "_", str(trade.get("strategy_name") or "").lower()).strip("_")
+
+    def _stop_loss_cooldown_decision(
+        self,
+        session: SessionState,
+        strategy: StrategyConfig,
+        *,
+        current_minute: int,
+    ) -> dict[str, Any] | None:
+        cooldown_count = self.portfolio_config.risk.stop_loss_cooldown_count
+        cooldown_minutes = self.portfolio_config.risk.stop_loss_cooldown_minutes
+        if cooldown_count is None or cooldown_minutes is None:
+            return None
+        if cooldown_count <= 0 or cooldown_minutes <= 0:
+            return None
+        scope = self.portfolio_config.risk.stop_loss_cooldown_scope
+        family_key = self._family_key_for_strategy(strategy)
+        matches: list[dict[str, Any]] = []
+        for trade in session.completed_trades:
+            if str(trade.get("exit_reason") or "") != "stop_loss":
+                continue
+            exit_minute_raw = trade.get("exit_minute")
+            try:
+                exit_minute = int(exit_minute_raw)
+            except (TypeError, ValueError):
+                continue
+            if exit_minute > current_minute:
+                continue
+            age_minutes = current_minute - exit_minute
+            if age_minutes > cooldown_minutes:
+                continue
+            if scope == "strategy":
+                if str(trade.get("strategy_name") or "") != strategy.name and str(
+                    trade.get("source_strategy_id") or ""
+                ) != str(strategy.source_strategy_id or ""):
+                    continue
+            elif scope == "symbol_regime":
+                if str(trade.get("underlying_symbol") or "").upper() != strategy.underlying_symbol:
+                    continue
+                if str(trade.get("regime") or "").lower() != strategy.regime:
+                    continue
+            else:
+                if str(trade.get("underlying_symbol") or "").upper() != strategy.underlying_symbol:
+                    continue
+                if str(trade.get("regime") or "").lower() != strategy.regime:
+                    continue
+                if self._family_key_for_completed_trade(trade) != family_key:
+                    continue
+            matches.append(
+                {
+                    "strategy_name": trade.get("strategy_name"),
+                    "source_strategy_id": trade.get("source_strategy_id"),
+                    "exit_minute": exit_minute,
+                    "age_minutes": age_minutes,
+                    "net_pnl": trade.get("net_pnl"),
+                }
+            )
+        if len(matches) < cooldown_count:
+            return None
+        return {
+            "decision_reason": (
+                f"{STOP_LOSS_COOLDOWN_REASON}:{scope}:"
+                f"{len(matches)}_stop_losses_in_{cooldown_minutes}m"
+            ),
+            "stop_loss_cooldown_scope": scope,
+            "stop_loss_cooldown_count": int(cooldown_count),
+            "stop_loss_cooldown_minutes": int(cooldown_minutes),
+            "recent_stop_loss_count": len(matches),
+            "recent_stop_losses": matches[-10:],
+        }
+
     def _current_portfolio_expected_greeks(self, session: SessionState) -> tuple[float, float]:
         total_delta_shares = 0.0
         total_vega_dollars = 0.0
@@ -1593,6 +1682,14 @@ class MultiTickerPortfolioPaperTrader:
         }
         if strategy.name in session.signals_fired:
             event["decision_reason"] = "duplicate_signal"
+            return None, event
+        stop_loss_cooldown = self._stop_loss_cooldown_decision(
+            session,
+            strategy,
+            current_minute=current_minute,
+        )
+        if stop_loss_cooldown is not None:
+            event.update(stop_loss_cooldown)
             return None, event
         if len(session.open_trades) >= self.portfolio_config.risk.max_open_positions:
             event["decision_reason"] = "max_open_positions"

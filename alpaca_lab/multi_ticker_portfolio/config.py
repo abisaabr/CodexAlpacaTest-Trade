@@ -200,6 +200,11 @@ class RiskConfig(BaseModel):
     entry_failure_streak_limit: int | None = 3
     entry_adverse_slippage_fraction_limit: float | None = 0.20
     entry_adverse_slippage_lookback: int = 4
+    stop_loss_cooldown_count: int | None = 2
+    stop_loss_cooldown_minutes: int | None = 60
+    stop_loss_cooldown_scope: Literal["strategy", "symbol_regime", "symbol_regime_family"] = (
+        "symbol_regime_family"
+    )
     entry_cutoff_minute: int | None = 345
     same_day_entry_cutoff_minute: int | None = 300
     event_blackouts: tuple[EventBlackoutConfig, ...] = Field(default_factory=tuple)

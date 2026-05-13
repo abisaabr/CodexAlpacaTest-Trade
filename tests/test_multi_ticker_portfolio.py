@@ -1696,6 +1696,76 @@ def test_entry_execution_circuit_breaker_triggers_on_adverse_slippage_average() 
     assert "average adverse entry slippage" in (session.block_reason or "")
 
 
+def test_stop_loss_cooldown_blocks_symbol_regime_family_entries() -> None:
+    base = default_portfolio_config()
+    strategy = _select_strategy(
+        base,
+        underlying_symbol="QQQ",
+        regime="bear",
+        family="Single-leg long put",
+        dte_mode="next_expiry",
+    ).model_copy(update={"source_strategy_id": "qqq__bear__put__single_leg_repair"})
+    config = base.model_copy(
+        update={
+            "risk": base.risk.model_copy(
+                update={
+                    "stop_loss_cooldown_count": 2,
+                    "stop_loss_cooldown_minutes": 60,
+                    "stop_loss_cooldown_scope": "symbol_regime_family",
+                }
+            ),
+            "execution": base.execution.model_copy(update={"underlying_symbols": ("QQQ",)}),
+            "strategies": (strategy,),
+        }
+    )
+    trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
+    trader.portfolio_config = config
+    trader._select_legs = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should not select legs"))
+    session = SessionState(
+        trade_date="2026-04-15",
+        starting_equity=25_000.0,
+        virtual_cash=25_000.0,
+        completed_trades=[
+            {
+                "strategy_name": "old_qqq_bear_put_a",
+                "source_strategy_id": "qqq__bear__put__single_leg_repair",
+                "underlying_symbol": "QQQ",
+                "regime": "bear",
+                "exit_reason": "stop_loss",
+                "exit_minute": 70,
+                "net_pnl": -50.0,
+            },
+            {
+                "strategy_name": "old_qqq_bear_put_b",
+                "source_strategy_id": "qqq__bear__put__single_leg_repair",
+                "underlying_symbol": "QQQ",
+                "regime": "bear",
+                "exit_reason": "stop_loss",
+                "exit_minute": 95,
+                "net_pnl": -60.0,
+            },
+        ],
+    )
+    ledger = PortfolioLedger(realized_equity=25_000.0, high_watermark=25_000.0)
+
+    open_trade, event = trader._evaluate_entry(
+        strategy=strategy,
+        session=session,
+        ledger=ledger,
+        option_chain=pd.DataFrame(),
+        spot_price=500.0,
+        current_minute=100,
+        current_equity=25_000.0,
+        broker_equity=30_000.0,
+        attempt_id="attempt-stop-cooldown",
+    )
+
+    assert open_trade is None
+    assert event["decision_reason"].startswith("stop_loss_cooldown:symbol_regime_family")
+    assert event["recent_stop_loss_count"] == 2
+    assert event["stop_loss_cooldown_minutes"] == 60
+
+
 def test_morning_notification_only_marks_sent_after_success() -> None:
     config = default_portfolio_config()
     trader = MultiTickerPortfolioPaperTrader.__new__(MultiTickerPortfolioPaperTrader)
