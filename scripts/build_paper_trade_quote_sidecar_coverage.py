@@ -25,7 +25,12 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument("--session-json", required=True)
-    parser.add_argument("--events-jsonl", required=True)
+    parser.add_argument(
+        "--events-jsonl",
+        action="append",
+        required=True,
+        help="Raw Alpaca realtime shadow JSONL file. Repeat to combine capture restarts.",
+    )
     parser.add_argument("--output-json", default=None)
     parser.add_argument("--output-csv", default=None)
     parser.add_argument("--window-seconds", type=float, default=5.0)
@@ -98,36 +103,40 @@ def _event_timestamp(row: dict[str, Any]) -> datetime | None:
 
 
 def _load_option_quote_events(
-    path: Path,
+    paths: list[Path],
     *,
     symbols: set[str],
     tail_bytes: int = 0,
 ) -> dict[str, list[dict[str, Any]]]:
     events: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for raw_line in _iter_jsonl_tail(path, max(0, int(tail_bytes))):
-        try:
-            row = json.loads(raw_line)
-        except json.JSONDecodeError:
+    for path in paths:
+        if not path.exists():
             continue
-        if str(row.get("event_type") or "") != "option_quote":
-            continue
-        payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
-        symbol = _symbol_from_payload(payload)
-        if symbol not in symbols:
-            continue
-        timestamp = _event_timestamp(row)
-        if timestamp is None:
-            continue
-        bid = _safe_float(payload.get("bid_price", payload.get("bp")))
-        ask = _safe_float(payload.get("ask_price", payload.get("ap")))
-        events[symbol].append(
-            {
-                "timestamp": timestamp,
-                "timestamp_iso": timestamp.isoformat(),
-                "bid": bid,
-                "ask": ask,
-            }
-        )
+        for raw_line in _iter_jsonl_tail(path, max(0, int(tail_bytes))):
+            try:
+                row = json.loads(raw_line)
+            except json.JSONDecodeError:
+                continue
+            if str(row.get("event_type") or "") != "option_quote":
+                continue
+            payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+            symbol = _symbol_from_payload(payload)
+            if symbol not in symbols:
+                continue
+            timestamp = _event_timestamp(row)
+            if timestamp is None:
+                continue
+            bid = _safe_float(payload.get("bid_price", payload.get("bp")))
+            ask = _safe_float(payload.get("ask_price", payload.get("ap")))
+            events[symbol].append(
+                {
+                    "timestamp": timestamp,
+                    "timestamp_iso": timestamp.isoformat(),
+                    "bid": bid,
+                    "ask": ask,
+                    "source_jsonl": str(path),
+                }
+            )
     for symbol in list(events):
         events[symbol].sort(key=lambda item: item["timestamp"])
     return dict(events)
@@ -196,7 +205,7 @@ def _pct(count: int, total: int) -> float:
 def build_sidecar_coverage(
     *,
     session_json: Path,
-    events_jsonl: Path,
+    events_jsonl: Path | list[Path],
     window_seconds: float,
     tail_bytes: int = 0,
 ) -> dict[str, Any]:
@@ -205,8 +214,9 @@ def build_sidecar_coverage(
         session_payload = {}
     rows = _completed_leg_rows(session_payload)
     symbols = {row["option_symbol"] for row in rows if row["option_symbol"]}
+    event_paths = [events_jsonl] if isinstance(events_jsonl, Path) else list(events_jsonl)
     events_by_symbol = _load_option_quote_events(
-        events_jsonl,
+        event_paths,
         symbols=symbols,
         tail_bytes=tail_bytes,
     )
@@ -240,6 +250,7 @@ def build_sidecar_coverage(
                 "entry_nearest_sidecar_quote_age_seconds": entry_age,
                 "entry_sidecar_bid": entry_event.get("bid") if entry_event else None,
                 "entry_sidecar_ask": entry_event.get("ask") if entry_event else None,
+                "entry_sidecar_source_jsonl": entry_event.get("source_jsonl") if entry_event else None,
                 "entry_sidecar_covered": entry_is_covered,
                 "exit_nearest_sidecar_quote_time": (
                     exit_event.get("timestamp_iso") if exit_event else None
@@ -247,6 +258,7 @@ def build_sidecar_coverage(
                 "exit_nearest_sidecar_quote_age_seconds": exit_age,
                 "exit_sidecar_bid": exit_event.get("bid") if exit_event else None,
                 "exit_sidecar_ask": exit_event.get("ask") if exit_event else None,
+                "exit_sidecar_source_jsonl": exit_event.get("source_jsonl") if exit_event else None,
                 "exit_sidecar_covered": exit_is_covered,
             }
         )
@@ -266,7 +278,8 @@ def build_sidecar_coverage(
         "status": "paper_trade_quote_sidecar_coverage_complete",
         "generated_at_utc": datetime.now(UTC).isoformat(),
         "session_json": str(session_json),
-        "events_jsonl": str(events_jsonl),
+        "events_jsonl": [str(path) for path in event_paths],
+        "events_jsonl_count": len(event_paths),
         "window_seconds": float(window_seconds),
         "tail_bytes": int(tail_bytes),
         "completed_trade_count": len(session_payload.get("completed_trades") or []),
@@ -315,7 +328,7 @@ def main() -> None:
     args = parse_args()
     summary = build_sidecar_coverage(
         session_json=Path(args.session_json),
-        events_jsonl=Path(args.events_jsonl),
+        events_jsonl=[Path(value) for value in args.events_jsonl],
         window_seconds=max(0.0, float(args.window_seconds)),
         tail_bytes=max(0, int(args.tail_bytes)),
     )

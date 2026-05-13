@@ -136,3 +136,60 @@ def test_paper_session_evidence_bundle_fails_closed_without_raw_sidecar(tmp_path
     assert summary["raw_sidecar_quote_gate"] == "fail"
     assert summary["quote_backed_promotion_input_allowed"] is False
     assert "raw_opra_sidecar_gate_failed" in summary["blockers"]
+
+
+def test_paper_session_evidence_bundle_combines_capture_restarts(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    run_root = tmp_path / "runs"
+    state_root.mkdir()
+    trade_date = "2026-05-13"
+    config = tmp_path / "portfolio.yaml"
+    _write_config(config, state_root=state_root, run_root=run_root)
+    _write_session(state_root / f"session_{trade_date}.json")
+    entry_events = tmp_path / "entry_events.jsonl"
+    exit_events = tmp_path / "exit_events.jsonl"
+    entry_events.write_text(
+        json.dumps(
+            {
+                "event_type": "option_quote",
+                "observed_at_utc": "2026-05-13T13:49:43.100000Z",
+                "payload": {
+                    "symbol": "QQQ260514P00711000",
+                    "timestamp": "2026-05-13T13:49:43Z",
+                    "bid_price": 7.21,
+                    "ask_price": 7.28,
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    exit_events.write_text(
+        json.dumps(
+            {
+                "event_type": "option_quote",
+                "observed_at_utc": "2026-05-13T13:51:12.100000Z",
+                "payload": {
+                    "symbol": "QQQ260514P00711000",
+                    "timestamp": "2026-05-13T13:51:12Z",
+                    "bid_price": 7.44,
+                    "ask_price": 7.52,
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summary = build_paper_session_evidence_bundle(
+        portfolio_config=config,
+        trade_date=trade_date,
+        quote_events_jsonl=[entry_events, exit_events],
+        output_dir=tmp_path / "bundle_combined",
+    )
+
+    assert summary["evidence_status"] == "quote_backed_session_evidence_complete"
+    assert summary["quote_events_jsonl_count"] == 2
+    assert summary["raw_sidecar_quote_summary"]["events_jsonl_count"] == 2
+    assert summary["quote_quality_sidecar_summary"]["events_jsonl_count"] == 2
+    assert summary["quote_backed_optimizer_input_allowed"] is True

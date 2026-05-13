@@ -95,7 +95,12 @@ def parse_args() -> argparse.Namespace:
             "sidecars for quote-backed replay hardening. This never submits orders."
         )
     )
-    parser.add_argument("--events-jsonl", required=True)
+    parser.add_argument(
+        "--events-jsonl",
+        action="append",
+        required=True,
+        help="Raw Alpaca realtime shadow JSONL file. Repeat to combine capture restarts.",
+    )
     parser.add_argument("--output-dir", required=True)
     parser.add_argument(
         "--underlyings",
@@ -298,7 +303,7 @@ def _aggregate_option_quotes(
 
 def build_realtime_quote_quality_sidecar(
     *,
-    events_jsonl: Path,
+    events_jsonl: Path | list[Path],
     output_dir: Path,
     underlyings: set[str] | None = None,
     option_symbols: set[str] | None = None,
@@ -320,60 +325,64 @@ def build_realtime_quote_quality_sidecar(
         "underlying_filter": sorted(underlyings) if underlyings else [],
         "option_symbol_filter": sorted(option_symbols) if option_symbols else [],
     }
-    with events_jsonl.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            if not line.strip():
-                continue
-            stats["events_seen"] += 1
-            try:
-                event = json.loads(line)
-            except json.JSONDecodeError:
-                stats["rejected_events"] += 1
-                continue
-            event_type = str(event.get("event_type") or "")
-            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
-            symbol = str(payload.get("symbol") or "").upper()
-            if event_type == "option_quote":
-                stats["option_quote_events"] += 1
-                underlying = _underlying_from_option_symbol(symbol)
-                if option_symbols and symbol not in option_symbols:
-                    stats["filtered_events"] += 1
+    event_paths = [events_jsonl] if isinstance(events_jsonl, Path) else list(events_jsonl)
+    for event_path in event_paths:
+        if not event_path.exists():
+            continue
+        with event_path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
                     continue
-                if underlyings and underlying not in underlyings:
-                    stats["filtered_events"] += 1
-                    continue
-                row = _quote_row(symbol=symbol, event=event, payload=payload, is_option=True)
-                if row:
-                    option_quotes.append(row)
-                    stats["accepted_option_quotes"] += 1
-                else:
+                stats["events_seen"] += 1
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
                     stats["rejected_events"] += 1
-            elif event_type == "stock_quote":
-                stats["stock_quote_events"] += 1
-                if underlyings and symbol not in underlyings:
-                    stats["filtered_events"] += 1
                     continue
-                row = _quote_row(symbol=symbol, event=event, payload=payload, is_option=False)
-                if row:
-                    stock_quotes.append(row)
-                    stats["accepted_stock_quotes"] += 1
-                else:
-                    stats["rejected_events"] += 1
-            elif event_type == "option_trade":
-                stats["option_trade_events"] += 1
-                underlying = _underlying_from_option_symbol(symbol)
-                if option_symbols and symbol not in option_symbols:
-                    stats["filtered_events"] += 1
-                    continue
-                if underlyings and underlying not in underlyings:
-                    stats["filtered_events"] += 1
-                    continue
-                row = _trade_row(event, payload)
-                if row:
-                    option_trades.append(row)
-                    stats["accepted_option_trades"] += 1
-                else:
-                    stats["rejected_events"] += 1
+                event_type = str(event.get("event_type") or "")
+                payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+                symbol = str(payload.get("symbol") or "").upper()
+                if event_type == "option_quote":
+                    stats["option_quote_events"] += 1
+                    underlying = _underlying_from_option_symbol(symbol)
+                    if option_symbols and symbol not in option_symbols:
+                        stats["filtered_events"] += 1
+                        continue
+                    if underlyings and underlying not in underlyings:
+                        stats["filtered_events"] += 1
+                        continue
+                    row = _quote_row(symbol=symbol, event=event, payload=payload, is_option=True)
+                    if row:
+                        option_quotes.append(row)
+                        stats["accepted_option_quotes"] += 1
+                    else:
+                        stats["rejected_events"] += 1
+                elif event_type == "stock_quote":
+                    stats["stock_quote_events"] += 1
+                    if underlyings and symbol not in underlyings:
+                        stats["filtered_events"] += 1
+                        continue
+                    row = _quote_row(symbol=symbol, event=event, payload=payload, is_option=False)
+                    if row:
+                        stock_quotes.append(row)
+                        stats["accepted_stock_quotes"] += 1
+                    else:
+                        stats["rejected_events"] += 1
+                elif event_type == "option_trade":
+                    stats["option_trade_events"] += 1
+                    underlying = _underlying_from_option_symbol(symbol)
+                    if option_symbols and symbol not in option_symbols:
+                        stats["filtered_events"] += 1
+                        continue
+                    if underlyings and underlying not in underlyings:
+                        stats["filtered_events"] += 1
+                        continue
+                    row = _trade_row(event, payload)
+                    if row:
+                        option_trades.append(row)
+                        stats["accepted_option_trades"] += 1
+                    else:
+                        stats["rejected_events"] += 1
 
     option_quote_frame = pd.DataFrame(option_quotes, columns=OPTION_QUOTE_COLUMNS)
     stock_quote_frame = pd.DataFrame(stock_quotes, columns=STOCK_QUOTE_COLUMNS)
@@ -391,7 +400,8 @@ def build_realtime_quote_quality_sidecar(
 
     summary = {
         "status": "quote_quality_sidecar_complete",
-        "events_jsonl": str(events_jsonl),
+        "events_jsonl": [str(path) for path in event_paths],
+        "events_jsonl_count": len(event_paths),
         "output_dir": str(output_dir),
         "stats": stats,
         "quality_status": (
@@ -423,7 +433,7 @@ def main() -> None:
     option_symbols = _csv_set(args.option_symbols)
     option_symbols.update(_symbol_file_set(Path(args.option_symbols_file) if args.option_symbols_file else None))
     summary = build_realtime_quote_quality_sidecar(
-        events_jsonl=Path(args.events_jsonl),
+        events_jsonl=[Path(value) for value in args.events_jsonl],
         output_dir=Path(args.output_dir),
         underlyings=_csv_set(args.underlyings) or None,
         option_symbols=option_symbols or None,

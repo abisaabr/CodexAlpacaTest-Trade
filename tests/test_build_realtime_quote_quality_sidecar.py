@@ -128,6 +128,56 @@ def test_build_realtime_quote_quality_sidecar_reports_no_quotes(tmp_path: Path) 
     assert (tmp_path / "out" / "quote_quality_sidecar_summary.json").exists()
 
 
+def test_build_realtime_quote_quality_sidecar_combines_capture_restarts(tmp_path: Path) -> None:
+    first = tmp_path / "first.jsonl"
+    second = tmp_path / "second.jsonl"
+    _write_events(
+        first,
+        [
+            {
+                "event_type": "option_quote",
+                "observed_at_utc": "2026-05-13T14:30:00.250000+00:00",
+                "payload": {
+                    "symbol": "QQQ260515C00450000",
+                    "timestamp": "2026-05-13T14:30:00+00:00",
+                    "bid_price": 1.00,
+                    "ask_price": 1.04,
+                },
+            },
+        ],
+    )
+    _write_events(
+        second,
+        [
+            {
+                "event_type": "option_quote",
+                "observed_at_utc": "2026-05-13T14:31:00.250000+00:00",
+                "payload": {
+                    "symbol": "QQQ260515C00450000",
+                    "timestamp": "2026-05-13T14:31:00+00:00",
+                    "bid_price": 1.08,
+                    "ask_price": 1.12,
+                },
+            },
+        ],
+    )
+
+    summary = build_realtime_quote_quality_sidecar(
+        events_jsonl=[first, second],
+        output_dir=tmp_path / "out_combined",
+        underlyings={"QQQ"},
+    )
+
+    assert summary["events_jsonl_count"] == 2
+    assert summary["quality_status"] == "quote_events_ready_for_asof_replay_join"
+    assert summary["stats"]["accepted_option_quotes"] == 2
+    quotes = pd.read_csv(tmp_path / "out_combined" / "option_quote_sidecar.csv")
+    assert quotes["event_time_utc"].tolist() == [
+        "2026-05-13T14:30:00+00:00",
+        "2026-05-13T14:31:00+00:00",
+    ]
+
+
 def test_build_realtime_quote_quality_sidecar_filters_exact_option_symbols(tmp_path: Path) -> None:
     events = tmp_path / "events.jsonl"
     _write_events(
