@@ -165,6 +165,55 @@ def _nearest_event(
     return nearest, age
 
 
+def _signed_lag_seconds(event: dict[str, Any] | None, target: datetime | None) -> float | None:
+    if event is None or target is None:
+        return None
+    return (event["timestamp"] - target).total_seconds()
+
+
+def _has_valid_event_bid_ask(event: dict[str, Any] | None) -> bool:
+    if event is None:
+        return False
+    bid = _safe_float(event.get("bid"))
+    ask = _safe_float(event.get("ask"))
+    return bool(bid is not None and ask is not None and ask >= bid > 0.0)
+
+
+def _gap_reason(
+    *,
+    symbol: str,
+    has_session_bid_ask: bool,
+    has_session_quote_time: bool,
+    symbol_event_count: int,
+    nearest_event: dict[str, Any] | None,
+    nearest_age: float | None,
+    nearest_lag: float | None,
+    sidecar_covered: bool,
+    window_seconds: float,
+) -> str:
+    if sidecar_covered and has_session_bid_ask and has_session_quote_time:
+        return "matched_session_and_sidecar_quote"
+    if not symbol:
+        return "missing_contract_symbol"
+    if not has_session_quote_time:
+        return "missing_session_quote_time"
+    if not has_session_bid_ask:
+        return "missing_session_bid_ask"
+    if symbol_event_count <= 0:
+        return "contract_not_in_sidecar_or_subscription_gap"
+    if nearest_event is None or nearest_age is None:
+        return "no_sidecar_quote_for_symbol"
+    if not _has_valid_event_bid_ask(nearest_event):
+        return "invalid_sidecar_bid_ask"
+    if nearest_lag is not None and nearest_lag > window_seconds:
+        return "nearest_sidecar_quote_after_decision_or_late_capture"
+    if nearest_lag is not None and nearest_lag < -window_seconds:
+        return "stale_sidecar_quote_before_decision"
+    if not sidecar_covered:
+        return "sidecar_quote_outside_window"
+    return "unknown_quote_gap"
+
+
 def _completed_leg_rows(session_payload: dict[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for trade_index, trade in enumerate(session_payload.get("completed_trades") or []):
@@ -234,8 +283,28 @@ def build_sidecar_coverage(
         )
         entry_event, entry_age = _nearest_event(symbol_events, entry_target)
         exit_event, exit_age = _nearest_event(symbol_events, exit_target)
-        entry_is_covered = entry_age is not None and entry_age <= window_seconds
-        exit_is_covered = exit_age is not None and exit_age <= window_seconds
+        entry_lag = _signed_lag_seconds(entry_event, entry_target)
+        exit_lag = _signed_lag_seconds(exit_event, exit_target)
+        entry_is_covered = (
+            entry_age is not None
+            and entry_age <= window_seconds
+            and _has_valid_event_bid_ask(entry_event)
+        )
+        exit_is_covered = (
+            exit_age is not None
+            and exit_age <= window_seconds
+            and _has_valid_event_bid_ask(exit_event)
+        )
+        entry_session_and_sidecar_covered = (
+            bool(row.get("entry_has_session_bid_ask"))
+            and bool(row.get("entry_has_session_quote_time"))
+            and entry_is_covered
+        )
+        exit_session_and_sidecar_covered = (
+            bool(row.get("exit_has_session_bid_ask"))
+            and bool(row.get("exit_has_session_quote_time"))
+            and exit_is_covered
+        )
         if entry_is_covered:
             entry_covered += 1
         if exit_is_covered:
@@ -248,30 +317,54 @@ def build_sidecar_coverage(
                     entry_event.get("timestamp_iso") if entry_event else None
                 ),
                 "entry_nearest_sidecar_quote_age_seconds": entry_age,
+                "entry_nearest_sidecar_quote_lag_seconds": entry_lag,
                 "entry_sidecar_bid": entry_event.get("bid") if entry_event else None,
                 "entry_sidecar_ask": entry_event.get("ask") if entry_event else None,
+                "entry_sidecar_has_valid_bid_ask": _has_valid_event_bid_ask(entry_event),
                 "entry_sidecar_source_jsonl": entry_event.get("source_jsonl") if entry_event else None,
                 "entry_sidecar_covered": entry_is_covered,
+                "entry_session_and_sidecar_covered": entry_session_and_sidecar_covered,
+                "entry_quote_gap_reason": _gap_reason(
+                    symbol=symbol,
+                    has_session_bid_ask=bool(row.get("entry_has_session_bid_ask")),
+                    has_session_quote_time=bool(row.get("entry_has_session_quote_time")),
+                    symbol_event_count=len(symbol_events),
+                    nearest_event=entry_event,
+                    nearest_age=entry_age,
+                    nearest_lag=entry_lag,
+                    sidecar_covered=entry_is_covered,
+                    window_seconds=window_seconds,
+                ),
                 "exit_nearest_sidecar_quote_time": (
                     exit_event.get("timestamp_iso") if exit_event else None
                 ),
                 "exit_nearest_sidecar_quote_age_seconds": exit_age,
+                "exit_nearest_sidecar_quote_lag_seconds": exit_lag,
                 "exit_sidecar_bid": exit_event.get("bid") if exit_event else None,
                 "exit_sidecar_ask": exit_event.get("ask") if exit_event else None,
+                "exit_sidecar_has_valid_bid_ask": _has_valid_event_bid_ask(exit_event),
                 "exit_sidecar_source_jsonl": exit_event.get("source_jsonl") if exit_event else None,
                 "exit_sidecar_covered": exit_is_covered,
+                "exit_session_and_sidecar_covered": exit_session_and_sidecar_covered,
+                "exit_quote_gap_reason": _gap_reason(
+                    symbol=symbol,
+                    has_session_bid_ask=bool(row.get("exit_has_session_bid_ask")),
+                    has_session_quote_time=bool(row.get("exit_has_session_quote_time")),
+                    symbol_event_count=len(symbol_events),
+                    nearest_event=exit_event,
+                    nearest_age=exit_age,
+                    nearest_lag=exit_lag,
+                    sidecar_covered=exit_is_covered,
+                    window_seconds=window_seconds,
+                ),
             }
         )
     leg_count = len(rows)
     complete_legs = sum(
         1
         for row in detailed_rows
-        if row["entry_sidecar_covered"]
-        and row["exit_sidecar_covered"]
-        and row["entry_has_session_bid_ask"]
-        and row["exit_has_session_bid_ask"]
-        and row["entry_has_session_quote_time"]
-        and row["exit_has_session_quote_time"]
+        if row["entry_session_and_sidecar_covered"]
+        and row["exit_session_and_sidecar_covered"]
     )
     evidence_complete = leg_count > 0 and complete_legs == leg_count
     summary = {
