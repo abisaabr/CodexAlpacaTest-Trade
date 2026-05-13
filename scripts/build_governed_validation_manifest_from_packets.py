@@ -218,6 +218,30 @@ def _liquidity_gate(value: Any) -> str:
     return "loose"
 
 
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "y"}
+
+
+def _has_quote_backed_replay(candidate: dict[str, Any]) -> bool:
+    replay_fields = (
+        candidate.get("quote_backed_replay_status"),
+        candidate.get("quote_quality_status"),
+        candidate.get("projection_quote_quality_status"),
+    )
+    if any(str(value or "").strip() == "quote_backed_replay" for value in replay_fields):
+        return True
+    return any(
+        _truthy(candidate.get(field))
+        for field in (
+            "quote_backed_projection_input_allowed",
+            "quote_backed_optimizer_input_allowed",
+            "quote_backed_promotion_input_allowed",
+        )
+    )
+
+
 def _build_strategy(
     candidate: dict[str, Any],
     *,
@@ -306,6 +330,7 @@ def build_manifest(
     output_path: Path,
     generated_for: str,
     packet_uris: list[str],
+    require_quote_backed_replay: bool = False,
 ) -> dict[str, Any]:
     strategies: list[dict[str, Any]] = []
     skipped: list[dict[str, str]] = []
@@ -341,6 +366,14 @@ def build_manifest(
         for candidate in candidate_rows:
             if candidate.get("promotion_status") != "eligible_for_promotion_review":
                 continue
+            if require_quote_backed_replay and not _has_quote_backed_replay(candidate):
+                skipped.append(
+                    {
+                        "candidate_variant_id": str(candidate.get("candidate_variant_id")),
+                        "reason": "quote_backed_replay_required",
+                    }
+                )
+                continue
             try:
                 strategies.append(
                     _build_strategy(
@@ -365,6 +398,7 @@ def build_manifest(
         "broker_facing": False,
         "live_manifest_effect": "none",
         "risk_policy_effect": "none",
+        "quote_backed_replay_required": require_quote_backed_replay,
         "source_packets": packet_sources,
         "strategy_count": len(strategies),
         "symbols": sorted({str(strategy["underlying_symbol"]) for strategy in strategies}),
@@ -399,6 +433,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output", required=True, help="Output YAML manifest path.")
     parser.add_argument("--generated-for", default="20260506", help="Suffix used in generated strategy names.")
+    parser.add_argument(
+        "--require-quote-backed-replay",
+        action="store_true",
+        help=(
+            "Skip candidates unless the packet row explicitly carries quote_backed_replay "
+            "lineage or quote-backed projection/optimizer/promotion allowance."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -411,6 +453,7 @@ def main() -> None:
         output_path=output_path,
         generated_for=args.generated_for,
         packet_uris=list(args.packet_uri),
+        require_quote_backed_replay=args.require_quote_backed_replay,
     )
     print(
         json.dumps(

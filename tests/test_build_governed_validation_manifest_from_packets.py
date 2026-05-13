@@ -103,3 +103,46 @@ def test_manifest_builder_includes_native_multileg_families(
     assert [leg["target_delta"] for leg in spread["legs"]] == pytest.approx([-0.55, -0.37])
     assert [leg["min_abs_delta"] for leg in spread["legs"]] == pytest.approx([0.35, 0.17])
     assert [leg["max_abs_delta"] for leg in spread["legs"]] == pytest.approx([0.75, 0.57])
+
+
+def test_manifest_builder_can_require_quote_backed_replay(tmp_path: Path) -> None:
+    backed = _candidate(
+        candidate_id="portfolio12h__qqq__bear__put__single_leg_repair__abc__profile_unit",
+        family="single_leg_repair",
+    )
+    backed["quote_backed_replay_status"] = "quote_backed_replay"
+    gap = _candidate(
+        candidate_id="portfolio12h__iwm__bull__put__bull_put_credit_spread__def__profile_unit",
+        family="bull_put_credit_spread",
+        symbol="IWM",
+        regime="bull",
+    )
+    packet_path = tmp_path / "packet.json"
+    packet_path.write_text(
+        json.dumps(
+            {
+                "decision": "ready_for_governed_validation_review",
+                "gate_summary": {"eligible_for_promotion_review_count": 2},
+                "review_candidates": [backed, gap],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = build_manifest(
+        packet_paths=[packet_path],
+        output_path=tmp_path / "manifest.yaml",
+        generated_for="unit",
+        packet_uris=[],
+        require_quote_backed_replay=True,
+    )
+
+    assert manifest["quote_backed_replay_required"] is True
+    assert manifest["strategy_count"] == 1
+    assert manifest["strategies"][0]["source_strategy_id"] == "qqq__bear__put__single_leg_repair"
+    assert manifest["skipped_candidates"] == [
+        {
+            "candidate_variant_id": "portfolio12h__iwm__bull__put__bull_put_credit_spread__def__profile_unit",
+            "reason": "quote_backed_replay_required",
+        }
+    ]
