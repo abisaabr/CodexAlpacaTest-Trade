@@ -46,6 +46,9 @@ def _write_markdown(path: Path, summary: dict[str, Any], strategy_table: pd.Data
         f"- Completed trades: `{summary.get('completed_trade_count')}`",
         f"- Open trades at report time: `{summary.get('open_trade_count')}`",
         f"- Broker-flat stale session exits: `{summary.get('broker_flat_without_session_exit_count')}`",
+        f"- Final session summary found: `{summary.get('session_summary_found')}`",
+        f"- Shutdown reconciled: `{summary.get('shutdown_reconciled')}`",
+        f"- Guardrail fire count: `{summary.get('guardrail_fire_count')}`",
         f"- Alert count: `{summary.get('alert_count')}`",
         f"- Strategy daily ledger: `{summary.get('strategy_daily_performance_ledger_path')}`",
         f"- Strategy cumulative ledger: `{summary.get('strategy_cumulative_performance_path')}`",
@@ -211,6 +214,7 @@ def build_postmortem(
     trade_date: str,
     submit_paper_orders: bool | None = None,
     quote_evidence_json: Path | None = None,
+    session_summary_json: Path | None = None,
 ) -> dict[str, Any]:
     session_path = state_root / f"session_{trade_date}.json"
     session_payload = _read_json(session_path, {})
@@ -235,6 +239,15 @@ def build_postmortem(
     quote_evidence = _read_json(quote_evidence_json, {}) if quote_evidence_json else {}
     if not isinstance(quote_evidence, dict):
         quote_evidence = {}
+    if session_summary_json is None:
+        auto_summary = run_root / trade_date / "multi_ticker_portfolio_session_summary.json"
+        session_summary_json = auto_summary if auto_summary.exists() else None
+    session_summary = _read_json(session_summary_json, {}) if session_summary_json else {}
+    if not isinstance(session_summary, dict):
+        session_summary = {}
+    end_of_day_cleanup = session_summary.get("end_of_day_cleanup")
+    if not isinstance(end_of_day_cleanup, dict):
+        end_of_day_cleanup = {}
     summary = {
         "trade_date": trade_date,
         "session_found": bool(session_payload),
@@ -260,6 +273,20 @@ def build_postmortem(
             quote_evidence.get("quote_backed_promotion_input_allowed", False)
         ),
         "quote_backed_evidence_blockers": quote_evidence.get("blockers") or [],
+        "session_summary_json": str(session_summary_json) if session_summary_json else None,
+        "session_summary_found": bool(session_summary),
+        "shutdown_reconciled": session_summary.get("shutdown_reconciled"),
+        "end_of_day_cleanup_shutdown_reconciled": end_of_day_cleanup.get("shutdown_reconciled"),
+        "end_of_day_cleanup_residual_broker_position_count": end_of_day_cleanup.get(
+            "residual_broker_position_count"
+        ),
+        "end_of_day_cleanup_open_trade_count_after_cleanup": end_of_day_cleanup.get(
+            "open_trade_count_after_cleanup"
+        ),
+        "guardrail_fire_count": session_summary.get("guardrail_fire_count"),
+        "guardrail_reason_count": session_summary.get("guardrail_reason_count"),
+        "guardrail_manual_review_count": session_summary.get("guardrail_manual_review_count"),
+        "guardrail_needs_manual_review": session_summary.get("guardrail_needs_manual_review"),
         "completed_trade_count": int(len(session_payload.get("completed_trades") or [])),
         "open_trade_count": int(len(session_payload.get("open_trades") or [])),
         "alert_count": int(len(session_payload.get("alerts") or [])),
@@ -283,6 +310,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--state-root", type=Path, default=None)
     parser.add_argument("--run-root", type=Path, default=None)
     parser.add_argument("--quote-evidence-json", type=Path, default=None)
+    parser.add_argument("--session-summary-json", type=Path, default=None)
     return parser.parse_args()
 
 
@@ -297,6 +325,7 @@ def main() -> None:
         trade_date=str(args.trade_date),
         submit_paper_orders=bool(config.execution.submit_paper_orders),
         quote_evidence_json=args.quote_evidence_json,
+        session_summary_json=args.session_summary_json,
     )
     print(json.dumps(summary, indent=2))
 

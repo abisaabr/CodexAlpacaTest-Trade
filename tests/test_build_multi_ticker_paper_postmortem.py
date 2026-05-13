@@ -170,3 +170,56 @@ def test_build_postmortem_surfaces_quote_backed_evidence_gate(tmp_path: Path) ->
     assert summary["quote_backed_optimizer_input_allowed"] is True
     assert summary["quote_backed_promotion_input_allowed"] is False
     assert summary["quote_backed_evidence_blockers"] == ["promotion_gate_not_requested"]
+
+
+def test_build_postmortem_surfaces_final_session_summary_and_eod_state(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    run_root = tmp_path / "runs"
+    state_root.mkdir()
+    trade_date = "2026-05-13"
+    (state_root / f"session_{trade_date}.json").write_text(
+        json.dumps(
+            {
+                "trade_date": trade_date,
+                "starting_equity": 25000.0,
+                "virtual_cash": 25000.0,
+                "completed_trades": [],
+                "open_trades": [],
+                "alerts": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    session_summary_dir = run_root / trade_date
+    session_summary_dir.mkdir(parents=True)
+    (session_summary_dir / "multi_ticker_portfolio_session_summary.json").write_text(
+        json.dumps(
+            {
+                "shutdown_reconciled": False,
+                "guardrail_fire_count": 3,
+                "guardrail_reason_count": {"exit_not_filled": 2, "entry_rejected": 1},
+                "guardrail_manual_review_count": 1,
+                "guardrail_needs_manual_review": True,
+                "end_of_day_cleanup": {
+                    "shutdown_reconciled": False,
+                    "residual_broker_position_count": 1,
+                    "open_trade_count_after_cleanup": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = build_postmortem(
+        state_root=state_root,
+        run_root=run_root,
+        trade_date=trade_date,
+        submit_paper_orders=True,
+    )
+
+    assert summary["session_summary_found"] is True
+    assert summary["shutdown_reconciled"] is False
+    assert summary["end_of_day_cleanup_shutdown_reconciled"] is False
+    assert summary["end_of_day_cleanup_residual_broker_position_count"] == 1
+    assert summary["guardrail_fire_count"] == 3
+    assert summary["guardrail_needs_manual_review"] is True
