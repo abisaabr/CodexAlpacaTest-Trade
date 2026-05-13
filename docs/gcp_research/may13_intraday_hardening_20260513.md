@@ -9,6 +9,7 @@ Research-only and PAPER-only hardening performed during the May 13 RTH session. 
 - `9431b68` - Added side-aware quote-backed replay PnL to `apply_quote_sidecar_to_trade_economics.py`, projection controls for `--prefer-quote-backed-pnl` and `--require-quote-backed-replay`, and optimizer support for `scaled_projection_pnl`.
 - `1710be7` - Added an opt-in governed manifest gate, `--require-quote-backed-replay`, so eligible review candidates can be skipped unless their packet row carries quote-backed evidence.
 - `8089c1a` - Added a configurable future-session stop-loss cooldown guardrail for repeated same symbol/regime/family stop-outs.
+- `36da6ee` - Added `--session-trade-leg-symbols` to the no-submit quote shadow so current session trade legs can be forced into the OPRA capture plan and refresh loop.
 
 ## Runtime Status At 11:30 ET
 
@@ -55,3 +56,4 @@ Latest quote health snapshot:
 - Run projection with `--require-quote-backed-replay`, market-quality cost model, fill model, and constrained optimizer.
 - Use `--require-quote-backed-replay` when building any future governed validation manifest intended for PAPER consideration.
 - Evaluate whether the stop-loss cooldown guardrail should be enabled in the next paper config after postmortem review.
+- Launch the next no-submit quote shadow with `--session-trade-leg-symbols` so actual selected trade legs remain captured even when they differ from the precomputed runtime leg set.
